@@ -2,9 +2,11 @@ package boomer
 
 
 import (
+	"fmt"
 	"log"
 	"time"
 	"os"
+	"runtime/debug"
 )
 
 
@@ -41,6 +43,19 @@ type Runner struct {
 }
 
 
+func (this *Runner) safeRun(fn func()){
+	defer func(){
+		// don't panic
+		err := recover()
+		if err != nil{
+			debug.PrintStack()
+			Events.Publish("request_failure", "unknown", "panic", 0.0, fmt.Sprintf("%v", err))
+		}
+	}()
+	fn()
+}
+
+
 func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 	if this.state == STATE_INIT || this.state == STATE_STOPPED {
@@ -72,7 +87,7 @@ func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 					case <- quit:
 						return
 					default:
-						fn()
+						this.safeRun(fn)
 					}
 				}
 			}(task.Fn)
