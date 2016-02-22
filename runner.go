@@ -28,6 +28,7 @@ type Task struct {
 	Weight int
 	Fn     func()
 	Name   string
+
 }
 
 
@@ -72,10 +73,15 @@ func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 		weightSum += task.Weight
 	}
 
+
 	for _, task := range this.Tasks {
 
 		percent := float64(task.Weight) / float64(weightSum)
 		amount := int(Round(float64(spawnCount) * percent, .5, 0))
+
+		if weightSum == 0 {
+			amount = int(float64(spawnCount) / float64(len(this.Tasks)))
+		}
 
 		for i := 1; i <= amount; i++ {
 			if i % this.hatchRate == 0 {
