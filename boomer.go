@@ -52,7 +52,7 @@ func Run(tasks ... *Task) {
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGINT)
 
-	log.Println("Boomerx is listening to master(", fmt.Sprintf("%s:%d", *masterHost, *masterPort), ") press Ctrl+c to quit.")
+	log.Println("Boomer is listening to master(", fmt.Sprintf("%s:%d", *masterHost, *masterPort), ") press Ctrl+c to quit.")
 
 	<- c
 	Events.Publish("boomer:quit")
