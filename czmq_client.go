@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"log"
 	"fmt"
 	"github.com/zeromq/goczmq"
 )
@@ -12,27 +13,34 @@ type zmqClient interface {
 }
 
 type czmqSocketClient struct {
-	push_conn *goczmq.Sock
-	pull_conn *goczmq.Sock
+	pushConn *goczmq.Sock
+	pullConn *goczmq.Sock
 }
 
-func NewZmqClient(masterHost string, masterPort int) (*czmqSocketClient, error){
+func NewZmqClient(masterHost string, masterPort int) (*czmqSocketClient){
 	tcpAddr := fmt.Sprintf("tcp://%s:%d", masterHost, masterPort)
-	push_conn, err := goczmq.NewPush(tcpAddr)
+	pushConn, err := goczmq.NewPush(tcpAddr)
+	if err != nil {
+		log.Fatalf("Failed to create zeromq pusher", err)
+	}
 	tcpAddr = fmt.Sprintf(">tcp://%s:%d", masterHost, masterPort+1)
-	pull_conn, err := goczmq.NewPull(tcpAddr)
+	pullConn, err := goczmq.NewPull(tcpAddr)
+	if err != nil {
+		log.Fatalf("Failed to create zeromq puller", err)
+	}
+	log.Println("ZMQ sockets connected")
 	newClient := &czmqSocketClient{
-		push_conn: push_conn,
-		pull_conn: pull_conn,
+		pushConn: pushConn,
+		pullConn: pullConn,
 	}
 	go newClient.recv()
 	go newClient.send()
-	return newClient, err
+	return newClient
 }
 
 func (this *czmqSocketClient) recv() {
 	for {
-		msg, _, _ := this.pull_conn.RecvFrame()
+		msg, _, _ := this.pullConn.RecvFrame()
 		msgFromMaster := NewMessageFromBytes(msg)
 		FromServer <- msgFromMaster
 	}
@@ -54,5 +62,5 @@ func (this *czmqSocketClient) send() {
 
 
 func (this *czmqSocketClient) sendMessage(msg *Message){
-	this.push_conn.SendFrame(msg.Serialize(), 0)
+	this.pushConn.SendFrame(msg.Serialize(), 0)
 }

@@ -12,6 +12,8 @@ Boomer will report to the locust master automatically, and your test result will
 
 
 ## Install
+First of all, install [goczmq](https://github.com/zeromq/goczmq#building-from-source-linux) by following its installation guide. Then you get boomer.
+
 ```bash
 go get github.com/myzhan/boomer
 ```
@@ -65,10 +67,17 @@ func main(){
 ```
 
 ## Usage
+If master is listening on zeromq socket.
 ```bash
 locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-go run main.go --master-host=127.0.0.1 --master-port=5557
+go run main.go --master-host=127.0.0.1 --master-port=5557 --rpc=zeromq
 ```
+If master is listening on tcp socket.
+```bash
+locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
+go run main.go --master-host=127.0.0.1 --master-port=5557 --rpc=socket
+```
+
 
 ## License
 
