@@ -23,6 +23,7 @@ func Run(tasks ... *Task) {
 
 	flag.Parse()
 
+	var message string
 	var runner *Runner
 	if *rpc == "zeromq" {
 		client:= NewZmqClient(*masterHost, *masterPort)
@@ -31,6 +32,7 @@ func Run(tasks ... *Task) {
 			Client: client,
 			NodeId: GetNodeId(),
 		}
+		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort+1)
 	}else if *rpc == "socket" {
 		client := NewSocketClient(*masterHost, *masterPort)
 		runner = &Runner{
@@ -38,6 +40,7 @@ func Run(tasks ... *Task) {
 			Client: client,
 			NodeId: GetNodeId(),
 		}
+		message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
 	}else{
 		log.Fatal("Unknown rpc type:", *rpc)
 	}
@@ -51,7 +54,7 @@ func Run(tasks ... *Task) {
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGINT)
 
-	log.Println("Boomer is listening to master(", fmt.Sprintf("%s:%d", *masterHost, *masterPort), ") press Ctrl+c to quit.")
+	log.Println(message)
 
 	<- c
 	Events.Publish("boomer:quit")
