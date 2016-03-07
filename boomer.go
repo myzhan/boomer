@@ -22,13 +22,27 @@ func Run(tasks ... *Task) {
 
 	flag.Parse()
 
-	client := NewSocketClient(*masterHost, *masterPort)
-
-	runner := &Runner{
+	czmq_client, err := NewZmqClient(*masterHost, *masterPort)
+	var runner *Runner
+	if err != nil {
+		log.Println("ZMQ sockets failed to connect, trying pure Go sockets")
+		client := NewSocketClient(*masterHost, *masterPort)
+		runner = &Runner{
 		Tasks: tasks,
 		Client: client,
 		NodeId: GetNodeId(),
+		}
+
+	}else{
+		log.Println("ZMQ sockets connected")
+		runner = &Runner{
+		Tasks: tasks,
+		Client: czmq_client,
+		NodeId: GetNodeId(),
+		}
 	}
+
+
 
 	Events.Subscribe("boomer:report_to_master", runner.onReportToMaster)
 	Events.Subscribe("boomer:quit", runner.onQuiting)
