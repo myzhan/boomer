@@ -66,7 +66,7 @@ func (this *StatsEntry) reset() {
 	this.NumFailures = 0
 	this.TotalResponseTime = 0
 	this.ResponseTimes = make(map[float64]int64)
-	this.MinResponseTime = -1
+	this.MinResponseTime = 0
 	this.MaxResponseTime = 0
 	this.LastRequestTimestamp = int64(time.Now().Unix())
 	this.NumReqsPerSec = make(map[int64]int64)
@@ -103,7 +103,7 @@ func (this *StatsEntry) logTimeOfRequest() {
 func (this *StatsEntry) logResponseTime(responseTime float64) {
 	this.TotalResponseTime += responseTime
 
-	if this.MinResponseTime == -1 {
+	if this.MinResponseTime == 0 {
 		this.MinResponseTime = responseTime
 	}
 
