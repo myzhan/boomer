@@ -1,3 +1,5 @@
+// +build zeromq
+
 package boomer
 
 import (
@@ -23,16 +25,18 @@ func Run(tasks ... *Task) {
 
 	flag.Parse()
 
+	log.Println("Boomer is built with zeromq support.")
+
 	var message string
 	var runner *Runner
 	if *rpc == "zeromq" {
-		client:= NewZmqClient(*masterHost, *masterPort)
+		client := NewZmqClient(*masterHost, *masterPort)
 		runner = &Runner{
 			Tasks: tasks,
 			Client: client,
 			NodeId: GetNodeId(),
 		}
-		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort+1)
+		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort + 1)
 	}else if *rpc == "socket" {
 		client := NewSocketClient(*masterHost, *masterPort)
 		runner = &Runner{
@@ -41,10 +45,9 @@ func Run(tasks ... *Task) {
 			NodeId: GetNodeId(),
 		}
 		message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
-	}else{
+	}else {
 		log.Fatal("Unknown rpc type:", *rpc)
 	}
-
 
 	Events.Subscribe("boomer:report_to_master", runner.onReportToMaster)
 	Events.Subscribe("boomer:quit", runner.onQuiting)
@@ -56,11 +59,11 @@ func Run(tasks ... *Task) {
 
 	log.Println(message)
 
-	<- c
+	<-c
 	Events.Publish("boomer:quit")
 
 	// wait for quit message is sent to master
-	<- DisconnectedFromServer
+	<-DisconnectedFromServer
 	log.Println("shut down")
 
 }

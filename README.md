@@ -8,15 +8,22 @@
 ## Description
 
 Boomer is a locust slave runner written in golang. Just write your test scenarios in golang functions, and tell Boomer to run them.
-Boomer will report to the locust master automatically, and your test result will be displayed on the master's web UI.
+Boomer will report to the locust master automatically, and your test results will be displayed on the master's web UI.
 
 
 ## Install
-First of all, install [goczmq](https://github.com/zeromq/goczmq#building-from-source-linux) by following its installation guide. Then you get boomer.
 
 ```bash
 go get github.com/myzhan/boomer
 ```
+
+### With zeromq support
+Install [goczmq](https://github.com/zeromq/goczmq#building-from-source-linux) by following its installation guide, and build Boomer with zeromq support.
+Once you build Boomer with zeromq support, both zeromq socket and tcp socket are supported. We add an additional command line option "--rpc", which defaults
+to "zeromq". "--rpc=socket" will switch to tcp socket.
+
+### Without zeromq support
+If you are new to Boomer, and want to give it a try as fast as you can. You can build Boomer without zeromq support.
 
 
 ## Sample(main.go)
@@ -67,15 +74,22 @@ func main(){
 ```
 
 ## Usage
+
 If master is listening on zeromq socket.
+
 ```bash
 locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-go run main.go --master-host=127.0.0.1 --master-port=5557 --rpc=zeromq
+# build Boomer with zeromq support
+go build -tags 'zeromq' -o a.out main.go 
+./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=zeromq
 ```
+
 If master is listening on tcp socket.
+
 ```bash
 locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-go run main.go --master-host=127.0.0.1 --master-port=5557 --rpc=socket
+go build -o a.out main.go
+./a.out --master-host=127.0.0.1 --master-port=5557
 ```
 
 

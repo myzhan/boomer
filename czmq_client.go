@@ -1,3 +1,5 @@
+// +build zeromq
+
 package boomer
 
 import (
@@ -17,13 +19,13 @@ type czmqSocketClient struct {
 	pullConn *goczmq.Sock
 }
 
-func NewZmqClient(masterHost string, masterPort int) (*czmqSocketClient){
+func NewZmqClient(masterHost string, masterPort int) (*czmqSocketClient) {
 	tcpAddr := fmt.Sprintf("tcp://%s:%d", masterHost, masterPort)
 	pushConn, err := goczmq.NewPush(tcpAddr)
 	if err != nil {
 		log.Fatalf("Failed to create zeromq pusher", err)
 	}
-	tcpAddr = fmt.Sprintf(">tcp://%s:%d", masterHost, masterPort+1)
+	tcpAddr = fmt.Sprintf(">tcp://%s:%d", masterHost, masterPort + 1)
 	pullConn, err := goczmq.NewPull(tcpAddr)
 	if err != nil {
 		log.Fatalf("Failed to create zeromq puller", err)
@@ -51,9 +53,9 @@ func (this *czmqSocketClient) recv() {
 func (this *czmqSocketClient) send() {
 	for {
 		select {
-		case msg := <- ToServer:
+		case msg := <-ToServer:
 			this.sendMessage(msg)
-			if msg.Type == "quit"{
+			if msg.Type == "quit" {
 				DisconnectedFromServer <- true
 			}
 		}
@@ -61,6 +63,6 @@ func (this *czmqSocketClient) send() {
 }
 
 
-func (this *czmqSocketClient) sendMessage(msg *Message){
+func (this *czmqSocketClient) sendMessage(msg *Message) {
 	this.pushConn.SendFrame(msg.Serialize(), 0)
 }
