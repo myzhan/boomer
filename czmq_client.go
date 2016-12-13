@@ -3,11 +3,10 @@
 package boomer
 
 import (
-	"log"
 	"fmt"
 	"github.com/zeromq/goczmq"
+	"log"
 )
-
 
 type zmqClient interface {
 	recv()
@@ -19,13 +18,13 @@ type czmqSocketClient struct {
 	pullConn *goczmq.Sock
 }
 
-func NewZmqClient(masterHost string, masterPort int) (*czmqSocketClient) {
+func NewZmqClient(masterHost string, masterPort int) *czmqSocketClient {
 	tcpAddr := fmt.Sprintf("tcp://%s:%d", masterHost, masterPort)
 	pushConn, err := goczmq.NewPush(tcpAddr)
 	if err != nil {
 		log.Fatalf("Failed to create zeromq pusher", err)
 	}
-	tcpAddr = fmt.Sprintf(">tcp://%s:%d", masterHost, masterPort + 1)
+	tcpAddr = fmt.Sprintf(">tcp://%s:%d", masterHost, masterPort+1)
 	pullConn, err := goczmq.NewPull(tcpAddr)
 	if err != nil {
 		log.Fatalf("Failed to create zeromq puller", err)
@@ -49,7 +48,6 @@ func (this *czmqSocketClient) recv() {
 
 }
 
-
 func (this *czmqSocketClient) send() {
 	for {
 		select {
@@ -61,7 +59,6 @@ func (this *czmqSocketClient) send() {
 		}
 	}
 }
-
 
 func (this *czmqSocketClient) sendMessage(msg *Message) {
 	this.pushConn.SendFrame(msg.Serialize(), 0)

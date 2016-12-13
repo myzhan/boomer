@@ -1,17 +1,16 @@
 package boomer
 
 import (
-	"math"
 	"crypto/md5"
-	"io"
 	"fmt"
+	"io"
+	"math"
+	"math/rand"
 	"os"
 	"time"
-	"math/rand"
 )
 
-
-func Round(val float64, roundOn float64, places int ) (newVal float64) {
+func Round(val float64, roundOn float64, places int) (newVal float64) {
 	var round float64
 	pow := math.Pow(10, float64(places))
 	digit := pow * val
@@ -25,15 +24,13 @@ func Round(val float64, roundOn float64, places int ) (newVal float64) {
 	return
 }
 
-
-func MD5(slice ...string) (string){
+func MD5(slice ...string) string {
 	h := md5.New()
 	for _, v := range slice {
 		io.WriteString(h, v)
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
-
 
 func GetNodeId() (nodeId string) {
 	// generate a random nodeId like locust does, using the same algorithm
@@ -43,4 +40,3 @@ func GetNodeId() (nodeId string) {
 	nodeId = fmt.Sprintf("%s_%s", hostname, MD5(fmt.Sprintf("%d%d", timestamp, randomNum)))
 	return
 }
-

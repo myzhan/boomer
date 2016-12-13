@@ -4,17 +4,15 @@ package boomer
 
 import (
 	"flag"
+	"fmt"
+	"log"
 	"os"
 	"os/signal"
-	"syscall"
-	"log"
 	"runtime"
-	"fmt"
+	"syscall"
 )
 
-
-func Run(tasks ... *Task) {
-
+func Run(tasks ...*Task) {
 
 	// support go version below 1.5
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -32,20 +30,20 @@ func Run(tasks ... *Task) {
 	if *rpc == "zeromq" {
 		client := NewZmqClient(*masterHost, *masterPort)
 		runner = &Runner{
-			Tasks: tasks,
+			Tasks:  tasks,
 			Client: client,
 			NodeId: GetNodeId(),
 		}
-		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort + 1)
-	}else if *rpc == "socket" {
+		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort+1)
+	} else if *rpc == "socket" {
 		client := NewSocketClient(*masterHost, *masterPort)
 		runner = &Runner{
-			Tasks: tasks,
+			Tasks:  tasks,
 			Client: client,
 			NodeId: GetNodeId(),
 		}
 		message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
-	}else {
+	} else {
 		log.Fatal("Unknown rpc type:", *rpc)
 	}
 

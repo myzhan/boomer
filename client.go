@@ -1,32 +1,27 @@
 package boomer
 
 import (
-	"net"
-	"log"
-	"encoding/binary"
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"log"
+	"net"
 )
-
 
 type Client interface {
 	recv()
 	send()
 }
 
-
 var FromServer = make(chan *Message, 100)
 var ToServer = make(chan *Message, 100)
 var DisconnectedFromServer = make(chan bool)
 
-
 type SocketClient struct {
-
 	conn *net.TCPConn
 }
 
-
-func NewSocketClient(masterHost string, masterPort int) *SocketClient{
+func NewSocketClient(masterHost string, masterPort int) *SocketClient {
 	serverAddr := fmt.Sprintf("%s:%d", masterHost, masterPort)
 	tcpAddr, _ := net.ResolveTCPAddr("tcp", serverAddr)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
@@ -42,8 +37,7 @@ func NewSocketClient(masterHost string, masterPort int) *SocketClient{
 	return newClient
 }
 
-
-func (this *SocketClient) recvBytes(length int) ([]byte) {
+func (this *SocketClient) recvBytes(length int) []byte {
 	buf := make([]byte, length)
 	for length > 0 {
 		n, err := this.conn.Read(buf)
@@ -54,7 +48,6 @@ func (this *SocketClient) recvBytes(length int) ([]byte) {
 	}
 	return buf
 }
-
 
 func (this *SocketClient) recv() {
 	for {
@@ -67,29 +60,27 @@ func (this *SocketClient) recv() {
 
 }
 
-
 func (this *SocketClient) send() {
 	for {
 		select {
-		case msg := <- ToServer:
+		case msg := <-ToServer:
 			this.sendMessage(msg)
-			if msg.Type == "quit"{
+			if msg.Type == "quit" {
 				DisconnectedFromServer <- true
 			}
 		}
 	}
 }
 
-
-func (this *SocketClient) sendMessage(msg *Message){
+func (this *SocketClient) sendMessage(msg *Message) {
 	packed := msg.Serialize()
 	buf := new(bytes.Buffer)
 	/*
-	use a fixed length header that indicates the length of the body
-	-----------------
-	| length | body |
-	-----------------
-	 */
+		use a fixed length header that indicates the length of the body
+		-----------------
+		| length | body |
+		-----------------
+	*/
 	binary.Write(buf, binary.BigEndian, int32(len(packed)))
 	buf.Write(packed)
 	this.conn.Write(buf.Bytes())

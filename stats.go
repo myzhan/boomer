@@ -1,8 +1,8 @@
 package boomer
+
 import (
 	"time"
 )
-
 
 type RequestStats struct {
 	Entries              map[string]*StatsEntry
@@ -14,23 +14,21 @@ type RequestStats struct {
 	StartTime            int64
 }
 
-
 func (this *RequestStats) get(name string, method string) (entry *StatsEntry) {
-	entry, ok := this.Entries[name + method]
+	entry, ok := this.Entries[name+method]
 	if !ok {
 		entry = &StatsEntry{
-			Stats: this,
-			Name: name,
-			Method: method,
+			Stats:         this,
+			Name:          name,
+			Method:        method,
 			NumReqsPerSec: make(map[int64]int64),
 			ResponseTimes: make(map[float64]int64),
 		}
 		entry.reset()
-		this.Entries[name + method] = entry
+		this.Entries[name+method] = entry
 	}
-	return this.Entries[name + method]
+	return this.Entries[name+method]
 }
-
 
 func (this *RequestStats) clearAll() {
 	this.NumRequests = 0
@@ -41,7 +39,6 @@ func (this *RequestStats) clearAll() {
 	this.LastRequestTimestamp = 0
 	this.StartTime = 0
 }
-
 
 type StatsEntry struct {
 	Stats                *RequestStats
@@ -59,7 +56,6 @@ type StatsEntry struct {
 	LastRequestTimestamp int64
 }
 
-
 func (this *StatsEntry) reset() {
 	this.StartTime = int64(time.Now().Unix())
 	this.NumRequests = 0
@@ -73,7 +69,6 @@ func (this *StatsEntry) reset() {
 	this.TotalContentLength = 0
 }
 
-
 func (this *StatsEntry) log(responseTime float64, contentLength int64) {
 	this.Stats.NumRequests += 1
 	this.NumRequests += 1
@@ -84,21 +79,19 @@ func (this *StatsEntry) log(responseTime float64, contentLength int64) {
 	this.TotalContentLength += contentLength
 }
 
-
 func (this *StatsEntry) logTimeOfRequest() {
 	now := int64(time.Now().Unix())
 
 	_, ok := this.NumReqsPerSec[now]
 	if !ok {
 		this.NumReqsPerSec[now] = 0
-	}else {
+	} else {
 		this.NumReqsPerSec[now] += 1
 	}
 
 	this.LastRequestTimestamp = now
 	this.Stats.LastRequestTimestamp = now
 }
-
 
 func (this *StatsEntry) logResponseTime(responseTime float64) {
 	this.TotalResponseTime += responseTime
@@ -119,23 +112,22 @@ func (this *StatsEntry) logResponseTime(responseTime float64) {
 
 	if responseTime < 100 {
 		roundedResponseTime = responseTime
-	}else if responseTime < 1000 {
+	} else if responseTime < 1000 {
 		roundedResponseTime = float64(Round(responseTime, .5, -1))
-	}else if responseTime < 10000 {
+	} else if responseTime < 10000 {
 		roundedResponseTime = float64(Round(responseTime, .5, -2))
-	}else {
+	} else {
 		roundedResponseTime = float64(Round(responseTime, .5, -3))
 	}
 
 	_, ok := this.ResponseTimes[roundedResponseTime]
 	if !ok {
 		this.ResponseTimes[roundedResponseTime] = 0
-	}else {
+	} else {
 		this.ResponseTimes[roundedResponseTime] += 1
 	}
 
 }
-
 
 func (this *StatsEntry) logError(err string) {
 	this.NumFailures += 1
@@ -144,17 +136,16 @@ func (this *StatsEntry) logError(err string) {
 	entry, ok := this.Stats.Errors[key]
 	if !ok {
 		entry = &StatsError{
-			Name: this.Name,
+			Name:   this.Name,
 			Method: this.Method,
-			Error: err,
+			Error:  err,
 		}
 		this.Stats.Errors[key] = entry
 	}
 	entry.occured()
 }
 
-
-func (this *StatsEntry) serialize() (map[string]interface{}) {
+func (this *StatsEntry) serialize() map[string]interface{} {
 	result := make(map[string]interface{})
 	result["name"] = this.Name
 	result["method"] = this.Method
@@ -171,13 +162,11 @@ func (this *StatsEntry) serialize() (map[string]interface{}) {
 	return result
 }
 
-
-func (this *StatsEntry) getStrippedReport() (map[string]interface{}) {
+func (this *StatsEntry) getStrippedReport() map[string]interface{} {
 	report := this.serialize()
 	this.reset()
 	return report
 }
-
 
 type StatsError struct {
 	Name       string
@@ -186,14 +175,12 @@ type StatsError struct {
 	Occurences int64
 }
 
-
 func (this *StatsError) occured() {
 	this.Occurences += 1
 }
 
-
-func (this *StatsError) toMap() map[string] interface{} {
-	m := make(map[string] interface{})
+func (this *StatsError) toMap() map[string]interface{} {
+	m := make(map[string]interface{})
 	m["method"] = this.Method
 	m["name"] = this.Name
 	m["error"] = this.Error
@@ -201,16 +188,15 @@ func (this *StatsError) toMap() map[string] interface{} {
 	return m
 }
 
-
 func reportToMasterHandler(data *map[string]interface{}) {
 	entries := make([]interface{}, 0, len(stats.Entries))
 	for _, v := range stats.Entries {
-		if !(v.NumRequests == 0 && v.NumFailures == 0){
+		if !(v.NumRequests == 0 && v.NumFailures == 0) {
 			entries = append(entries, v.getStrippedReport())
 		}
 	}
 
-	errors := make(map[string] map[string] interface{})
+	errors := make(map[string]map[string]interface{})
 	for k, v := range stats.Errors {
 		errors[k] = v.toMap()
 	}
@@ -221,39 +207,35 @@ func reportToMasterHandler(data *map[string]interface{}) {
 	stats.Errors = make(map[string]*StatsError)
 }
 
-
 type RequestSuccess struct {
-	requestType string
-	name string
-	responseTime float64
+	requestType    string
+	name           string
+	responseTime   float64
 	responseLength int64
 }
 
-
 type RequestFailure struct {
-	requestType string
-	name string
+	requestType  string
+	name         string
 	responseTime float64
-	error string
+	error        string
 }
-
 
 var stats = new(RequestStats)
 var RequestSuccessChannel = make(chan *RequestSuccess, 100)
 var RequestFailureChannel = make(chan *RequestFailure, 100)
 var ClearStatsChannel = make(chan bool)
 
-
 func init() {
 	Events.Subscribe("boomer:report_to_master", reportToMasterHandler)
 	stats.Entries = make(map[string]*StatsEntry)
 	stats.Errors = make(map[string]*StatsError)
-	go func(){
+	go func() {
 		for {
 			select {
-			case m := <- RequestSuccessChannel:
+			case m := <-RequestSuccessChannel:
 				stats.get(m.name, m.requestType).log(m.responseTime, m.responseLength)
-			case n := <- RequestFailureChannel:
+			case n := <-RequestFailureChannel:
 				stats.get(n.name, n.requestType).logError(n.error)
 			case <-ClearStatsChannel:
 				stats.clearAll()

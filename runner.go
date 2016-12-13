@@ -1,39 +1,31 @@
 package boomer
 
-
 import (
 	"fmt"
 	"log"
-	"time"
 	"os"
 	"runtime/debug"
+	"time"
 )
-
 
 const (
-	STATE_INIT string = "ready"
+	STATE_INIT     string = "ready"
 	STATE_HATCHING string = "hatching"
-	STATE_RUNNING string = "running"
-	STATE_STOPPED string = "stopped"
+	STATE_RUNNING  string = "running"
+	STATE_STOPPED  string = "stopped"
 )
-
 
 const (
 	SLAVE_REPORT_INTERVAL time.Duration = 3 * time.Second
 )
 
-
 type Task struct {
-
 	Weight int
 	Fn     func()
 	Name   string
-
 }
 
-
 type Runner struct {
-
 	Tasks       []*Task
 	NumClients  int
 	hatchRate   int
@@ -43,12 +35,11 @@ type Runner struct {
 	NodeId      string
 }
 
-
-func (this *Runner) safeRun(fn func()){
-	defer func(){
+func (this *Runner) safeRun(fn func()) {
+	defer func() {
 		// don't panic
 		err := recover()
-		if err != nil{
+		if err != nil {
 			debug.PrintStack()
 			Events.Publish("request_failure", "unknown", "panic", 0.0, fmt.Sprintf("%v", err))
 		}
@@ -56,13 +47,12 @@ func (this *Runner) safeRun(fn func()){
 	fn()
 }
 
-
 func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 	if this.state == STATE_INIT || this.state == STATE_STOPPED {
 		this.state = STATE_HATCHING
 		this.NumClients = spawnCount
-	}else {
+	} else {
 		this.NumClients += spawnCount
 	}
 
@@ -73,24 +63,23 @@ func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 		weightSum += task.Weight
 	}
 
-
 	for _, task := range this.Tasks {
 
 		percent := float64(task.Weight) / float64(weightSum)
-		amount := int(Round(float64(spawnCount) * percent, .5, 0))
+		amount := int(Round(float64(spawnCount)*percent, .5, 0))
 
 		if weightSum == 0 {
 			amount = int(float64(spawnCount) / float64(len(this.Tasks)))
 		}
 
 		for i := 1; i <= amount; i++ {
-			if i % this.hatchRate == 0 {
+			if i%this.hatchRate == 0 {
 				time.Sleep(1 * time.Second)
 			}
 			go func(fn func()) {
-				for{
+				for {
 					select {
-					case <- quit:
+					case <-quit:
 						return
 					default:
 						this.safeRun(fn)
@@ -107,7 +96,6 @@ func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 }
 
-
 func (this *Runner) StartHatching(spawnCount int, hatchRate int) {
 
 	if this.state != STATE_RUNNING && this.state != STATE_HATCHING {
@@ -115,7 +103,6 @@ func (this *Runner) StartHatching(spawnCount int, hatchRate int) {
 		this.stopChannel = make(chan bool)
 		this.NumClients = spawnCount
 	}
-
 
 	if this.state != STATE_INIT && this.state != STATE_STOPPED {
 		// Dynamically changing the goroutine count
@@ -128,41 +115,37 @@ func (this *Runner) StartHatching(spawnCount int, hatchRate int) {
 				this.stopChannel <- true
 			}
 			this.hatchComplete()
-		}else if this.NumClients < spawnCount {
+		} else if this.NumClients < spawnCount {
 			addCount := spawnCount - this.NumClients
 			this.hatchRate = hatchRate
 			this.spawnGoRoutines(addCount, this.stopChannel)
-		}else {
+		} else {
 			// equal
 			this.hatchComplete()
 		}
-	}else {
+	} else {
 		this.hatchRate = hatchRate
 		this.spawnGoRoutines(spawnCount, this.stopChannel)
 	}
 }
 
-
 func (this *Runner) hatchComplete() {
 	data := make(map[string]interface{})
 	data["count"] = this.NumClients
 	ToServer <- &Message{
-		Type: "hatch_complete",
-		Data: data,
+		Type:   "hatch_complete",
+		Data:   data,
 		NodeId: this.NodeId,
 	}
 }
-
 
 func (this *Runner) onReportToMaster(data *map[string]interface{}) {
 	(*data)["user_count"] = this.NumClients
 }
 
-
 func (this *Runner) onQuiting() {
 	ToServer <- &Message{Type: "quit", NodeId: this.NodeId}
 }
-
 
 func (this *Runner) Stop() {
 
@@ -176,7 +159,6 @@ func (this *Runner) Stop() {
 	}
 
 }
-
 
 func (this *Runner) GetReady() {
 
@@ -195,7 +177,7 @@ func (this *Runner) GetReady() {
 				workers := 0
 				if _, ok := clients.(uint64); ok {
 					workers = int(clients.(uint64))
-				}else {
+				} else {
 					workers = int(clients.(int64))
 				}
 				this.StartHatching(workers, int(hatchRate))
@@ -220,11 +202,11 @@ func (this *Runner) GetReady() {
 			select {
 			case <-ticker.C:
 				data := make(map[string]interface{})
-			// collect stats data
+				// collect stats data
 				Events.Publish("boomer:report_to_master", &data)
 				ToServer <- &Message{
-					Type: "stats",
-					Data: data,
+					Type:   "stats",
+					Data:   data,
 					NodeId: this.NodeId,
 				}
 			}

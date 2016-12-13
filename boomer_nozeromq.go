@@ -4,17 +4,15 @@ package boomer
 
 import (
 	"flag"
+	"fmt"
+	"log"
 	"os"
 	"os/signal"
-	"syscall"
-	"log"
 	"runtime"
-	"fmt"
+	"syscall"
 )
 
-
-func Run(tasks ... *Task) {
-
+func Run(tasks ...*Task) {
 
 	// support go version below 1.5
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -31,7 +29,7 @@ func Run(tasks ... *Task) {
 
 	client := NewSocketClient(*masterHost, *masterPort)
 	runner = &Runner{
-		Tasks: tasks,
+		Tasks:  tasks,
 		Client: client,
 		NodeId: GetNodeId(),
 	}
