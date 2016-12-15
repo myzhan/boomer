@@ -70,16 +70,18 @@ func (this *StatsEntry) reset() {
 }
 
 func (this *StatsEntry) log(responseTime float64, contentLength int64) {
-	this.Stats.NumRequests += 1
+
 	this.NumRequests += 1
 
 	this.logTimeOfRequest()
 	this.logResponseTime(responseTime)
 
 	this.TotalContentLength += contentLength
+
 }
 
 func (this *StatsEntry) logTimeOfRequest() {
+
 	now := int64(time.Now().Unix())
 
 	_, ok := this.NumReqsPerSec[now]
@@ -90,7 +92,7 @@ func (this *StatsEntry) logTimeOfRequest() {
 	}
 
 	this.LastRequestTimestamp = now
-	this.Stats.LastRequestTimestamp = now
+
 }
 
 func (this *StatsEntry) logResponseTime(responseTime float64) {
@@ -131,7 +133,6 @@ func (this *StatsEntry) logResponseTime(responseTime float64) {
 
 func (this *StatsEntry) logError(err string) {
 	this.NumFailures += 1
-	this.Stats.NumFailures += 1
 	key := MD5(this.Method, this.Name, err)
 	entry, ok := this.Stats.Errors[key]
 	if !ok {
