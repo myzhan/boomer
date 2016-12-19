@@ -2,6 +2,7 @@ package boomer
 
 import (
 	"time"
+	"log"
 )
 
 type RequestStats struct {
@@ -27,7 +28,11 @@ func (this *RequestStats) get(name string, method string) (entry *StatsEntry) {
 		entry.reset()
 		this.Entries[name+method] = entry
 	}
-	return this.Entries[name+method]
+	entry, ok = this.Entries[name+method]
+	if !ok {
+		log.Fatal(ok, "entry is null, why?")
+	}
+	return entry
 }
 
 func (this *RequestStats) clearAll() {
