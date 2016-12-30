@@ -18,21 +18,20 @@ type RequestStats struct {
 func (this *RequestStats) get(name string, method string) (entry *StatsEntry) {
 	entry, ok := this.Entries[name+method]
 	if !ok {
-		entry = &StatsEntry{
+		newEntry := &StatsEntry{
 			Stats:         this,
 			Name:          name,
 			Method:        method,
 			NumReqsPerSec: make(map[int64]int64),
 			ResponseTimes: make(map[float64]int64),
 		}
-		entry.reset()
-		this.Entries[name+method] = entry
+		newEntry.reset()
+		this.Entries[name+method] = newEntry
+		return newEntry
+	} else {
+		return entry
 	}
-	entry, ok = this.Entries[name+method]
-	if !ok {
-		log.Fatal(ok, "entry is null, why?")
-	}
-	return entry
+
 }
 
 func (this *RequestStats) clearAll() {
@@ -240,7 +239,11 @@ func init() {
 		for {
 			select {
 			case m := <-RequestSuccessChannel:
-				stats.get(m.name, m.requestType).log(m.responseTime, m.responseLength)
+				entry := stats.get(m.name, m.requestType)
+				if entry == nil {
+					log.Fatal("entry is nil, WTF?")
+				}
+				entry.log(m.responseTime, m.responseLength)
 			case n := <-RequestFailureChannel:
 				stats.get(n.name, n.requestType).logError(n.error)
 			case <-ClearStatsChannel:
