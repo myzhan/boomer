@@ -35,7 +35,6 @@ func Run(tasks ...*Task) {
 	}
 	message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
 
-	Events.Subscribe("boomer:report_to_master", runner.onReportToMaster)
 	Events.Subscribe("boomer:quit", runner.onQuiting)
 
 	runner.GetReady()

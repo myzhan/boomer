@@ -2,7 +2,6 @@ package boomer
 
 import (
 	"time"
-	"log"
 )
 
 type RequestStats struct {
@@ -193,7 +192,8 @@ func (this *StatsError) toMap() map[string]interface{} {
 	return m
 }
 
-func reportToMasterHandler(data *map[string]interface{}) {
+func collectReportData() map[string] interface{} {
+	data := make(map[string] interface{})
 	entries := make([]interface{}, 0, len(stats.Entries))
 	for _, v := range stats.Entries {
 		if !(v.NumRequests == 0 && v.NumFailures == 0) {
@@ -206,10 +206,12 @@ func reportToMasterHandler(data *map[string]interface{}) {
 		errors[k] = v.toMap()
 	}
 
-	(*data)["stats"] = entries
-	(*data)["errors"] = errors
+	data["stats"] = entries
+	data["errors"] = errors
 	stats.Entries = make(map[string]*StatsEntry)
 	stats.Errors = make(map[string]*StatsError)
+
+	return data
 }
 
 type RequestSuccess struct {
@@ -229,25 +231,27 @@ type RequestFailure struct {
 var stats = new(RequestStats)
 var RequestSuccessChannel = make(chan *RequestSuccess, 100)
 var RequestFailureChannel = make(chan *RequestFailure, 100)
-var ClearStatsChannel = make(chan bool)
+var clearStatsChannel = make(chan bool)
+var messageToServerChannel = make(chan map[string]interface{}, 10)
 
 func init() {
-	Events.Subscribe("boomer:report_to_master", reportToMasterHandler)
 	stats.Entries = make(map[string]*StatsEntry)
 	stats.Errors = make(map[string]*StatsError)
 	go func() {
+		var ticker = time.NewTicker(SLAVE_REPORT_INTERVAL)
 		for {
 			select {
 			case m := <-RequestSuccessChannel:
 				entry := stats.get(m.name, m.requestType)
-				if entry == nil {
-					log.Fatal("entry is nil, WTF?")
-				}
 				entry.log(m.responseTime, m.responseLength)
 			case n := <-RequestFailureChannel:
 				stats.get(n.name, n.requestType).logError(n.error)
-			case <-ClearStatsChannel:
+			case <-clearStatsChannel:
 				stats.clearAll()
+			case <-ticker.C:
+				data := collectReportData()
+				// send data to channel, no network IO in this goroutine
+				messageToServerChannel <- data
 			}
 		}
 	}()

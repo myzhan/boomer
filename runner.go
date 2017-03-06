@@ -99,7 +99,7 @@ func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 func (this *Runner) StartHatching(spawnCount int, hatchRate int) {
 
 	if this.state != STATE_RUNNING && this.state != STATE_HATCHING {
-		ClearStatsChannel <- true
+		clearStatsChannel <- true
 		this.stopChannel = make(chan bool)
 		this.NumClients = spawnCount
 	}
@@ -139,9 +139,6 @@ func (this *Runner) hatchComplete() {
 	}
 }
 
-func (this *Runner) onReportToMaster(data *map[string]interface{}) {
-	(*data)["user_count"] = this.NumClients
-}
 
 func (this *Runner) onQuiting() {
 	ToServer <- &Message{Type: "quit", NodeId: this.NodeId}
@@ -197,13 +194,10 @@ func (this *Runner) GetReady() {
 
 	// report to server
 	go func() {
-		var ticker = time.NewTicker(SLAVE_REPORT_INTERVAL)
 		for {
 			select {
-			case <-ticker.C:
-				data := make(map[string]interface{})
-				// collect stats data
-				Events.Publish("boomer:report_to_master", &data)
+			case data := <- messageToServerChannel:
+				data["user_count"] = this.NumClients
 				ToServer <- &Message{
 					Type:   "stats",
 					Data:   data,

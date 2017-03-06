@@ -47,7 +47,6 @@ func Run(tasks ...*Task) {
 		log.Fatal("Unknown rpc type:", *rpc)
 	}
 
-	Events.Subscribe("boomer:report_to_master", runner.onReportToMaster)
 	Events.Subscribe("boomer:quit", runner.onQuiting)
 
 	runner.GetReady()
