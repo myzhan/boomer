@@ -6,16 +6,11 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"time"
 )
-
-func now() int64 {
-	return time.Now().UnixNano() / int64(time.Millisecond)
-}
 
 func test_http() {
 
-	startTime := now()
+	startTime := boomer.Now()
 
 	tr := &http.Transport{
 		DisableKeepAlives: true,
@@ -27,7 +22,7 @@ func test_http() {
 	io.Copy(ioutil.Discard, resp.Body)
 	resp.Body.Close()
 
-	endTime := now()
+	endTime := boomer.Now()
 
 	if err != nil {
 		boomer.Events.Publish("request_failure", "demo", "http", 0.0, err.Error())
