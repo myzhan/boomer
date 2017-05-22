@@ -25,17 +25,17 @@ type Task struct {
 	Name   string
 }
 
-type Runner struct {
-	Tasks       []*Task
-	NumClients  int
+type runner struct {
+	tasks       []*Task
+	numClients  int
 	hatchRate   int
 	stopChannel chan bool
 	state       string
-	Client      Client
-	NodeId      string
+	client      client
+	nodeId      string
 }
 
-func (this *Runner) safeRun(fn func()) {
+func (r *runner) safeRun(fn func()) {
 	defer func() {
 		// don't panic
 		err := recover()
@@ -47,33 +47,33 @@ func (this *Runner) safeRun(fn func()) {
 	fn()
 }
 
-func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
+func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
-	if this.state == STATE_INIT || this.state == STATE_STOPPED {
-		this.state = STATE_HATCHING
-		this.NumClients = spawnCount
+	if r.state == STATE_INIT || r.state == STATE_STOPPED {
+		r.state = STATE_HATCHING
+		r.numClients = spawnCount
 	} else {
-		this.NumClients += spawnCount
+		r.numClients += spawnCount
 	}
 
-	log.Println("Hatching and swarming", spawnCount, "clients at the rate", this.hatchRate, "clients/s...")
+	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
 	weightSum := 0
-	for _, task := range this.Tasks {
+	for _, task := range r.tasks {
 		weightSum += task.Weight
 	}
 
-	for _, task := range this.Tasks {
+	for _, task := range r.tasks {
 
 		percent := float64(task.Weight) / float64(weightSum)
 		amount := int(Round(float64(spawnCount)*percent, .5, 0))
 
 		if weightSum == 0 {
-			amount = int(float64(spawnCount) / float64(len(this.Tasks)))
+			amount = int(float64(spawnCount) / float64(len(r.tasks)))
 		}
 
 		for i := 1; i <= amount; i++ {
-			if i%this.hatchRate == 0 {
+			if i%r.hatchRate == 0 {
 				time.Sleep(1 * time.Second)
 			}
 			go func(fn func()) {
@@ -82,7 +82,7 @@ func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 					case <-quit:
 						return
 					default:
-						this.safeRun(fn)
+						r.safeRun(fn)
 					}
 				}
 			}(task.Fn)
@@ -90,84 +90,83 @@ func (this *Runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 	}
 
-	this.hatchComplete()
+	r.hatchComplete()
 
-	this.state = STATE_RUNNING
+	r.state = STATE_RUNNING
 
 }
 
-func (this *Runner) StartHatching(spawnCount int, hatchRate int) {
+func (r *runner) startHatching(spawnCount int, hatchRate int) {
 
-	if this.state != STATE_RUNNING && this.state != STATE_HATCHING {
+	if r.state != STATE_RUNNING && r.state != STATE_HATCHING {
 		clearStatsChannel <- true
-		this.stopChannel = make(chan bool)
-		this.NumClients = spawnCount
+		r.stopChannel = make(chan bool)
+		r.numClients = spawnCount
 	}
 
-	if this.state != STATE_INIT && this.state != STATE_STOPPED {
+	if r.state != STATE_INIT && r.state != STATE_STOPPED {
 		// Dynamically changing the goroutine count
-		this.state = STATE_HATCHING
-		if this.NumClients > spawnCount {
+		r.state = STATE_HATCHING
+		if r.numClients > spawnCount {
 			// FIXME: Randomly stop goroutine, without considering their weights
-			stopCount := this.NumClients - spawnCount
-			this.NumClients -= stopCount
+			stopCount := r.numClients - spawnCount
+			r.numClients -= stopCount
 			for i := 0; i < stopCount; i++ {
-				this.stopChannel <- true
+				r.stopChannel <- true
 			}
-			this.hatchComplete()
-		} else if this.NumClients < spawnCount {
-			addCount := spawnCount - this.NumClients
-			this.hatchRate = hatchRate
-			this.spawnGoRoutines(addCount, this.stopChannel)
+			r.hatchComplete()
+		} else if r.numClients < spawnCount {
+			addCount := spawnCount - r.numClients
+			r.hatchRate = hatchRate
+			r.spawnGoRoutines(addCount, r.stopChannel)
 		} else {
 			// equal
-			this.hatchComplete()
+			r.hatchComplete()
 		}
 	} else {
-		this.hatchRate = hatchRate
-		this.spawnGoRoutines(spawnCount, this.stopChannel)
+		r.hatchRate = hatchRate
+		r.spawnGoRoutines(spawnCount, r.stopChannel)
 	}
 }
 
-func (this *Runner) hatchComplete() {
+func (r *runner) hatchComplete() {
 	data := make(map[string]interface{})
-	data["count"] = this.NumClients
-	ToServer <- &Message{
+	data["count"] = r.numClients
+	toServer <- &message{
 		Type:   "hatch_complete",
 		Data:   data,
-		NodeId: this.NodeId,
+		NodeId: r.nodeId,
 	}
 }
 
-
-func (this *Runner) onQuiting() {
-	ToServer <- &Message{Type: "quit", NodeId: this.NodeId}
+func (r *runner) onQuiting() {
+	toServer <- &message{Type: "quit", NodeId: r.nodeId}
 }
 
-func (this *Runner) Stop() {
+func (r *runner) stop() {
 
-	if this.state == STATE_RUNNING {
-		for i := 0; i < this.NumClients; i++ {
-			this.stopChannel <- false
+	if r.state == STATE_RUNNING {
+		for i := 0; i < r.numClients; i++ {
+			r.stopChannel <- false
 		}
-		close(this.stopChannel)
-		this.state = STATE_STOPPED
+		close(r.stopChannel)
+		r.state = STATE_STOPPED
 		log.Println("Recv stop message from master, all the goroutines are stopped")
 	}
 
 }
 
-func (this *Runner) GetReady() {
+func (r *runner) getReady() {
 
-	this.state = STATE_INIT
+	r.state = STATE_INIT
 
 	// read message from server
 	go func() {
 		for {
-			msg := <-FromServer
+			msg := <-fromServer
 			switch msg.Type {
 			case "hatch":
-				ToServer <- &Message{Type: "hatching", NodeId: this.NodeId}
+				toServer <- &message{Type: "hatching", NodeId: r.nodeId}
 				rate, _ := msg.Data["hatch_rate"]
 				clients, _ := msg.Data["num_clients"]
 				hatchRate := rate.(float64)
@@ -177,11 +176,11 @@ func (this *Runner) GetReady() {
 				} else {
 					workers = int(clients.(int64))
 				}
-				this.StartHatching(workers, int(hatchRate))
+				r.startHatching(workers, int(hatchRate))
 			case "stop":
-				this.Stop()
-				ToServer <- &Message{Type: "client_stopped", NodeId: this.NodeId}
-				ToServer <- &Message{Type: "client_ready", NodeId: this.NodeId}
+				r.stop()
+				toServer <- &message{Type: "client_stopped", NodeId: r.nodeId}
+				toServer <- &message{Type: "client_ready", NodeId: r.nodeId}
 			case "quit":
 				log.Println("Got quit message from master, shutting down...")
 				os.Exit(0)
@@ -190,18 +189,18 @@ func (this *Runner) GetReady() {
 	}()
 
 	// tell master, I'm ready
-	ToServer <- &Message{Type: "client_ready", NodeId: this.NodeId}
+	toServer <- &message{Type: "client_ready", NodeId: r.nodeId}
 
 	// report to server
 	go func() {
 		for {
 			select {
-			case data := <- messageToServerChannel:
-				data["user_count"] = this.NumClients
-				ToServer <- &Message{
+			case data := <-messageToServerChannel:
+				data["user_count"] = r.numClients
+				toServer <- &message{
 					Type:   "stats",
 					Data:   data,
-					NodeId: this.NodeId,
+					NodeId: r.nodeId,
 				}
 			}
 		}

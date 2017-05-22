@@ -33,7 +33,7 @@ func MD5(slice ...string) string {
 }
 
 // generate a random nodeId like locust does, using the same algorithm.
-func GetNodeId() (nodeId string) {
+func getNodeId() (nodeId string) {
 	hostname, _ := os.Hostname()
 	timestamp := int32(time.Now().Unix())
 	randomNum := rand.Intn(10000)

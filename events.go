@@ -7,7 +7,7 @@ import (
 var Events = EventBus.New()
 
 func requestSuccessHandler(requestType string, name string, responseTime float64, responseLength int64) {
-	RequestSuccessChannel <- &RequestSuccess{
+	requestSuccessChannel <- &requestSuccess{
 		requestType:    requestType,
 		name:           name,
 		responseTime:   responseTime,
@@ -16,7 +16,7 @@ func requestSuccessHandler(requestType string, name string, responseTime float64
 }
 
 func requestFailureHandler(requestType string, name string, responseTime float64, exception string) {
-	RequestFailureChannel <- &RequestFailure{
+	requestFailureChannel <- &requestFailure{
 		requestType:  requestType,
 		name:         name,
 		responseTime: responseTime,

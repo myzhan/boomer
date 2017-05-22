@@ -18,16 +18,16 @@ type czmqSocketClient struct {
 	pullConn *goczmq.Sock
 }
 
-func NewZmqClient(masterHost string, masterPort int) *czmqSocketClient {
+func newZmqClient(masterHost string, masterPort int) *czmqSocketClient {
 	tcpAddr := fmt.Sprintf("tcp://%s:%d", masterHost, masterPort)
 	pushConn, err := goczmq.NewPush(tcpAddr)
 	if err != nil {
-		log.Fatalf("Failed to create zeromq pusher", err)
+		log.Fatalf("Failed to create zeromq pusher, %s", err)
 	}
 	tcpAddr = fmt.Sprintf(">tcp://%s:%d", masterHost, masterPort+1)
 	pullConn, err := goczmq.NewPull(tcpAddr)
 	if err != nil {
-		log.Fatalf("Failed to create zeromq puller", err)
+		log.Fatalf("Failed to create zeromq puller, %s", err)
 	}
 	log.Println("ZMQ sockets connected")
 	newClient := &czmqSocketClient{
@@ -39,27 +39,27 @@ func NewZmqClient(masterHost string, masterPort int) *czmqSocketClient {
 	return newClient
 }
 
-func (this *czmqSocketClient) recv() {
+func (c *czmqSocketClient) recv() {
 	for {
-		msg, _, _ := this.pullConn.RecvFrame()
-		msgFromMaster := NewMessageFromBytes(msg)
-		FromServer <- msgFromMaster
+		msg, _, _ := c.pullConn.RecvFrame()
+		msgFromMaster := newMessageFromBytes(msg)
+		fromServer <- msgFromMaster
 	}
 
 }
 
-func (this *czmqSocketClient) send() {
+func (c *czmqSocketClient) send() {
 	for {
 		select {
-		case msg := <-ToServer:
-			this.sendMessage(msg)
+		case msg := <-toServer:
+			c.sendMessage(msg)
 			if msg.Type == "quit" {
-				DisconnectedFromServer <- true
+				disconnectedFromServer <- true
 			}
 		}
 	}
 }
 
-func (this *czmqSocketClient) sendMessage(msg *Message) {
-	this.pushConn.SendFrame(msg.Serialize(), 0)
+func (c *czmqSocketClient) sendMessage(msg *message) {
+	c.pushConn.SendFrame(msg.serialize(), 0)
 }

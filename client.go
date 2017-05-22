@@ -8,20 +8,20 @@ import (
 	"net"
 )
 
-type Client interface {
+type client interface {
 	recv()
 	send()
 }
 
-var FromServer = make(chan *Message, 100)
-var ToServer = make(chan *Message, 100)
-var DisconnectedFromServer = make(chan bool)
+var fromServer = make(chan *message, 100)
+var toServer = make(chan *message, 100)
+var disconnectedFromServer = make(chan bool)
 
-type SocketClient struct {
+type socketClient struct {
 	conn *net.TCPConn
 }
 
-func NewSocketClient(masterHost string, masterPort int) *SocketClient {
+func newSocketClient(masterHost string, masterPort int) *socketClient {
 	serverAddr := fmt.Sprintf("%s:%d", masterHost, masterPort)
 	tcpAddr, _ := net.ResolveTCPAddr("tcp", serverAddr)
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
@@ -29,7 +29,7 @@ func NewSocketClient(masterHost string, masterPort int) *SocketClient {
 		log.Fatalf("Failed to connect to the Locust master: %s %s", serverAddr, err)
 	}
 	conn.SetNoDelay(true)
-	newClient := &SocketClient{
+	newClient := &socketClient{
 		conn: conn,
 	}
 	go newClient.recv()
@@ -37,10 +37,10 @@ func NewSocketClient(masterHost string, masterPort int) *SocketClient {
 	return newClient
 }
 
-func (this *SocketClient) recvBytes(length int) []byte {
+func (c *socketClient) recvBytes(length int) []byte {
 	buf := make([]byte, length)
 	for length > 0 {
-		n, err := this.conn.Read(buf)
+		n, err := c.conn.Read(buf)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -49,39 +49,39 @@ func (this *SocketClient) recvBytes(length int) []byte {
 	return buf
 }
 
-func (this *SocketClient) recv() {
+func (c *socketClient) recv() {
 	for {
-		h := this.recvBytes(4)
+		h := c.recvBytes(4)
 		msgLength := binary.BigEndian.Uint32(h)
-		msg := this.recvBytes(int(msgLength))
-		msgFromMaster := NewMessageFromBytes(msg)
-		FromServer <- msgFromMaster
+		msg := c.recvBytes(int(msgLength))
+		msgFromMaster := newMessageFromBytes(msg)
+		fromServer <- msgFromMaster
 	}
 
 }
 
-func (this *SocketClient) send() {
+func (c *socketClient) send() {
 	for {
 		select {
-		case msg := <-ToServer:
-			this.sendMessage(msg)
+		case msg := <-toServer:
+			c.sendMessage(msg)
 			if msg.Type == "quit" {
-				DisconnectedFromServer <- true
+				disconnectedFromServer <- true
 			}
 		}
 	}
 }
 
-func (this *SocketClient) sendMessage(msg *Message) {
-	packed := msg.Serialize()
+func (c *socketClient) sendMessage(msg *message) {
+	packed := msg.serialize()
 	buf := new(bytes.Buffer)
-	/*
-		use a fixed length header that indicates the length of the body
-		-----------------
-		| length | body |
-		-----------------
-	*/
+
+	// use a fixed length header that indicates the length of the body
+	// -----------------
+	// | length | body |
+	// -----------------
+
 	binary.Write(buf, binary.BigEndian, int32(len(packed)))
 	buf.Write(packed)
-	this.conn.Write(buf.Bytes())
+	c.conn.Write(buf.Bytes())
 }
