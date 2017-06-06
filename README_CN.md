@@ -71,6 +71,13 @@ func main(){
 
 ## 使用
 
+为了方便调试，可以单独运行 task，不必连接到 master。
+
+```bash
+go build -o a.out main.go
+./a.out --run-tasks foo,bar
+```
+
 如果 master 使用 zeromq。
 
 ```bash

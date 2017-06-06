@@ -24,11 +24,13 @@ func bar() {
 func main() {
 
 	task1 := &boomer.Task{
+		Name: "foo",
 		Weight: 10,
 		Fn:     foo,
 	}
 
 	task2 := &boomer.Task{
+		Name: "bar",
 		Weight: 20,
 		Fn:     bar,
 	}

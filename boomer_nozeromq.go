@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"strings"
 )
 
 func Run(tasks ...*Task) {
@@ -19,6 +20,24 @@ func Run(tasks ...*Task) {
 
 	if !flag.Parsed() {
 		flag.Parse()
+	}
+
+	if *runTasks != "" {
+		// Run tasks without connecting to the master.
+		taskNames := strings.Split(*runTasks, ",")
+		for _, task := range tasks {
+			if task.Name == "" {
+				continue
+			} else {
+				for _, name := range taskNames {
+					if name == task.Name {
+						log.Println("Running " + task.Name)
+						task.Fn()
+					}
+				}
+			}
+		}
+		return
 	}
 
 	log.Println("Boomer is built without zeromq support. We recommend you to install the goczmq package, and build Boomer with zeromq when running in distributed mode.")
@@ -54,8 +73,10 @@ func Run(tasks ...*Task) {
 
 var masterHost *string
 var masterPort *int
+var runTasks *string
 
 func init() {
 	masterHost = flag.String("master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
 	masterPort = flag.Int("master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
+	runTasks = flag.String("run-tasks", "", "Run tasks without connecting to the master, multiply tasks is seperated by comma. Usually, it's for debug purpose.")
 }

@@ -61,11 +61,13 @@ func bar(){
 func main(){
 
     task1 := &boomer.Task{
+        Name: "foo",
         Weight: 10,
         Fn: foo,
     }
 
     task2 := &boomer.Task{
+        Name: "bar",
         Weight: 20,
         Fn: bar,
     }
@@ -76,6 +78,13 @@ func main(){
 ```
 
 ## Usage
+
+For debug purpose, you can run tasks without connecting to the master.
+
+```bash
+go build -o a.out main.go
+./a.out --run-tasks foo,bar
+```
 
 If master is listening on zeromq socket.
 
