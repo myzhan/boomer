@@ -34,7 +34,7 @@ func test_http() {
 func main() {
 
 	task := &boomer.Task{
-		Name: "http_shortconn",
+		Name:   "http_shortconn",
 		Weight: 10,
 		Fn:     test_http,
 	}

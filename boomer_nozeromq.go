@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"syscall"
 	"strings"
+	"syscall"
 )
 
 func Run(tasks ...*Task) {
