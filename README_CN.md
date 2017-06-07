@@ -38,7 +38,7 @@ func foo(){
     /*
     汇报一个成功的结果，实际使用时，根据实际场景，自行判断成功还是失败
     */
-    boomer.Events.Publish("request_success", "foo", "http", 100.0, int64(10))
+    boomer.Events.Publish("request_success", "http", "foo", 100.0, int64(10))
 }
 
 
@@ -47,7 +47,7 @@ func bar(){
     /*
     汇报一个失败的结果，实际使用时，根据实际场景，自行判断成功还是失败
     */
-    boomer.Events.Publish("request_failure", "bar", "udp", 100.0, "udp error")
+    boomer.Events.Publish("request_failure", "udp", "bar", 100.0, "udp error")
 }
 
 
