@@ -8,15 +8,13 @@ import (
 	"net/http"
 )
 
+// reuse the same client
+var client *http.Client
+
 func test_http() {
 
 	startTime := boomer.Now()
 
-	tr := &http.Transport{
-		DisableKeepAlives: true,
-	}
-
-	client := &http.Client{Transport: tr}
 	resp, err := client.Get("https://localhost/")
 
 	io.Copy(ioutil.Discard, resp.Body)
@@ -33,8 +31,14 @@ func test_http() {
 
 func main() {
 
+	tr := &http.Transport{
+		MaxIdleConnsPerHost: 2000,
+	}
+
+	client = &http.Client{Transport: tr}
+
 	task := &boomer.Task{
-		Name:   "http_shortconn",
+		Name:   "http_longconn",
 		Weight: 10,
 		Fn:     test_http,
 	}
