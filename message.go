@@ -15,6 +15,14 @@ type message struct {
 	NodeId string                 `codec: "node_id"`
 }
 
+func newMessage(t string, data map[string]interface{}, nodeId string) (msg *message) {
+	return &message{
+		Type:   t,
+		Data:   data,
+		NodeId: nodeId,
+	}
+}
+
 func (m *message) serialize() (out []byte) {
 	mh.StructToArray = true
 	enc := codec.NewEncoderBytes(&out, &mh)
