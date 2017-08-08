@@ -89,7 +89,7 @@ func (s *statsEntry) logTimeOfRequest() {
 
 	_, ok := s.numReqsPerSec[now]
 	if !ok {
-		s.numReqsPerSec[now] = 0
+		s.numReqsPerSec[now] = 1
 	} else {
 		s.numReqsPerSec[now] += 1
 	}
@@ -127,7 +127,7 @@ func (s *statsEntry) logResponseTime(responseTime float64) {
 
 	_, ok := s.responseTimes[roundedResponseTime]
 	if !ok {
-		s.responseTimes[roundedResponseTime] = 0
+		s.responseTimes[roundedResponseTime] = 1
 	} else {
 		s.responseTimes[roundedResponseTime] += 1
 	}
