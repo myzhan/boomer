@@ -134,11 +134,11 @@ var number *int
 
 func init() {
 
-	backendAddr = flag.String("backend-addr", "127.0.0.1:44444", "backend addr")
-	timeout := flag.Int("backend-timeout", 1000, "backend time(ms)")
+	backendAddr = flag.String("backend-addr", "127.0.0.1:44444", "backend address")
+	timeout := flag.Int("backend-timeout", 1000, "backend timeout(ms)")
 	backendTimeout = time.Duration(*timeout) * time.Millisecond
-	proxyHost = flag.String("proxy-host", "0.0.0.0", "proxy host")
-	proxyPort = flag.Int("proxy-port", 23333, "proxy port")
+	proxyHost = flag.String("proxy-host", "0.0.0.0", "proxy bind-host")
+	proxyPort = flag.Int("proxy-port", 23333, "proxy bind-port")
 	UDPBufferSize = flag.Int("udp-buffer-size", 10240, "udp recv buffer size")
 	number = flag.Int("number", 1, "the number of replication for multi-copying")
 	flag.Parse()
