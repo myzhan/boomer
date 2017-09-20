@@ -18,6 +18,8 @@ It will listen and report to the locust master automatically, your test results 
 go get github.com/myzhan/boomer
 ```
 
+*WARNING*: Since version 0.8, locust has removed old socket implementation for master/slave communication. If you are using locust 0.8 or later, you have to build boomer with zeromq support. Or you should use locust before 0.8.
+
 ### With zeromq support
 Install [goczmq](https://github.com/zeromq/goczmq#building-from-source-linux) by following its installation guide, and build boomer with zeromq support.
 Once you build boomer with zeromq support, both zeromq socket and tcp socket are supported. We add an additional command line option "--rpc", which defaults

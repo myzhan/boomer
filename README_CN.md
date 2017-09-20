@@ -12,6 +12,8 @@ boomer 完整地实现了 locust 的通讯协议，运行在 slave 模式下，�
 go get github.com/myzhan/boomer
 ```
 
+*注意*: locust 0.8 版本开始，master 和 slave 间的通信，不再支持 socket 的方式。如果你开始使用 locust 0.8 及之后的版本，编译 boomer 的时候，必须要使用 zeromq，不然连接不上 master。如果想继续使用 socket 的方式，考虑使用 locust 0.8 之前的版本。
+
 ### 使用zeromq（可选）
 安装 [goczmq](https://github.com/zeromq/goczmq#building-from-source-linux) 依赖后，可以使用 zeromq 与 master 进行通信，获得更好的通讯性能。
 
