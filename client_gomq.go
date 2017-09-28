@@ -73,7 +73,7 @@ func (c *gomqSocketClient) recv() {
 	for {
 		msg, err := c.pullSocket.Recv()
 		if err != nil {
-			log.Println("Error reading: %v", err)
+			log.Printf("Error reading: %v\n", err)
 		} else {
 			msgFromMaster := newMessageFromBytes(msg)
 			fromServer <- msgFromMaster
@@ -97,6 +97,6 @@ func (c *gomqSocketClient) send() {
 func (c *gomqSocketClient) sendMessage(msg *message) {
 	err := c.pushSocket.Send(msg.serialize())
 	if err != nil {
-		log.Println("Error sending: %v", err)
+		log.Printf("Error sending: %v\n", err)
 	}
 }
