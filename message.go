@@ -12,14 +12,14 @@ var (
 type message struct {
 	Type   string                 `codec: "type"`
 	Data   map[string]interface{} `codec: "data"`
-	NodeId string                 `codec: "node_id"`
+	NodeID string                 `codec: "node_id"`
 }
 
-func newMessage(t string, data map[string]interface{}, nodeId string) (msg *message) {
+func newMessage(t string, data map[string]interface{}, nodeID string) (msg *message) {
 	return &message{
 		Type:   t,
 		Data:   data,
-		NodeId: nodeId,
+		NodeID: nodeID,
 	}
 }
 

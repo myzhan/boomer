@@ -4,6 +4,7 @@ import (
 	"github.com/asaskevich/EventBus"
 )
 
+// Events is core event bus instance of boomer
 var Events = EventBus.New()
 
 func requestSuccessHandler(requestType string, name string, responseTime float64, responseLength int64) {

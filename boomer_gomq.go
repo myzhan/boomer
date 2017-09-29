@@ -49,7 +49,7 @@ func Run(tasks ...*Task) {
 		r = &runner{
 			tasks:  tasks,
 			client: client,
-			nodeId: getNodeId(),
+			nodeID: getNodeID(),
 		}
 		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort+1)
 	} else if *rpc == "socket" {
@@ -57,7 +57,7 @@ func Run(tasks ...*Task) {
 		r = &runner{
 			tasks:  tasks,
 			client: client,
-			nodeId: getNodeId(),
+			nodeID: getNodeID(),
 		}
 		message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
 	} else {

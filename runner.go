@@ -9,16 +9,19 @@ import (
 )
 
 const (
-	STATE_INIT     string = "ready"
-	STATE_HATCHING string = "hatching"
-	STATE_RUNNING  string = "running"
-	STATE_STOPPED  string = "stopped"
+	stateInit     string = "ready"
+	stateHatching string = "hatching"
+	stateRunning  string = "running"
+	stateStopped  string = "stopped"
 )
 
 const (
-	SLAVE_REPORT_INTERVAL time.Duration = 3 * time.Second
+	slaveReportInterval time.Duration = 3 * time.Second
 )
 
+// Task is like locust's task.
+// when boomer receive start message, it will spawn several
+// goroutines to run Task.Fn .
 type Task struct {
 	Weight int
 	Fn     func()
@@ -32,7 +35,7 @@ type runner struct {
 	stopChannel chan bool
 	state       string
 	client      client
-	nodeId      string
+	nodeID      string
 }
 
 func (r *runner) safeRun(fn func()) {
@@ -49,8 +52,8 @@ func (r *runner) safeRun(fn func()) {
 
 func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
-	if r.state == STATE_INIT || r.state == STATE_STOPPED {
-		r.state = STATE_HATCHING
+	if r.state == stateInit || r.state == stateStopped {
+		r.state = stateHatching
 		r.numClients = spawnCount
 	} else {
 		r.numClients += spawnCount
@@ -66,7 +69,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 	for _, task := range r.tasks {
 
 		percent := float64(task.Weight) / float64(weightSum)
-		amount := int(Round(float64(spawnCount)*percent, .5, 0))
+		amount := int(round(float64(spawnCount)*percent, .5, 0))
 
 		if weightSum == 0 {
 			amount = int(float64(spawnCount) / float64(len(r.tasks)))
@@ -92,21 +95,21 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 	r.hatchComplete()
 
-	r.state = STATE_RUNNING
+	r.state = stateRunning
 
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
 
-	if r.state != STATE_RUNNING && r.state != STATE_HATCHING {
+	if r.state != stateRunning && r.state != stateHatching {
 		clearStatsChannel <- true
 		r.stopChannel = make(chan bool)
 		r.numClients = spawnCount
 	}
 
-	if r.state != STATE_INIT && r.state != STATE_STOPPED {
+	if r.state != stateInit && r.state != stateStopped {
 		// Dynamically changing the goroutine count
-		r.state = STATE_HATCHING
+		r.state = stateHatching
 		if r.numClients > spawnCount {
 			// FIXME: Randomly stop goroutine, without considering their weights
 			stopCount := r.numClients - spawnCount
@@ -132,21 +135,21 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 func (r *runner) hatchComplete() {
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
-	toServer <- newMessage("hatch_complete", data, r.nodeId)
+	toServer <- newMessage("hatch_complete", data, r.nodeID)
 }
 
 func (r *runner) onQuiting() {
-	toServer <- newMessage("quit", nil, r.nodeId)
+	toServer <- newMessage("quit", nil, r.nodeID)
 }
 
 func (r *runner) stop() {
 
-	if r.state == STATE_RUNNING {
+	if r.state == stateRunning {
 		for i := 0; i < r.numClients; i++ {
 			r.stopChannel <- false
 		}
 		close(r.stopChannel)
-		r.state = STATE_STOPPED
+		r.state = stateStopped
 		log.Println("Recv stop message from master, all the goroutines are stopped")
 	}
 
@@ -154,7 +157,7 @@ func (r *runner) stop() {
 
 func (r *runner) getReady() {
 
-	r.state = STATE_INIT
+	r.state = stateInit
 
 	// read message from server
 	go func() {
@@ -162,7 +165,7 @@ func (r *runner) getReady() {
 			msg := <-fromServer
 			switch msg.Type {
 			case "hatch":
-				toServer <- newMessage("hatching", nil, r.nodeId)
+				toServer <- newMessage("hatching", nil, r.nodeID)
 				rate, _ := msg.Data["hatch_rate"]
 				clients, _ := msg.Data["num_clients"]
 				hatchRate := rate.(float64)
@@ -175,8 +178,8 @@ func (r *runner) getReady() {
 				r.startHatching(workers, int(hatchRate))
 			case "stop":
 				r.stop()
-				toServer <- newMessage("client_stopped", nil, r.nodeId)
-				toServer <- newMessage("client_ready", nil, r.nodeId)
+				toServer <- newMessage("client_stopped", nil, r.nodeID)
+				toServer <- newMessage("client_ready", nil, r.nodeID)
 			case "quit":
 				log.Println("Got quit message from master, shutting down...")
 				os.Exit(0)
@@ -185,7 +188,7 @@ func (r *runner) getReady() {
 	}()
 
 	// tell master, I'm ready
-	toServer <- newMessage("client_ready", nil, r.nodeId)
+	toServer <- newMessage("client_ready", nil, r.nodeID)
 
 	// report to server
 	go func() {
@@ -193,7 +196,7 @@ func (r *runner) getReady() {
 			select {
 			case data := <-messageToServerChannel:
 				data["user_count"] = r.numClients
-				toServer <- newMessage("stats", data, r.nodeId)
+				toServer <- newMessage("stats", data, r.nodeID)
 			}
 		}
 	}()

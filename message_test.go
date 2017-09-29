@@ -15,7 +15,7 @@ func TestEncodeAndDecode(t *testing.T) {
 	if msg.Type != decoded.Type {
 		t.Error("message type mismatched.")
 	}
-	if msg.NodeId != decoded.NodeId {
+	if msg.NodeID != decoded.NodeID {
 		t.Error("message type mismatched.")
 	}
 

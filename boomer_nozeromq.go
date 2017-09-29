@@ -13,6 +13,9 @@ import (
 	"syscall"
 )
 
+
+// Run accepts a slice of Task and connects
+// to a locust master.
 func Run(tasks ...*Task) {
 
 	// support go version below 1.5
@@ -49,7 +52,7 @@ func Run(tasks ...*Task) {
 	r = &runner{
 		tasks:  tasks,
 		client: client,
-		nodeId: getNodeId(),
+		nodeID: getNodeID(),
 	}
 	message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
 

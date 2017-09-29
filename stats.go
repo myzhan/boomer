@@ -27,10 +27,8 @@ func (s *requestStats) get(name string, method string) (entry *statsEntry) {
 		newEntry.reset()
 		s.entries[name+method] = newEntry
 		return newEntry
-	} else {
-		return entry
 	}
-
+	return entry
 }
 
 func (s *requestStats) clearAll() {
@@ -74,7 +72,7 @@ func (s *statsEntry) reset() {
 
 func (s *statsEntry) log(responseTime float64, contentLength int64) {
 
-	s.numRequests += 1
+	s.numRequests++
 
 	s.logTimeOfRequest()
 	s.logResponseTime(responseTime)
@@ -91,7 +89,7 @@ func (s *statsEntry) logTimeOfRequest() {
 	if !ok {
 		s.numReqsPerSec[now] = 1
 	} else {
-		s.numReqsPerSec[now] += 1
+		s.numReqsPerSec[now]++
 	}
 
 	s.lastRequestTimestamp = now
@@ -118,24 +116,24 @@ func (s *statsEntry) logResponseTime(responseTime float64) {
 	if responseTime < 100 {
 		roundedResponseTime = responseTime
 	} else if responseTime < 1000 {
-		roundedResponseTime = float64(Round(responseTime, .5, -1))
+		roundedResponseTime = float64(round(responseTime, .5, -1))
 	} else if responseTime < 10000 {
-		roundedResponseTime = float64(Round(responseTime, .5, -2))
+		roundedResponseTime = float64(round(responseTime, .5, -2))
 	} else {
-		roundedResponseTime = float64(Round(responseTime, .5, -3))
+		roundedResponseTime = float64(round(responseTime, .5, -3))
 	}
 
 	_, ok := s.responseTimes[roundedResponseTime]
 	if !ok {
 		s.responseTimes[roundedResponseTime] = 1
 	} else {
-		s.responseTimes[roundedResponseTime] += 1
+		s.responseTimes[roundedResponseTime]++
 	}
 
 }
 
 func (s *statsEntry) logError(err string) {
-	s.numFailures += 1
+	s.numFailures++
 	key := MD5(s.method, s.name, err)
 	entry, ok := s.stats.errors[key]
 	if !ok {
@@ -180,7 +178,7 @@ type statsError struct {
 }
 
 func (err *statsError) occured() {
-	err.occurences += 1
+	err.occurences++
 }
 
 func (err *statsError) toMap() map[string]interface{} {
@@ -238,7 +236,7 @@ func init() {
 	stats.entries = make(map[string]*statsEntry)
 	stats.errors = make(map[string]*statsError)
 	go func() {
-		var ticker = time.NewTicker(SLAVE_REPORT_INTERVAL)
+		var ticker = time.NewTicker(slaveReportInterval)
 		for {
 			select {
 			case m := <-requestSuccessChannel:

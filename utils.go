@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func Round(val float64, roundOn float64, places int) (newVal float64) {
+func round(val float64, roundOn float64, places int) (newVal float64) {
 	var round float64
 	pow := math.Pow(10, float64(places))
 	digit := pow * val
@@ -24,6 +24,7 @@ func Round(val float64, roundOn float64, places int) (newVal float64) {
 	return
 }
 
+// MD5 hash of strings
 func MD5(slice ...string) string {
 	h := md5.New()
 	for _, v := range slice {
@@ -32,16 +33,16 @@ func MD5(slice ...string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// generate a random nodeId like locust does, using the same algorithm.
-func getNodeId() (nodeId string) {
+// generate a random nodeID like locust does, using the same algorithm.
+func getNodeID() (nodeID string) {
 	hostname, _ := os.Hostname()
 	timestamp := int32(time.Now().Unix())
 	randomNum := rand.Intn(10000)
-	nodeId = fmt.Sprintf("%s_%s", hostname, MD5(fmt.Sprintf("%d%d", timestamp, randomNum)))
+	nodeID = fmt.Sprintf("%s_%s", hostname, MD5(fmt.Sprintf("%d%d", timestamp, randomNum)))
 	return
 }
 
-// get current timestamp in milliseconds.
+// Now get current timestamp in milliseconds.
 func Now() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
