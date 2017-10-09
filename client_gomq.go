@@ -1,5 +1,3 @@
-// +build gomq
-
 package boomer
 
 import (
@@ -7,19 +5,32 @@ import (
 	"log"
 	"net"
 	"strings"
+	"flag"
 
 	"github.com/zeromq/gomq"
 	"github.com/zeromq/gomq/zmtp"
 )
 
-type zmqClient interface {
-	recv()
-	send()
-}
-
 type gomqSocketClient struct {
 	pushSocket *gomq.Socket
 	pullSocket *gomq.Socket
+}
+
+func newClient() client {
+	log.Println("Boomer is built with gomq support.")
+	var message string
+	var client client
+	if *rpc == "zeromq" {
+		client = newZmqClient(*masterHost, *masterPort)
+		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort+1)
+	} else if *rpc == "socket" {
+		client = newSocketClient(*masterHost, *masterPort)
+		message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
+	} else {
+		log.Fatal("Unknown rpc type:", *rpc)
+	}
+	log.Println(message)
+	return client
 }
 
 func newGomqSocket(socketType zmtp.SocketType) *gomq.Socket {
@@ -99,4 +110,10 @@ func (c *gomqSocketClient) sendMessage(msg *message) {
 	if err != nil {
 		log.Printf("Error sending: %v\n", err)
 	}
+}
+
+var rpc *string
+
+func init() {
+	rpc = flag.String("rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
 }

@@ -12,17 +12,17 @@ boomer 完整地实现了 locust 的通讯协议，运行在 slave 模式下，�
 go get github.com/myzhan/boomer
 ```
 
-*注意*: locust 0.8 版本开始，master 和 slave 间的通信，不再支持 socket 的方式。如果你开始使用 locust 0.8 及之后的版本，编译 boomer 的时候，必须要使用 zeromq，不然连接不上 master。如果想继续使用 socket 的方式，考虑使用 locust 0.8 之前的版本。
+### zeromq 支持
+boomer 默认使用 [gomq](https://github.com/zeromq/gomq)，一个纯 Go 语言实现的 ZeroMQ 客户端。
 
-### 使用zeromq（可选）
-安装 [goczmq](https://github.com/zeromq/goczmq#building-from-source-linux) 依赖后，可以使用 zeromq 与 master 进行通信，获得更好的通讯性能。
+由于 gomq 还不稳定，可以改用 [goczmq](https://github.com/zeromq/goczmq)。
 
-默认的 --rpc 参数值是 zeromq，启动时，可以使用 --rpc=socket 切换到普通的 TCP Socket。
-
-### 不使用zeromq
-如果想快速使用，也可以不安装 zeromq 相关依赖，直接使用 TCP Socket 来和 master 通讯。
-
-**无论选择了哪个，locust(master) 和 boomer 要使用一致的协议，才能互通。**
+```bash
+# 默认使用 gomq
+go build -o a.out main.go
+# 使用 goczmq
+go build -tags 'goczmq' -o a.out main.go
+```
 
 ## 例子(main.go)
 下面演示一下 boomer 的 API，可以在 examples 目录下找到更多的例子。
@@ -83,23 +83,17 @@ go build -o a.out main.go
 如果 master 使用 zeromq。
 
 ```bash
-# 启动一个 master，依然是 locust
 locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-# 构建可执行文件
-go build -tags 'zeromq' -o a.out main.go
-# 连接 master，使用 zeromq
+go build -o a.out main.go
 ./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=zeromq
 ```
 
 如果 master 使用 TCP Socket。
 
 ```bash
-# 启动一个 master，依然是 locust
 locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-# 构建可执行文件
 go build -o a.out main.go
-# 连接 master，使用 TCP Socket
-./a.out --master-host=127.0.0.1 --master-port=5557
+./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=socket
 ```
 
 locust 启动时，需要一个 locustfile，随便一个符合它要求的即可，这里提供了一个 dummy.py。

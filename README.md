@@ -18,19 +18,21 @@ It will listen and report to the locust master automatically, your test results 
 go get github.com/myzhan/boomer
 ```
 
-*WARNING*: Since version 0.8, locust has removed old socket implementation for master/slave communication. If you are using locust 0.8 or later, you have to build boomer with zeromq support. Or you should use locust before 0.8.
+### Zeromq support
 
-### With zeromq support
-Install [goczmq](https://github.com/zeromq/goczmq#building-from-source-linux) by following its installation guide, and build boomer with zeromq support.
-Once you build boomer with zeromq support, both zeromq socket and tcp socket are supported. We add an additional command line option "--rpc", which defaults
-to "zeromq". "--rpc=socket" will switch to tcp socket.
+Boomer use [gomq](https://github.com/zeromq/gomq) by default, which is a pure Go implementation of the ZeroMQ.
 
-### Without zeromq support
-If you are new to boomer, and want to give it a try as fast as you can. You can build boomer without zeromq support.
+Becase of the instability of gomq, you can switch to [goczmq](https://github.com/zeromq/goczmq).
 
+```bash
+# use gomq
+go build -o a.out main.go
+# use goczmq
+go build -tags 'goczmq' -o a.out main.go
+```
 
 ## Examples(main.go)
-Below is a example of boomer's API. You can find more in "examples" directory.
+This is a example of boomer's API. You can find more in "examples" directory.
 
 ```go
 package main
@@ -92,8 +94,7 @@ If master is listening on zeromq socket.
 
 ```bash
 locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-# build boomer with zeromq support
-go build -tags 'zeromq' -o a.out main.go 
+go build -o a.out main.go
 ./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=zeromq
 ```
 
@@ -102,7 +103,7 @@ If master is listening on tcp socket.
 ```bash
 locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
 go build -o a.out main.go
-./a.out --master-host=127.0.0.1 --master-port=5557
+./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=socket
 ```
 
 So far, dummy.py is necessary when starting a master, because locust needs such a file.
