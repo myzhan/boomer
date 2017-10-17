@@ -52,13 +52,6 @@ func (r *runner) safeRun(fn func()) {
 
 func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
-	if r.state == stateInit || r.state == stateStopped {
-		r.state = stateHatching
-		r.numClients = spawnCount
-	} else {
-		r.numClients += spawnCount
-	}
-
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
 	weightSum := 0
@@ -95,8 +88,6 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 	r.hatchComplete()
 
-	r.state = stateRunning
-
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
@@ -104,38 +95,30 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 	if r.state != stateRunning && r.state != stateHatching {
 		clearStatsChannel <- true
 		r.stopChannel = make(chan bool)
-		r.numClients = spawnCount
 	}
 
-	if r.state != stateInit && r.state != stateStopped {
-		// Dynamically changing the goroutine count
-		r.state = stateHatching
-		if r.numClients > spawnCount {
-			// FIXME: Randomly stop goroutine, without considering their weights
-			stopCount := r.numClients - spawnCount
-			r.numClients -= stopCount
-			for i := 0; i < stopCount; i++ {
-				r.stopChannel <- true
-			}
-			r.hatchComplete()
-		} else if r.numClients < spawnCount {
-			addCount := spawnCount - r.numClients
-			r.hatchRate = hatchRate
-			r.spawnGoRoutines(addCount, r.stopChannel)
-		} else {
-			// equal
-			r.hatchComplete()
+	if r.state == stateRunning {
+		// stop all running goroutines
+		for i := 0; i < r.numClients; i++ {
+			r.stopChannel <- true
 		}
-	} else {
-		r.hatchRate = hatchRate
-		r.spawnGoRoutines(spawnCount, r.stopChannel)
 	}
+
+	r.state = stateHatching
+
+	r.hatchRate = hatchRate
+	r.numClients = spawnCount
+	r.spawnGoRoutines(r.numClients, r.stopChannel)
+
 }
 
 func (r *runner) hatchComplete() {
+
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
 	toServer <- newMessage("hatch_complete", data, r.nodeID)
+
+	r.state = stateRunning
 }
 
 func (r *runner) onQuiting() {
