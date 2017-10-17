@@ -20,7 +20,7 @@ go get github.com/myzhan/boomer
 
 ### Zeromq support
 
-Boomer use [gomq](https://github.com/zeromq/gomq) by default, which is a pure Go implementation of the ZeroMQ.
+Boomer use forked gomq by default, which is a pure Go implementation of the ZeroMQ.
 
 Becase of the instability of gomq, you can switch to [goczmq](https://github.com/zeromq/goczmq).
 

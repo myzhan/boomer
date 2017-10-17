@@ -7,8 +7,8 @@ import (
 	"strings"
 	"flag"
 
-	"github.com/zeromq/gomq"
-	"github.com/zeromq/gomq/zmtp"
+	"github.com/myzhan/boomer/gomq"
+	"github.com/myzhan/boomer/gomq/zmtp"
 )
 
 type gomqSocketClient struct {
