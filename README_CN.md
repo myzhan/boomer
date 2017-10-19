@@ -1,4 +1,4 @@
-# boomer
+# boomer [![Build Status](https://travis-ci.org/myzhan/boomer.svg?branch=master)](https://travis-ci.org/myzhan/boomer)
 
 ## boomer是什么？
 
