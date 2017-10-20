@@ -1,3 +1,5 @@
+// +build !goczmq
+
 package boomer
 
 import (
