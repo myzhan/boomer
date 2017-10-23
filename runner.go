@@ -98,12 +98,12 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 	}
 
 	if r.state == stateRunning {
-		// stop all running goroutines
-		for i := 0; i < r.numClients; i++ {
-			r.stopChannel <- true
-		}
+		// stop previous goroutines without blocking
+		// those goroutines will exit when r.safeRun returns
+		close(r.stopChannel)
 	}
 
+	r.stopChannel = make(chan bool)
 	r.state = stateHatching
 
 	r.hatchRate = hatchRate
