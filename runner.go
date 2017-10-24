@@ -128,9 +128,6 @@ func (r *runner) onQuiting() {
 func (r *runner) stop() {
 
 	if r.state == stateRunning {
-		for i := 0; i < r.numClients; i++ {
-			r.stopChannel <- false
-		}
 		close(r.stopChannel)
 		r.state = stateStopped
 		log.Println("Recv stop message from master, all the goroutines are stopped")
