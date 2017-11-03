@@ -39,6 +39,11 @@ func Run(tasks ...*Task) {
 		return
 	}
 
+	if maxRPS > 0 {
+		log.Println("Max RPS that boomer may generate is limited to", maxRPS)
+		maxRPSEnabled = true
+	}
+
 	var r *runner
 	client := newClient()
 	r = &runner{
@@ -64,7 +69,12 @@ func Run(tasks ...*Task) {
 }
 
 var runTasks *string
+var maxRPS int64
+var maxRPSThreshold int64
+var maxRPSEnabled = false
+var maxRPSControlChannel = make(chan bool)
 
 func init() {
 	runTasks = flag.String("run-tasks", "", "Run tasks without connecting to the master, multiply tasks is seperated by comma. Usually, it's for debug purpose.")
+	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate.")
 }

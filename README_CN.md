@@ -80,6 +80,12 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
+限制最高 RPS(TPS)，在一些指定 RPS(TPS) 的场景下使用。
+```bash
+go build -o a.out main.go
+./a.out --max-rps 10000
+```
+
 如果 master 使用 zeromq。
 
 ```bash

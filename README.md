@@ -90,6 +90,12 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
+If you want to limit max RPS(TPS) that boomer can generate.
+```bash
+go build -o a.out main.go
+./a.out --max-rps 10000
+```
+
 If master is listening on zeromq socket.
 
 ```bash
