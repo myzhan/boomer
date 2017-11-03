@@ -1,8 +1,9 @@
 package boomer
 
 import (
-	"github.com/ugorji/go/codec"
 	"log"
+
+	"github.com/ugorji/go/codec"
 )
 
 var (

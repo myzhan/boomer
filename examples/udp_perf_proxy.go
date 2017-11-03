@@ -23,7 +23,6 @@ import (
 //	|            |        |            |        |            |
 //	+------------+        +------------+        +------------+
 
-
 // While requests from udpcopy passing through this udp server, it keeps track of qps and timeout.
 // Also, it can multi-copy the original request for more stress.
 

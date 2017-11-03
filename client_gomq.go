@@ -3,11 +3,11 @@
 package boomer
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"strings"
-	"flag"
 
 	"github.com/myzhan/boomer/gomq"
 	"github.com/myzhan/boomer/gomq/zmtp"
