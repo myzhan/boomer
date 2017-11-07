@@ -116,11 +116,11 @@ func (s *statsEntry) logResponseTime(responseTime float64) {
 	if responseTime < 100 {
 		roundedResponseTime = responseTime
 	} else if responseTime < 1000 {
-		roundedResponseTime = float64(round(responseTime, .5, -1))
+		roundedResponseTime = round(responseTime, .5, -1)
 	} else if responseTime < 10000 {
-		roundedResponseTime = float64(round(responseTime, .5, -2))
+		roundedResponseTime = round(responseTime, .5, -2)
 	} else {
-		roundedResponseTime = float64(round(responseTime, .5, -3))
+		roundedResponseTime = round(responseTime, .5, -3)
 	}
 
 	_, ok := s.responseTimes[roundedResponseTime]
