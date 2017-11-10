@@ -58,7 +58,7 @@ func sendReq(req []byte, addr string) {
 		resp := make([]byte, *UDPBufferSize)
 		respLength, err := conn.Read(resp)
 		if err != nil {
-			boomer.Events.Publish("request_failure", "udp-read", NAME, 0.0, "REQ_TIMEOUT")
+			boomer.Events.Publish("request_failure", "udp-read", NAME, 0.0, err.Error())
 			return
 		}
 
