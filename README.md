@@ -116,6 +116,12 @@ So far, dummy.py is necessary when starting a master, because locust needs such 
 
 Don't worry, dummy.py has nothing to do with your test.
 
+## Contributing
+
+If you are enjoying boomer and willing to add new features to it, you are welcome.
+
+Also, good examples are welcome!!!
+
 ## License
 
 Open source licensed under the MIT license (see _LICENSE_ file for details).
