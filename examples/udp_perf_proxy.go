@@ -39,7 +39,7 @@ func sendReq(req []byte, addr string) {
 
 	conn, err := net.DialUDP("udp", nil, a)
 	if err != nil {
-		boomer.Events.Publish("request_failure", "udp-dial", NAME, 0.0, err.Error())
+		boomer.Events.Publish("request_failure", "udp-dial", name, 0.0, err.Error())
 		return
 	}
 
@@ -51,20 +51,20 @@ func sendReq(req []byte, addr string) {
 
 		_, err = conn.Write(req)
 		if err != nil {
-			boomer.Events.Publish("request_failure", "udp-write", NAME, 0.0, err.Error())
+			boomer.Events.Publish("request_failure", "udp-write", name, 0.0, err.Error())
 			return
 		}
 
-		resp := make([]byte, *UDPBufferSize)
+		resp := make([]byte, *udpBufferSize)
 		respLength, err := conn.Read(resp)
 		if err != nil {
-			boomer.Events.Publish("request_failure", "udp-read", NAME, 0.0, err.Error())
+			boomer.Events.Publish("request_failure", "udp-read", name, 0.0, err.Error())
 			return
 		}
 
 		elapsed := boomer.Now() - startTime
 
-		boomer.Events.Publish("request_success", "udp-resp", NAME, elapsed, int64(respLength))
+		boomer.Events.Publish("request_success", "udp-resp", name, elapsed, int64(respLength))
 	}
 
 }
@@ -80,14 +80,14 @@ func proxy() {
 	}
 
 	for {
-		data := make([]byte, *UDPBufferSize)
+		data := make([]byte, *udpBufferSize)
 		n, _, err := listener.ReadFromUDP(data)
 		if err != nil {
 			log.Println("error during read, current request is dropped.", err)
 			continue
 		}
-		if *UDPBufferSize <= n {
-			log.Printf("request size is larger than %d，please enlarge udp-buffer-size. current request is dropped.\n", *UDPBufferSize)
+		if *udpBufferSize <= n {
+			log.Printf("request size is larger than %d，please enlarge udp-buffer-size. current request is dropped.\n", *udpBufferSize)
 			continue
 		}
 		if !testStarted {
@@ -120,15 +120,15 @@ func main() {
 	boomer.Run(task)
 }
 
-const NAME string = "udproxy"
+const name = "udproxy"
 
-var testStarted bool = false
+var testStarted = false
 
 var backendAddr *string
 var backendTimeout time.Duration
 var proxyHost *string
 var proxyPort *int
-var UDPBufferSize *int
+var udpBufferSize *int
 var number *int
 
 func init() {
@@ -138,7 +138,7 @@ func init() {
 	backendTimeout = time.Duration(*timeout) * time.Millisecond
 	proxyHost = flag.String("proxy-host", "0.0.0.0", "proxy bind-host")
 	proxyPort = flag.Int("proxy-port", 23333, "proxy bind-port")
-	UDPBufferSize = flag.Int("udp-buffer-size", 10240, "udp recv buffer size")
+	udpBufferSize = flag.Int("udp-buffer-size", 10240, "udp recv buffer size")
 	number = flag.Int("number", 1, "the number of replication for multi-copying")
 	flag.Parse()
 
