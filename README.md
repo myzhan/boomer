@@ -44,7 +44,7 @@ import "time"
 
 func foo(){
 	
-	start := boomer.Now()
+    start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
     
