@@ -62,9 +62,9 @@ func sendReq(req []byte, addr string) {
 			return
 		}
 
-		endTime := boomer.Now()
+		elapsed := boomer.Now() - startTime
 
-		boomer.Events.Publish("request_success", "udp-resp", NAME, float64(endTime-startTime), int64(respLength))
+		boomer.Events.Publish("request_success", "udp-resp", NAME, elapsed, int64(respLength))
 	}
 
 }

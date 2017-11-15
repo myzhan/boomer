@@ -23,4 +23,11 @@ func TestRound(t *testing.T) {
 	if roundOne != roundTwo {
 		t.Error("round(58360.5002) should be equal to round(58460.6003)")
 	}
+
+	roundOne = round(float64(58360), .5, -3)
+	roundTwo = round(float64(58460), .5, -3)
+	if roundOne != roundTwo {
+		t.Error("round(58360) should be equal to round(58460)")
+	}
+
 }

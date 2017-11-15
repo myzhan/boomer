@@ -43,7 +43,7 @@ func worker() {
 
 	response, err := client.Do(request)
 
-	endTime := boomer.Now()
+	elapsed := boomer.Now() - startTime
 
 	if err != nil {
 		if verbose {
@@ -53,10 +53,10 @@ func worker() {
 	} else {
 		if response.StatusCode == http.StatusOK {
 			boomer.Events.Publish("request_success", "http", "200",
-				float64(endTime-startTime), response.ContentLength)
+				elapsed, response.ContentLength)
 		} else {
 			boomer.Events.Publish("request_success", "http", string(response.StatusCode),
-				float64(endTime-startTime), response.ContentLength)
+				elapsed, response.ContentLength)
 		}
 
 		if verbose {

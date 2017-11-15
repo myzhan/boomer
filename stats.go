@@ -22,7 +22,7 @@ func (s *requestStats) get(name string, method string) (entry *statsEntry) {
 			name:          name,
 			method:        method,
 			numReqsPerSec: make(map[int64]int64),
-			responseTimes: make(map[float64]int64),
+			responseTimes: make(map[int64]int64),
 		}
 		newEntry.reset()
 		s.entries[name+method] = newEntry
@@ -47,11 +47,11 @@ type statsEntry struct {
 	method               string
 	numRequests          int64
 	numFailures          int64
-	totalResponseTime    float64
-	minResponseTime      float64
-	maxResponseTime      float64
+	totalResponseTime    int64
+	minResponseTime      int64
+	maxResponseTime      int64
 	numReqsPerSec        map[int64]int64
-	responseTimes        map[float64]int64
+	responseTimes        map[int64]int64
 	totalContentLength   int64
 	startTime            int64
 	lastRequestTimestamp int64
@@ -62,7 +62,7 @@ func (s *statsEntry) reset() {
 	s.numRequests = 0
 	s.numFailures = 0
 	s.totalResponseTime = 0
-	s.responseTimes = make(map[float64]int64)
+	s.responseTimes = make(map[int64]int64)
 	s.minResponseTime = 0
 	s.maxResponseTime = 0
 	s.lastRequestTimestamp = int64(time.Now().Unix())
@@ -70,7 +70,7 @@ func (s *statsEntry) reset() {
 	s.totalContentLength = 0
 }
 
-func (s *statsEntry) log(responseTime float64, contentLength int64) {
+func (s *statsEntry) log(responseTime int64, contentLength int64) {
 
 	s.numRequests++
 
@@ -96,7 +96,7 @@ func (s *statsEntry) logTimeOfRequest() {
 
 }
 
-func (s *statsEntry) logResponseTime(responseTime float64) {
+func (s *statsEntry) logResponseTime(responseTime int64) {
 	s.totalResponseTime += responseTime
 
 	if s.minResponseTime == 0 {
@@ -111,16 +111,20 @@ func (s *statsEntry) logResponseTime(responseTime float64) {
 		s.maxResponseTime = responseTime
 	}
 
-	roundedResponseTime := float64(0)
+	roundedResponseTime := int64(0)
 
+	// to avoid to much data that has to be transfered to the master node when
+	// running in distributed mode, we save the response time rounded in a dict
+	// so that 147 becomes 150, 3432 becomes 3400 and 58760 becomes 59000
+	// see aslo locust's stats.py
 	if responseTime < 100 {
 		roundedResponseTime = responseTime
 	} else if responseTime < 1000 {
-		roundedResponseTime = round(responseTime, .5, -1)
+		roundedResponseTime = int64(round(float64(responseTime), .5, -1))
 	} else if responseTime < 10000 {
-		roundedResponseTime = round(responseTime, .5, -2)
+		roundedResponseTime = int64(round(float64(responseTime), .5, -2))
 	} else {
-		roundedResponseTime = round(responseTime, .5, -3)
+		roundedResponseTime = int64(round(float64(responseTime), .5, -3))
 	}
 
 	_, ok := s.responseTimes[roundedResponseTime]
@@ -215,14 +219,14 @@ func collectReportData() map[string]interface{} {
 type requestSuccess struct {
 	requestType    string
 	name           string
-	responseTime   float64
+	responseTime   int64
 	responseLength int64
 }
 
 type requestFailure struct {
 	requestType  string
 	name         string
-	responseTime float64
+	responseTime int64
 	error        string
 }
 
