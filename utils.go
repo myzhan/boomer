@@ -42,7 +42,7 @@ func getNodeID() (nodeID string) {
 	return
 }
 
-// Now get current timestamp in milliseconds.
+// Now gets current timestamp in milliseconds.
 func Now() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
