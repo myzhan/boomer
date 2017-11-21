@@ -5,20 +5,57 @@ import (
 )
 
 type requestStats struct {
-	entries              map[string]*statsEntry
-	errors               map[string]*statsError
-	numRequests          int64
-	numFailures          int64
-	maxRequests          int64
-	lastRequestTimestamp int64
-	startTime            int64
+	entries   map[string]*statsEntry
+	errors    map[string]*statsError
+	total     *statsEntry
+	startTime int64
+}
+
+func newRequestStats() *requestStats {
+	entries := make(map[string]*statsEntry)
+	errors := make(map[string]*statsError)
+
+	requestStats := &requestStats{
+		entries: entries,
+		errors:  errors,
+	}
+
+	requestStats.total = &statsEntry{
+		name:   "Total",
+		method: "",
+	}
+	requestStats.total.reset()
+
+	return requestStats
+}
+
+func (s *requestStats) logRequest(method, name string, responseTime int64, contentLength int64) {
+	s.total.log(responseTime, contentLength)
+	s.get(name, method).log(responseTime, contentLength)
+}
+
+func (s *requestStats) logError(method, name, err string) {
+	s.total.logError(err)
+	s.get(name, method).logError(err)
+
+	// store error in errors map
+	key := MD5(method, name, err)
+	entry, ok := s.errors[key]
+	if !ok {
+		entry = &statsError{
+			name:   name,
+			method: method,
+			error:  err,
+		}
+		s.errors[key] = entry
+	}
+	entry.occured()
 }
 
 func (s *requestStats) get(name string, method string) (entry *statsEntry) {
 	entry, ok := s.entries[name+method]
 	if !ok {
 		newEntry := &statsEntry{
-			stats:         s,
 			name:          name,
 			method:        method,
 			numReqsPerSec: make(map[int64]int64),
@@ -32,17 +69,36 @@ func (s *requestStats) get(name string, method string) (entry *statsEntry) {
 }
 
 func (s *requestStats) clearAll() {
-	s.numRequests = 0
-	s.numFailures = 0
+	s.total = &statsEntry{
+		name:   "Total",
+		method: "",
+	}
+	s.total.reset()
+
 	s.entries = make(map[string]*statsEntry)
 	s.errors = make(map[string]*statsError)
-	s.maxRequests = 0
-	s.lastRequestTimestamp = 0
-	s.startTime = 0
+	s.startTime = int64(time.Now().Unix())
+}
+
+func (s *requestStats) serializeStats() []interface{} {
+	entries := make([]interface{}, 0, len(s.entries))
+	for _, v := range s.entries {
+		if !(v.numRequests == 0 && v.numFailures == 0) {
+			entries = append(entries, v.getStrippedReport())
+		}
+	}
+	return entries
+}
+
+func (s *requestStats) serializeErrors() map[string]map[string]interface{} {
+	errors := make(map[string]map[string]interface{})
+	for k, v := range s.errors {
+		errors[k] = v.toMap()
+	}
+	return errors
 }
 
 type statsEntry struct {
-	stats                *requestStats
 	name                 string
 	method               string
 	numRequests          int64
@@ -71,18 +127,15 @@ func (s *statsEntry) reset() {
 }
 
 func (s *statsEntry) log(responseTime int64, contentLength int64) {
-
 	s.numRequests++
 
 	s.logTimeOfRequest()
 	s.logResponseTime(responseTime)
 
 	s.totalContentLength += contentLength
-
 }
 
 func (s *statsEntry) logTimeOfRequest() {
-
 	now := int64(time.Now().Unix())
 
 	_, ok := s.numReqsPerSec[now]
@@ -93,7 +146,6 @@ func (s *statsEntry) logTimeOfRequest() {
 	}
 
 	s.lastRequestTimestamp = now
-
 }
 
 func (s *statsEntry) logResponseTime(responseTime int64) {
@@ -133,22 +185,10 @@ func (s *statsEntry) logResponseTime(responseTime int64) {
 	} else {
 		s.responseTimes[roundedResponseTime]++
 	}
-
 }
 
 func (s *statsEntry) logError(err string) {
 	s.numFailures++
-	key := MD5(s.method, s.name, err)
-	entry, ok := s.stats.errors[key]
-	if !ok {
-		entry = &statsError{
-			name:   s.name,
-			method: s.method,
-			error:  err,
-		}
-		s.stats.errors[key] = entry
-	}
-	entry.occured()
 }
 
 func (s *statsEntry) serialize() map[string]interface{} {
@@ -187,30 +227,22 @@ func (err *statsError) occured() {
 
 func (err *statsError) toMap() map[string]interface{} {
 	m := make(map[string]interface{})
+
 	m["method"] = err.method
 	m["name"] = err.name
 	m["error"] = err.error
 	m["occurences"] = err.occurences
+
 	return m
 }
 
 func collectReportData() map[string]interface{} {
 	data := make(map[string]interface{})
-	entries := make([]interface{}, 0, len(stats.entries))
-	for _, v := range stats.entries {
-		if !(v.numRequests == 0 && v.numFailures == 0) {
-			entries = append(entries, v.getStrippedReport())
-		}
-	}
 
-	errors := make(map[string]map[string]interface{})
-	for k, v := range stats.errors {
-		errors[k] = v.toMap()
-	}
+	data["stats"] = stats.serializeStats()
+	data["stats_total"] = stats.total.getStrippedReport()
+	data["errors"] = stats.serializeErrors()
 
-	data["stats"] = entries
-	data["errors"] = errors
-	stats.entries = make(map[string]*statsEntry)
 	stats.errors = make(map[string]*statsError)
 
 	return data
@@ -230,7 +262,7 @@ type requestFailure struct {
 	error        string
 }
 
-var stats = new(requestStats)
+var stats = newRequestStats()
 var requestSuccessChannel = make(chan *requestSuccess, 100)
 var requestFailureChannel = make(chan *requestFailure, 100)
 var clearStatsChannel = make(chan bool)
@@ -244,10 +276,9 @@ func init() {
 		for {
 			select {
 			case m := <-requestSuccessChannel:
-				entry := stats.get(m.name, m.requestType)
-				entry.log(m.responseTime, m.responseLength)
+				stats.logRequest(m.requestType, m.name, m.responseTime, m.responseLength)
 			case n := <-requestFailureChannel:
-				stats.get(n.name, n.requestType).logError(n.error)
+				stats.logError(n.requestType, n.name, n.error)
 			case <-clearStatsChannel:
 				stats.clearAll()
 			case <-ticker.C:
