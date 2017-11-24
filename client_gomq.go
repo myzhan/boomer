@@ -3,7 +3,6 @@
 package boomer
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -112,10 +111,4 @@ func (c *gomqSocketClient) sendMessage(msg *message) {
 	if err != nil {
 		log.Printf("Error sending: %v\n", err)
 	}
-}
-
-var rpc *string
-
-func init() {
-	rpc = flag.String("rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
 }
