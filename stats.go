@@ -77,7 +77,7 @@ func (s *requestStats) clearAll() {
 
 	s.entries = make(map[string]*statsEntry)
 	s.errors = make(map[string]*statsError)
-	s.startTime = int64(time.Now().Unix())
+	s.startTime = time.Now().Unix()
 }
 
 func (s *requestStats) serializeStats() []interface{} {
@@ -114,14 +114,14 @@ type statsEntry struct {
 }
 
 func (s *statsEntry) reset() {
-	s.startTime = int64(time.Now().Unix())
+	s.startTime = time.Now().Unix()
 	s.numRequests = 0
 	s.numFailures = 0
 	s.totalResponseTime = 0
 	s.responseTimes = make(map[int64]int64)
 	s.minResponseTime = 0
 	s.maxResponseTime = 0
-	s.lastRequestTimestamp = int64(time.Now().Unix())
+	s.lastRequestTimestamp = time.Now().Unix()
 	s.numReqsPerSec = make(map[int64]int64)
 	s.totalContentLength = 0
 }
@@ -136,7 +136,7 @@ func (s *statsEntry) log(responseTime int64, contentLength int64) {
 }
 
 func (s *statsEntry) logTimeOfRequest() {
-	now := int64(time.Now().Unix())
+	now := time.Now().Unix()
 
 	_, ok := s.numReqsPerSec[now]
 	if !ok {
