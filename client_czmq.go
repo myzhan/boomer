@@ -56,7 +56,7 @@ func (c *czmqSocketClient) recv() {
 	for {
 		msg, _, _ := c.pullConn.RecvFrame()
 		msgFromMaster := newMessageFromBytes(msg)
-		fromServer <- msgFromMaster
+		fromMaster <- msgFromMaster
 	}
 
 }
@@ -64,10 +64,10 @@ func (c *czmqSocketClient) recv() {
 func (c *czmqSocketClient) send() {
 	for {
 		select {
-		case msg := <-toServer:
+		case msg := <-toMaster:
 			c.sendMessage(msg)
 			if msg.Type == "quit" {
-				disconnectedFromServer <- true
+				disconnectedFromMaster <- true
 			}
 		}
 	}

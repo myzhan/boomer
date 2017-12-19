@@ -46,7 +46,7 @@ func (c *socketClient) recv() {
 		msgLength := binary.BigEndian.Uint32(h)
 		msg := c.recvBytes(int(msgLength))
 		msgFromMaster := newMessageFromBytes(msg)
-		fromServer <- msgFromMaster
+		fromMaster <- msgFromMaster
 	}
 
 }
@@ -54,10 +54,10 @@ func (c *socketClient) recv() {
 func (c *socketClient) send() {
 	for {
 		select {
-		case msg := <-toServer:
+		case msg := <-toMaster:
 			c.sendMessage(msg)
 			if msg.Type == "quit" {
-				disconnectedFromServer <- true
+				disconnectedFromMaster <- true
 			}
 		}
 	}

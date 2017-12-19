@@ -127,13 +127,13 @@ func (r *runner) hatchComplete() {
 
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
-	toServer <- newMessage("hatch_complete", data, r.nodeID)
+	toMaster <- newMessage("hatch_complete", data, r.nodeID)
 
 	r.state = stateRunning
 }
 
 func (r *runner) onQuiting() {
-	toServer <- newMessage("quit", nil, r.nodeID)
+	toMaster <- newMessage("quit", nil, r.nodeID)
 }
 
 func (r *runner) stop() {
@@ -150,13 +150,13 @@ func (r *runner) getReady() {
 
 	r.state = stateInit
 
-	// read message from server
+	// read message from master
 	go func() {
 		for {
-			msg := <-fromServer
+			msg := <-fromMaster
 			switch msg.Type {
 			case "hatch":
-				toServer <- newMessage("hatching", nil, r.nodeID)
+				toMaster <- newMessage("hatching", nil, r.nodeID)
 				rate, _ := msg.Data["hatch_rate"]
 				clients, _ := msg.Data["num_clients"]
 				hatchRate := int(rate.(float64))
@@ -174,8 +174,8 @@ func (r *runner) getReady() {
 				}
 			case "stop":
 				r.stop()
-				toServer <- newMessage("client_stopped", nil, r.nodeID)
-				toServer <- newMessage("client_ready", nil, r.nodeID)
+				toMaster <- newMessage("client_stopped", nil, r.nodeID)
+				toMaster <- newMessage("client_ready", nil, r.nodeID)
 			case "quit":
 				log.Println("Got quit message from master, shutting down...")
 				os.Exit(0)
@@ -184,15 +184,15 @@ func (r *runner) getReady() {
 	}()
 
 	// tell master, I'm ready
-	toServer <- newMessage("client_ready", nil, r.nodeID)
+	toMaster <- newMessage("client_ready", nil, r.nodeID)
 
-	// report to server
+	// report to master
 	go func() {
 		for {
 			select {
-			case data := <-messageToServerChannel:
+			case data := <-messageToRunner:
 				data["user_count"] = r.numClients
-				toServer <- newMessage("stats", data, r.nodeID)
+				toMaster <- newMessage("stats", data, r.nodeID)
 			}
 		}
 	}()

@@ -266,7 +266,7 @@ var stats = newRequestStats()
 var requestSuccessChannel = make(chan *requestSuccess, 100)
 var requestFailureChannel = make(chan *requestFailure, 100)
 var clearStatsChannel = make(chan bool)
-var messageToServerChannel = make(chan map[string]interface{}, 10)
+var messageToRunner = make(chan map[string]interface{}, 10)
 
 func init() {
 	stats.entries = make(map[string]*statsEntry)
@@ -284,7 +284,7 @@ func init() {
 			case <-ticker.C:
 				data := collectReportData()
 				// send data to channel, no network IO in this goroutine
-				messageToServerChannel <- data
+				messageToRunner <- data
 			}
 		}
 	}()

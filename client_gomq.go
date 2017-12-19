@@ -88,7 +88,7 @@ func (c *gomqSocketClient) recv() {
 			log.Printf("Error reading: %v\n", err)
 		} else {
 			msgFromMaster := newMessageFromBytes(msg)
-			fromServer <- msgFromMaster
+			fromMaster <- msgFromMaster
 		}
 	}
 
@@ -97,10 +97,10 @@ func (c *gomqSocketClient) recv() {
 func (c *gomqSocketClient) send() {
 	for {
 		select {
-		case msg := <-toServer:
+		case msg := <-toMaster:
 			c.sendMessage(msg)
 			if msg.Type == "quit" {
-				disconnectedFromServer <- true
+				disconnectedFromMaster <- true
 			}
 		}
 	}
