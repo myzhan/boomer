@@ -10,14 +10,14 @@ import (
 )
 
 const (
-	stateInit     string = "ready"
-	stateHatching string = "hatching"
-	stateRunning  string = "running"
-	stateStopped  string = "stopped"
+	stateInit     = "ready"
+	stateHatching = "hatching"
+	stateRunning  = "running"
+	stateStopped  = "stopped"
 )
 
 const (
-	slaveReportInterval time.Duration = 3 * time.Second
+	slaveReportInterval = 3 * time.Second
 )
 
 // Task is like locust's task.
