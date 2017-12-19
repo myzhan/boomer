@@ -159,14 +159,19 @@ func (r *runner) getReady() {
 				toServer <- newMessage("hatching", nil, r.nodeID)
 				rate, _ := msg.Data["hatch_rate"]
 				clients, _ := msg.Data["num_clients"]
-				hatchRate := rate.(float64)
+				hatchRate := int(rate.(float64))
 				workers := 0
 				if _, ok := clients.(uint64); ok {
 					workers = int(clients.(uint64))
 				} else {
 					workers = int(clients.(int64))
 				}
-				r.startHatching(workers, int(hatchRate))
+				if workers == 0 || hatchRate == 0 {
+					log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
+						workers, hatchRate)
+				} else {
+					r.startHatching(workers, hatchRate)
+				}
 			case "stop":
 				r.stop()
 				toServer <- newMessage("client_stopped", nil, r.nodeID)
