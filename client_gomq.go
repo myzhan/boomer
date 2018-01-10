@@ -8,8 +8,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/myzhan/boomer/gomq"
-	"github.com/myzhan/boomer/gomq/zmtp"
+	"github.com/zeromq/gomq"
+	"github.com/zeromq/gomq/zmtp"
 )
 
 type gomqSocketClient struct {
