@@ -13,7 +13,7 @@ go get github.com/myzhan/boomer
 ```
 
 ### zeromq 支持
-boomer 默认使用自己维护的 gomq，一个纯 Go 语言实现的 ZeroMQ 客户端。
+boomer 默认使用 gomq，一个纯 Go 语言实现的 ZeroMQ 客户端。
 
 由于 gomq 还不稳定，可以改用 [goczmq](https://github.com/zeromq/goczmq)。
 
