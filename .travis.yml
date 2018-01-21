@@ -9,6 +9,7 @@ go:
 install:
   - go get github.com/asaskevich/EventBus
   - go get github.com/ugorji/go/codec
+  - go get github.com/zeromq/gomq
 
 script:
   - go test -v .
