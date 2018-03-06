@@ -88,7 +88,7 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
-限制最高 RPS(TPS)，在一些指定 RPS(TPS) 的场景下使用。
+限制单个 boomer 实例的最高 RPS(TPS)，在一些指定 RPS(TPS) 的场景下使用。
 ```bash
 go build -o a.out main.go
 ./a.out --max-rps 10000

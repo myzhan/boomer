@@ -98,7 +98,7 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
-If you want to limit max RPS(TPS) that boomer can generate.
+If you want to limit max RPS(TPS) that a single instance of boomer can generate.
 ```bash
 go build -o a.out main.go
 ./a.out --max-rps 10000
