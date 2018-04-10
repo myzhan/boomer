@@ -70,29 +70,36 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 		}
 
 		for i := 1; i <= amount; i++ {
-			if i%r.hatchRate == 0 {
-				time.Sleep(1 * time.Second)
-			}
-			go func(fn func()) {
-				for {
-					select {
-					case <-quit:
-						return
-					default:
-						if maxRPSEnabled {
-							token := atomic.AddInt64(&maxRPSThreshold, -1)
-							if token < 0 {
-								// max RPS is reached, wait until next second
-								<-maxRPSControlChannel
+			select {
+			case <-quit:
+				// quit hatching goroutine
+				return
+			default:
+				if i%r.hatchRate == 0 {
+					time.Sleep(1 * time.Second)
+				}
+				go func(fn func()) {
+					for {
+						select {
+						case <-quit:
+							return
+						default:
+							if maxRPSEnabled {
+								token := atomic.AddInt64(&maxRPSThreshold, -1)
+								if token < 0 {
+									// max RPS is reached, wait until next second
+									<-maxRPSControlChannel
+								} else {
+									r.safeRun(fn)
+								}
 							} else {
 								r.safeRun(fn)
 							}
-						} else {
-							r.safeRun(fn)
 						}
 					}
-				}
-			}(task.Fn)
+				}(task.Fn)
+			}
+
 		}
 
 	}
@@ -108,7 +115,7 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 		r.stopChannel = make(chan bool)
 	}
 
-	if r.state == stateRunning {
+	if r.state == stateRunning || r.state == stateHatching {
 		// stop previous goroutines without blocking
 		// those goroutines will exit when r.safeRun returns
 		close(r.stopChannel)
@@ -119,8 +126,7 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 
 	r.hatchRate = hatchRate
 	r.numClients = spawnCount
-	r.spawnGoRoutines(r.numClients, r.stopChannel)
-
+	go r.spawnGoRoutines(r.numClients, r.stopChannel)
 }
 
 func (r *runner) hatchComplete() {
@@ -138,7 +144,7 @@ func (r *runner) onQuiting() {
 
 func (r *runner) stop() {
 
-	if r.state == stateRunning {
+	if r.state == stateRunning || r.state == stateHatching {
 		close(r.stopChannel)
 		r.state = stateStopped
 		log.Println("Recv stop message from master, all the goroutines are stopped")
