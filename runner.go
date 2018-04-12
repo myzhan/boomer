@@ -31,7 +31,7 @@ type Task struct {
 
 type runner struct {
 	tasks       []*Task
-	numClients  int
+	numClients  int32
 	hatchRate   int
 	stopChannel chan bool
 	state       string
@@ -78,6 +78,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 				if i%r.hatchRate == 0 {
 					time.Sleep(1 * time.Second)
 				}
+				atomic.AddInt32(&r.numClients, 1)
 				go func(fn func()) {
 					for {
 						select {
@@ -125,8 +126,8 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 	r.state = stateHatching
 
 	r.hatchRate = hatchRate
-	r.numClients = spawnCount
-	go r.spawnGoRoutines(r.numClients, r.stopChannel)
+	r.numClients = 0
+	go r.spawnGoRoutines(spawnCount, r.stopChannel)
 }
 
 func (r *runner) hatchComplete() {
