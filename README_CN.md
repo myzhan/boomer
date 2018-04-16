@@ -24,6 +24,12 @@ go build -o a.out main.go
 go build -tags 'goczmq' -o a.out main.go
 ```
 
+如果使用 gomq 编译失败，先尝试更新 gomq 的版本。
+
+```bash
+go get -u github.com/zeromq/gomq
+```
+
 ## 例子(main.go)
 下面演示一下 boomer 的 API，可以在 examples 目录下找到更多的例子。
 
@@ -36,11 +42,11 @@ import "time"
 
 
 func foo(){
-	
+
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
-    
+
     /*
     汇报一个成功的结果，实际使用时，根据实际场景，自行判断成功还是失败
     */
@@ -49,11 +55,11 @@ func foo(){
 
 
 func bar(){
-	
+
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
-    
+
     /*
     汇报一个失败的结果，实际使用时，根据实际场景，自行判断成功还是失败
     */
@@ -72,7 +78,7 @@ func main(){
         Weight: 20,
         Fn: bar,
     }
-    
+
     // 连接到 master，等待页面上下发指令，支持多个 Task
     boomer.Run(task1, task2)
 

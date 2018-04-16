@@ -31,6 +31,12 @@ go build -o a.out main.go
 go build -tags 'goczmq' -o a.out main.go
 ```
 
+If you fail to compile boomer with gomq, try to update gomq fisrt.
+
+```bash
+go get -u github.com/zeromq/gomq
+```
+
 ## Examples(main.go)
 This is a example of boomer's API. You can find more in "examples" directory.
 
@@ -43,11 +49,11 @@ import "time"
 
 
 func foo(){
-	
+
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
-    
+
     /*
     Report your test result as a success, if you write it in locust, it will looks like this
     events.request_success.fire(request_type="http", name="foo", response_time=100, response_length=10)
@@ -57,11 +63,11 @@ func foo(){
 
 
 func bar(){
-	
+
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
-    
+
     /*
     Report your test result as a failure, if you write it in locust, it will looks like this
     events.request_failure.fire(request_type="udp", name="bar", response_time=100, exception=Exception("udp error"))

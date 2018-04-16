@@ -35,7 +35,7 @@ func newClient() client {
 }
 
 func newGomqSocket(socketType zmtp.SocketType) *gomq.Socket {
-	socket := gomq.NewSocket(false, socketType, zmtp.NewSecurityNull())
+	socket := gomq.NewSocket(false, socketType, nil, zmtp.NewSecurityNull())
 	return socket
 }
 
@@ -51,7 +51,7 @@ func getNetConn(addr string) net.Conn {
 func connectSock(socket *gomq.Socket, addr string) {
 	netConn := getNetConn(addr)
 	zmtpConn := zmtp.NewConnection(netConn)
-	_, err := zmtpConn.Prepare(socket.SecurityMechanism(), socket.SocketType(), false, nil)
+	_, err := zmtpConn.Prepare(socket.SecurityMechanism(), socket.SocketType(), nil, false, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
