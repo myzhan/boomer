@@ -165,10 +165,10 @@ func (s *statsEntry) logResponseTime(responseTime int64) {
 
 	roundedResponseTime := int64(0)
 
-	// to avoid to much data that has to be transfered to the master node when
+	// to avoid to much data that has to be transferred to the master node when
 	// running in distributed mode, we save the response time rounded in a dict
 	// so that 147 becomes 150, 3432 becomes 3400 and 58760 becomes 59000
-	// see aslo locust's stats.py
+	// see also locust's stats.py
 	if responseTime < 100 {
 		roundedResponseTime = responseTime
 	} else if responseTime < 1000 {

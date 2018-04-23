@@ -64,7 +64,7 @@ func worker() {
 			body, err := ioutil.ReadAll(response.Body)
 			if err != nil {
 				log.Printf("%v\n", err)
-			} else {　
+			} else {
 				log.Printf("Status Code: %d\n", response.StatusCode)
 				log.Println(string(body))
 			}
