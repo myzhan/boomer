@@ -3,10 +3,10 @@ package boomer
 import (
 	"fmt"
 	"log"
-	"os"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
+	"os"
 )
 
 const (
@@ -153,42 +153,44 @@ func (r *runner) stop() {
 
 }
 
+func (r *runner) listener() {
+	for {
+		msg := <-fromMaster
+		switch msg.Type {
+		case "hatch":
+			toMaster <- newMessage("hatching", nil, r.nodeID)
+			rate, _ := msg.Data["hatch_rate"]
+			clients, _ := msg.Data["num_clients"]
+			hatchRate := int(rate.(float64))
+			workers := 0
+			if _, ok := clients.(uint64); ok {
+				workers = int(clients.(uint64))
+			} else {
+				workers = int(clients.(int64))
+			}
+			if workers == 0 || hatchRate == 0 {
+				log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
+					workers, hatchRate)
+			} else {
+				r.startHatching(workers, hatchRate)
+			}
+		case "stop":
+			r.stop()
+			toMaster <- newMessage("client_stopped", nil, r.nodeID)
+			toMaster <- newMessage("client_ready", nil, r.nodeID)
+		case "quit":
+			log.Println("Got quit message from master, shutting down...")
+			os.Exit(0)
+		}
+	}
+}
+
 func (r *runner) getReady() {
 
 	r.state = stateInit
 
-	// read message from master
-	go func() {
-		for {
-			msg := <-fromMaster
-			switch msg.Type {
-			case "hatch":
-				toMaster <- newMessage("hatching", nil, r.nodeID)
-				rate, _ := msg.Data["hatch_rate"]
-				clients, _ := msg.Data["num_clients"]
-				hatchRate := int(rate.(float64))
-				workers := 0
-				if _, ok := clients.(uint64); ok {
-					workers = int(clients.(uint64))
-				} else {
-					workers = int(clients.(int64))
-				}
-				if workers == 0 || hatchRate == 0 {
-					log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
-						workers, hatchRate)
-				} else {
-					r.startHatching(workers, hatchRate)
-				}
-			case "stop":
-				r.stop()
-				toMaster <- newMessage("client_stopped", nil, r.nodeID)
-				toMaster <- newMessage("client_ready", nil, r.nodeID)
-			case "quit":
-				log.Println("Got quit message from master, shutting down...")
-				os.Exit(0)
-			}
-		}
-	}()
+	// listen to master
+	go r.listener()
 
 	// tell master, I'm ready
 	toMaster <- newMessage("client_ready", nil, r.nodeID)
