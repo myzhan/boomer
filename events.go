@@ -42,7 +42,7 @@ func requestFailureHandler(requestType string, name string, responseTime interfa
 	}
 }
 
-func init() {
+func initEvents() {
 	Events.Subscribe("request_success", requestSuccessHandler)
 	Events.Subscribe("request_failure", requestFailureHandler)
 }

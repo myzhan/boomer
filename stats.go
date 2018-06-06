@@ -268,7 +268,7 @@ var requestFailureChannel = make(chan *requestFailure, 100)
 var clearStatsChannel = make(chan bool)
 var messageToRunner = make(chan map[string]interface{}, 10)
 
-func init() {
+func initStats() {
 	stats.entries = make(map[string]*statsEntry)
 	stats.errors = make(map[string]*statsError)
 	go func() {
