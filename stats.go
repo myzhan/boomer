@@ -135,18 +135,22 @@ func (s *statsEntry) log(responseTime int64, contentLength int64) {
 	s.totalContentLength += contentLength
 }
 
+// cache of current time in second
 var now = time.Now().Unix()
 
 func (s *statsEntry) logTimeOfRequest() {
 
-	_, ok := s.numReqsPerSec[now]
+	// 'now' is updated by another goroutine
+	// make a copy to avoid race condition
+	key := now
+	_, ok := s.numReqsPerSec[key]
 	if !ok {
-		s.numReqsPerSec[now] = 1
+		s.numReqsPerSec[key] = 1
 	} else {
-		s.numReqsPerSec[now]++
+		s.numReqsPerSec[key]++
 	}
 
-	s.lastRequestTimestamp = now
+	s.lastRequestTimestamp = key
 
 }
 
