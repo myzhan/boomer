@@ -135,8 +135,9 @@ func (s *statsEntry) log(responseTime int64, contentLength int64) {
 	s.totalContentLength += contentLength
 }
 
+var now = time.Now().Unix()
+
 func (s *statsEntry) logTimeOfRequest() {
-	now := time.Now().Unix()
 
 	_, ok := s.numReqsPerSec[now]
 	if !ok {
@@ -146,6 +147,7 @@ func (s *statsEntry) logTimeOfRequest() {
 	}
 
 	s.lastRequestTimestamp = now
+
 }
 
 func (s *statsEntry) logResponseTime(responseTime int64) {
@@ -285,6 +287,16 @@ func initStats() {
 				data := collectReportData()
 				// send data to channel, no network IO in this goroutine
 				messageToRunner <- data
+			}
+		}
+	}()
+
+	go func() {
+		var ticker = time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				now = time.Now().Unix()
 			}
 		}
 	}()
