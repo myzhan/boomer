@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"runtime"
+	"runtime/pprof"
+	"time"
 )
 
 var runTasks string
@@ -17,6 +19,9 @@ var maxRPS int64
 var maxRPSThreshold int64
 var maxRPSEnabled = false
 var maxRPSControlChannel = make(chan bool)
+
+var memoryProfile string
+var cpuProfile string
 
 var initted uint32
 var initMutex = sync.Mutex{}
@@ -30,8 +35,10 @@ func initBoomer() {
 	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate.")
 	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
 	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
-	flag.IntVar(&masterPort,"master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
-	flag.StringVar(&rpc,"rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
+	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
+	flag.StringVar(&rpc, "rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
+	flag.StringVar(&memoryProfile, "mem-profile", "", "Collect runtime heap profile after 30 seconds.")
+	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling for 30 seconds.")
 
 	if !flag.Parsed() {
 		flag.Parse()
@@ -92,6 +99,14 @@ func Run(tasks ...*Task) {
 
 	r.getReady()
 
+	if memoryProfile != "" {
+		startMemoryProfile()
+	}
+
+	if cpuProfile != "" {
+		startCPUProfile()
+	}
+
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGINT)
 
@@ -102,4 +117,40 @@ func Run(tasks ...*Task) {
 	<-disconnectedFromMaster
 	log.Println("shut down")
 
+}
+
+func startMemoryProfile() {
+	f, err := os.Create(memoryProfile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	time.AfterFunc(30*time.Second, func() {
+		err = pprof.WriteHeapProfile(f)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		f.Close()
+		log.Println("Stop memory profiling after 30 seconds")
+	})
+}
+
+func startCPUProfile() {
+	f, err := os.Create(cpuProfile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = pprof.StartCPUProfile(f)
+	if err != nil {
+		log.Println(err)
+		f.Close()
+		return
+	}
+
+	time.AfterFunc(30*time.Second, func() {
+		pprof.StopCPUProfile()
+		f.Close()
+		log.Println("Stop CPU profiling after 30 seconds")
+	})
 }
