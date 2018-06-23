@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 	"os"
+	"math"
 )
 
 const (
@@ -85,11 +86,11 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 						case <-quit:
 							return
 						default:
-							if maxRPSEnabled {
-								token := atomic.AddInt64(&maxRPSThreshold, -1)
+							if rpsControlEnabled {
+								token := atomic.AddInt64(&rpsThreshold, -1)
 								if token < 0 {
-									// max RPS is reached, wait until next second
-									<-maxRPSControlChannel
+									// RPS threshold is reached, wait until next second
+									<-rpsControlChannel
 								} else {
 									r.safeRun(fn)
 								}
@@ -172,10 +173,16 @@ func (r *runner) listener() {
 				log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
 					workers, hatchRate)
 			} else {
+				if rpsControlEnabled {
+					startRPSController()
+				}
 				r.startHatching(workers, hatchRate)
 			}
 		case "stop":
 			r.stop()
+			if rpsControlEnabled {
+				stopRPSController()
+			}
 			toMaster <- newMessage("client_stopped", nil, r.nodeID)
 			toMaster <- newMessage("client_ready", nil, r.nodeID)
 		case "quit":
@@ -183,6 +190,43 @@ func (r *runner) listener() {
 			os.Exit(0)
 		}
 	}
+}
+
+func startRPSController() {
+	rpsControllerQuitChannel = make(chan bool)
+	go func() {
+		nextRPSThreshold := int64(0)
+		for {
+			select {
+			case <- rpsControllerQuitChannel:
+				return
+			default:
+				if requestIncreaseRate > 0 {
+					nextRPSThreshold = nextRPSThreshold + requestIncreaseRate
+					if nextRPSThreshold < 0 {
+						// int64 overflow
+						nextRPSThreshold = int64(math.MaxInt64)
+					}
+					if maxRPS > 0 && nextRPSThreshold > maxRPS {
+						nextRPSThreshold = maxRPS
+					}
+				} else {
+					if maxRPS > 0 {
+						nextRPSThreshold = maxRPS
+					}
+				}
+				atomic.StoreInt64(&rpsThreshold, nextRPSThreshold)
+				time.Sleep(1 * time.Second)
+				// use channel to broadcast
+				close(rpsControlChannel)
+				rpsControlChannel = make(chan bool)
+			}
+		}
+	}()
+}
+
+func stopRPSController() {
+	close(rpsControllerQuitChannel)
 }
 
 func (r *runner) getReady() {
@@ -206,15 +250,4 @@ func (r *runner) getReady() {
 		}
 	}()
 
-	if maxRPSEnabled {
-		go func() {
-			for {
-				atomic.StoreInt64(&maxRPSThreshold, maxRPS)
-				time.Sleep(1 * time.Second)
-				// use channel to broadcast
-				close(maxRPSControlChannel)
-				maxRPSControlChannel = make(chan bool)
-			}
-		}()
-	}
 }

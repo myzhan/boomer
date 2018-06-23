@@ -16,9 +16,11 @@ import (
 
 var runTasks string
 var maxRPS int64
-var maxRPSThreshold int64
-var maxRPSEnabled = false
-var maxRPSControlChannel = make(chan bool)
+var requestIncreaseRate int64
+var rpsThreshold int64
+var rpsControlEnabled = false
+var rpsControlChannel = make(chan bool)
+var rpsControllerQuitChannel = make(chan bool)
 
 var memoryProfile string
 var cpuProfile string
@@ -32,7 +34,8 @@ func initBoomer() {
 	// support go version below 1.5
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate.")
+	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate, disabled by default.")
+	flag.Int64Var(&requestIncreaseRate, "request-increase-rate", -1, "Request increase rate, disabled by default.")
 	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
 	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
 	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
@@ -44,9 +47,14 @@ func initBoomer() {
 		flag.Parse()
 	}
 
-	if maxRPS > 0 {
-		log.Println("Max RPS that boomer may generate is limited to", maxRPS)
-		maxRPSEnabled = true
+	if maxRPS > 0 || requestIncreaseRate > 0 {
+		rpsControlEnabled = true
+		if maxRPS > 0 {
+			log.Println("Max RPS that boomer may generate is limited to", maxRPS)
+		}
+		if requestIncreaseRate > 0 {
+			log.Println("Request increase rate is", requestIncreaseRate)
+		}
 	}
 
 	initEvents()

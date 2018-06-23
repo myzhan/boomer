@@ -94,10 +94,18 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
-限制单个 boomer 实例的最高 RPS(TPS)，在一些指定 RPS(TPS) 的场景下使用。
+限制单个 boomer 实例的最高 RPS，在一些指定 RPS 的场景下使用。
+
 ```bash
 go build -o a.out main.go
 ./a.out --max-rps 10000
+```
+
+线性增长的 RPS，从 0 开始，每秒增加 10 个请求。
+
+```bash
+go build -o a.out main.go
+./a.out --request-increase-rate 10
 ```
 
 如果 master 使用 zeromq。
