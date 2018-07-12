@@ -115,7 +115,11 @@ If you want the RPS increase from zero to max-rps or infinity.
 
 ```
 go build -o a.out main.go
+# The default interval is 1 second
 ./a.out --request-increase-rate 10
+# Change the interval to 1 minute
+# Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h"
+./a.out --request-increase-rate 10/1m
 ```
 
 If master is listening on zeromq socket.

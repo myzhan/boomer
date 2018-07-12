@@ -192,30 +192,14 @@ func (r *runner) listener() {
 	}
 }
 
-func startRPSController() {
-	rpsControllerQuitChannel = make(chan bool)
+func startBucketUpdater() {
 	go func() {
-		nextRPSThreshold := int64(0)
 		for {
 			select {
 			case <- rpsControllerQuitChannel:
 				return
 			default:
-				if requestIncreaseRate > 0 {
-					nextRPSThreshold = nextRPSThreshold + requestIncreaseRate
-					if nextRPSThreshold < 0 {
-						// int64 overflow
-						nextRPSThreshold = int64(math.MaxInt64)
-					}
-					if maxRPS > 0 && nextRPSThreshold > maxRPS {
-						nextRPSThreshold = maxRPS
-					}
-				} else {
-					if maxRPS > 0 {
-						nextRPSThreshold = maxRPS
-					}
-				}
-				atomic.StoreInt64(&rpsThreshold, nextRPSThreshold)
+				atomic.StoreInt64(&rpsThreshold, currentRPSThreshold)
 				time.Sleep(1 * time.Second)
 				// use channel to broadcast
 				close(rpsControlChannel)
@@ -223,6 +207,35 @@ func startRPSController() {
 			}
 		}
 	}()
+}
+
+func startRPSController() {
+	rpsControllerQuitChannel = make(chan bool)
+	go func() {
+		for {
+			select {
+			case <- rpsControllerQuitChannel:
+				return
+			default:
+				if requestIncreaseStep > 0 {
+					currentRPSThreshold = currentRPSThreshold + requestIncreaseStep
+					if currentRPSThreshold < 0 {
+						// int64 overflow
+						currentRPSThreshold = int64(math.MaxInt64)
+					}
+					if maxRPS > 0 && currentRPSThreshold > maxRPS {
+						currentRPSThreshold = maxRPS
+					}
+				} else {
+					if maxRPS > 0 {
+						currentRPSThreshold = maxRPS
+					}
+				}
+				time.Sleep(requestIncreaseInterval)
+			}
+		}
+	}()
+	startBucketUpdater()
 }
 
 func stopRPSController() {

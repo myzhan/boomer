@@ -12,11 +12,15 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"time"
+	"strconv"
 )
 
 var runTasks string
 var maxRPS int64
-var requestIncreaseRate int64
+var requestIncreaseRate string
+var requestIncreaseStep int64
+var requestIncreaseInterval time.Duration
+var currentRPSThreshold = int64(0)
 var rpsThreshold int64
 var rpsControlEnabled = false
 var rpsControlChannel = make(chan bool)
@@ -35,7 +39,7 @@ func initBoomer() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate, disabled by default.")
-	flag.Int64Var(&requestIncreaseRate, "request-increase-rate", -1, "Request increase rate, disabled by default.")
+	flag.StringVar(&requestIncreaseRate, "request-increase-rate", "-1", "Request increase rate, disabled by default.")
 	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
 	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
 	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
@@ -47,13 +51,35 @@ func initBoomer() {
 		flag.Parse()
 	}
 
-	if maxRPS > 0 || requestIncreaseRate > 0 {
+	if maxRPS > 0 || requestIncreaseRate != "-1" {
 		rpsControlEnabled = true
 		if maxRPS > 0 {
 			log.Println("Max RPS that boomer may generate is limited to", maxRPS)
 		}
-		if requestIncreaseRate > 0 {
+		if requestIncreaseRate != "-1" {
 			log.Println("Request increase rate is", requestIncreaseRate)
+			if strings.Contains(requestIncreaseRate, "/") {
+				tmp := strings.Split(requestIncreaseRate, "/")
+				if len(tmp) != 2 {
+					log.Fatalf("Wrong format of requestIncreaseRate, %s", requestIncreaseRate)
+				}
+				step, err := strconv.ParseInt(tmp[0], 10, 64)
+				if err != nil {
+					log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+				}
+				requestIncreaseStep = step
+				requestIncreaseInterval, err = time.ParseDuration(tmp[1])
+				if err != nil {
+					log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+				}
+			} else {
+				step, err := strconv.ParseInt(requestIncreaseRate, 10, 64)
+				if err != nil {
+					log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+				}
+				requestIncreaseStep = step
+				requestIncreaseInterval = time.Second
+			}
 		}
 	}
 

@@ -105,7 +105,11 @@ go build -o a.out main.go
 
 ```bash
 go build -o a.out main.go
+# 默认间隔 1 秒增加 1 次
 ./a.out --request-increase-rate 10
+# 间隔 1 分钟增加 1 次
+# 有效的时间单位 "ns", "us" (or "µs"), "ms", "s", "m", "h"
+./a.out --request-increase-rate 10/1m
 ```
 
 如果 master 使用 zeromq。
