@@ -1,18 +1,18 @@
-package boomer
+package boomer_bak
 
 import (
 	"flag"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
-	"syscall"
-	"sync"
-	"sync/atomic"
 	"runtime"
 	"runtime/pprof"
-	"time"
 	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
 )
 
 var runTasks string
@@ -129,6 +129,56 @@ func Run(tasks ...*Task) {
 		nodeID: getNodeID(),
 	}
 
+	_startRunner(r)
+
+}
+
+func RunClients(tasks TaskClient) {
+
+	if atomic.LoadUint32(&initted) == 1 {
+		panic("Don't call boomer.Run() more than once.")
+	}
+
+	// init boomer
+	initMutex.Lock()
+	initBoomer()
+	initMutex.Unlock()
+
+	if runTasks != "" {
+		c := tasks.New()
+		if !c.OnStart(1) {
+			log.Println("OnStart fail")
+			return
+		}
+		// Run tasks without connecting to the master.
+		taskNames := strings.Split(runTasks, ",")
+		for _, task := range c.Tasks() {
+			if task.Name == "" {
+				continue
+			} else {
+				for _, name := range taskNames {
+					if name == task.Name {
+						log.Println("Running " + task.Name)
+						task.Fn()
+					}
+				}
+			}
+		}
+		return
+	}
+
+	var r *runner
+	client := newClient()
+	r = &runner{
+		taskClients: tasks,
+		client:      client,
+		nodeID:      getNodeID(),
+	}
+	_startRunner(r)
+
+}
+
+func _startRunner(r *runner) {
 	Events.Subscribe("boomer:quit", r.onQuiting)
 
 	r.getReady()
@@ -150,7 +200,6 @@ func Run(tasks ...*Task) {
 	// wait for quit message is sent to master
 	<-disconnectedFromMaster
 	log.Println("shut down")
-
 }
 
 func startMemoryProfile() {

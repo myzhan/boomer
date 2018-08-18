@@ -1,13 +1,13 @@
-package boomer
+package boomer_bak
 
 import (
 	"fmt"
 	"log"
+	"math"
+	"os"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
-	"os"
-	"math"
 )
 
 const (
@@ -30,8 +30,16 @@ type Task struct {
 	Name   string
 }
 
+type TaskClient interface {
+	New() TaskClient
+	OnStart(idx int) bool
+	Tasks() []*Task
+	OnStop()
+}
+
 type runner struct {
 	tasks       []*Task
+	taskClients TaskClient
 	numClients  int32
 	hatchRate   int
 	stopChannel chan bool
@@ -55,7 +63,77 @@ func (r *runner) safeRun(fn func()) {
 func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
+	if len(r.taskClients.Tasks()) > 0 {
+		r.runTaskClients(spawnCount, quit)
+	} else {
+		r.runTasks(spawnCount, quit)
+	}
+	r.hatchComplete()
 
+}
+
+func (r *runner) runTaskClients(spawnCount int, quit chan bool) {
+
+	weightSum := 0
+	tasks := r.taskClients.Tasks()
+	for _, task := range tasks {
+		weightSum += task.Weight
+	}
+
+	idx := 0
+	for task_idx, task := range tasks {
+
+		percent := float64(task.Weight) / float64(weightSum)
+		amount := int(round(float64(spawnCount)*percent, .5, 0))
+
+		if weightSum == 0 {
+			amount = int(float64(spawnCount) / float64(len(tasks)))
+		}
+
+		for i := 1; i <= amount; i++ {
+			select {
+			case <-quit:
+				// quit hatching goroutine
+				return
+			default:
+				idx += 1
+				c := r.taskClients.New()
+				if !c.OnStart(idx) {
+					continue
+				}
+				if i%r.hatchRate == 0 {
+					time.Sleep(1 * time.Second)
+				}
+				atomic.AddInt32(&r.numClients, 1)
+				go func(c TaskClient, task_idx int) {
+					cts := c.Tasks()
+					fn := cts[task_idx].Fn
+					for {
+						select {
+						case <-quit:
+							c.OnStop()
+							return
+						default:
+							if rpsControlEnabled {
+								token := atomic.AddInt64(&rpsThreshold, -1)
+								if token < 0 {
+									// RPS threshold is reached, wait until next second
+									<-rpsControlChannel
+								} else {
+									r.safeRun(fn)
+								}
+							} else {
+								r.safeRun(fn)
+							}
+						}
+					}
+				}(c, task_idx)
+			}
+		}
+	}
+}
+
+func (r *runner) runTasks(spawnCount int, quit chan bool) {
 	weightSum := 0
 	for _, task := range r.tasks {
 		weightSum += task.Weight
@@ -105,11 +183,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 		}
 
 	}
-
-	r.hatchComplete()
-
 }
-
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
 
 	if r.state != stateRunning && r.state != stateHatching {
@@ -196,7 +270,7 @@ func startBucketUpdater() {
 	go func() {
 		for {
 			select {
-			case <- rpsControllerQuitChannel:
+			case <-rpsControllerQuitChannel:
 				return
 			default:
 				atomic.StoreInt64(&rpsThreshold, currentRPSThreshold)
@@ -214,7 +288,7 @@ func startRPSController() {
 	go func() {
 		for {
 			select {
-			case <- rpsControllerQuitChannel:
+			case <-rpsControllerQuitChannel:
 				return
 			default:
 				if requestIncreaseStep > 0 {
