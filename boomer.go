@@ -1,4 +1,4 @@
-package boomer_bak
+package boomer
 
 import (
 	"flag"
