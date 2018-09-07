@@ -11,9 +11,9 @@ var (
 )
 
 type message struct {
-	Type   string                 `codec: "type"`
-	Data   map[string]interface{} `codec: "data"`
-	NodeID string                 `codec: "node_id"`
+	Type   string                 `codec:"type"`
+	Data   map[string]interface{} `codec:"data"`
+	NodeID string                 `codec:"node_id"`
 }
 
 func newMessage(t string, data map[string]interface{}, nodeID string) (msg *message) {
