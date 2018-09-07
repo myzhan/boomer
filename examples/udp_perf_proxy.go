@@ -43,8 +43,6 @@ func sendReq(req []byte, addr string) {
 		return
 	}
 
-	conn.SetReadDeadline(time.Now().Add(backendTimeout))
-
 	for n := 0; n < *number; n++ {
 
 		startTime := boomer.Now()
@@ -56,6 +54,8 @@ func sendReq(req []byte, addr string) {
 		}
 
 		resp := make([]byte, *udpBufferSize)
+		conn.SetReadDeadline(time.Now().Add(backendTimeout))
+
 		respLength, err := conn.Read(resp)
 		if err != nil {
 			boomer.Events.Publish("request_failure", "udp-read", name, 0.0, err.Error())
