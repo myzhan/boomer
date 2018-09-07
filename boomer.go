@@ -5,14 +5,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
-	"syscall"
-	"sync"
-	"sync/atomic"
 	"runtime"
 	"runtime/pprof"
-	"time"
 	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
 )
 
 var runTasks string
@@ -37,15 +37,6 @@ func initBoomer() {
 
 	// support go version below 1.5
 	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate, disabled by default.")
-	flag.StringVar(&requestIncreaseRate, "request-increase-rate", "-1", "Request increase rate, disabled by default.")
-	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
-	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
-	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
-	flag.StringVar(&rpc, "rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
-	flag.StringVar(&memoryProfile, "mem-profile", "", "Collect runtime heap profile after 30 seconds.")
-	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling for 30 seconds.")
 
 	if !flag.Parsed() {
 		flag.Parse()
@@ -187,4 +178,15 @@ func startCPUProfile() {
 		f.Close()
 		log.Println("Stop CPU profiling after 30 seconds")
 	})
+}
+
+func init() {
+	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate, disabled by default.")
+	flag.StringVar(&requestIncreaseRate, "request-increase-rate", "-1", "Request increase rate, disabled by default.")
+	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
+	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
+	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
+	flag.StringVar(&rpc, "rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
+	flag.StringVar(&memoryProfile, "mem-profile", "", "Collect runtime heap profile after 30 seconds.")
+	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling for 30 seconds.")
 }
