@@ -56,7 +56,7 @@ func newWorker(remoteAddr string) *worker {
 				wn, err := conn.Write(req)
 				if err != nil {
 					boomer.Events.Publish("request_failure", "udp-write", name, 0.0, err.Error())
-					return
+					continue
 				}
 
 				if *dontRead {
@@ -67,7 +67,7 @@ func newWorker(remoteAddr string) *worker {
 					respLength, err := conn.Read(recvBuff)
 					if err != nil {
 						boomer.Events.Publish("request_failure", "udp-read", name, 0.0, err.Error())
-						return
+						continue
 					}
 					elapsed := boomer.Now() - startTime
 					boomer.Events.Publish("request_success", "udp-resp", name, elapsed, int64(respLength))
