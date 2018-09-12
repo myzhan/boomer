@@ -170,7 +170,7 @@ func init() {
 	timeout := flag.Int("backend-timeout", 1000, "backend timeout(ms)")
 	proxyHost = flag.String("proxy-host", "0.0.0.0", "proxy bind-host")
 	proxyPort = flag.Int("proxy-port", 23333, "proxy bind-port")
-	workersCount = flag.Int("workers", 200, "UDP workers")
+	workersCount = flag.Int("workers", 20, "UDP workers")
 	udpBufferSize = flag.Int("udp-buffer-size", 4096, "udp recv buffer size")
 	number = flag.Int("number", 1, "the number of replication for multi-copying")
 	dontRead = flag.Bool("dontread", false, "do not wait for backend's response")
