@@ -1,7 +1,6 @@
 package boomer
 
 import (
-	"runtime"
 	"testing"
 	"time"
 )
@@ -61,16 +60,7 @@ func TestSpawnGoRoutines(t *testing.T) {
 		nodeID:      "TestSpawnGoRoutines",
 	}
 	runner.spawnGoRoutines(10, runner.stopChannel)
-
-	// Print out stack trace of all goroutines
-	// buf := make([]byte, 1<<16)
-	// runtime.Stack(buf, true)
-	// fmt.Printf("%s", buf)
-
-	// 3 goroutines spawned by testting and 12 goroutines spawned by boomer
-	numGoroutine := runtime.NumGoroutine()
-	// NOTICE: this test may be flaky.
-	if numGoroutine != 15 {
-		t.Errorf("Number of goroutines mismatches, expected: 15, current count: %d\n", numGoroutine)
+	if runner.numClients != 10 {
+		t.Errorf("Number of goroutines mismatches, expected: 10, current count: %d\n", runner.numClients)
 	}
 }
