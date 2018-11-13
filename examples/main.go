@@ -1,7 +1,11 @@
 package main
 
-import "github.com/myzhan/boomer"
-import "time"
+import (
+	"log"
+	"time"
+
+	"github.com/myzhan/boomer"
+)
 
 func foo() {
 
@@ -26,6 +30,8 @@ func bar() {
 }
 
 func main() {
+
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	task1 := &boomer.Task{
 		Name:   "foo",
