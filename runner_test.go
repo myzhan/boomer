@@ -13,6 +13,8 @@ func TestSafeRun(t *testing.T) {
 }
 
 func TestGetReady(t *testing.T) {
+	// FIXME: recreate global toMaster channel, this will make this test flaky
+	toMaster = make(chan *message, 10)
 	runner := &runner{
 		nodeID: "TestingGetReady",
 	}
@@ -31,9 +33,12 @@ func TestGetReady(t *testing.T) {
 	if msg.NodeID != "TestingGetReady" {
 		t.Error("The msg node_id is not TestingGetReady")
 	}
+	close(toMaster)
 }
 
 func TestSpawnGoRoutines(t *testing.T) {
+	// FIXME: recreate global toMaster channel, this will make this test flaky
+	toMaster = make(chan *message, 10)
 	taskA := &Task{
 		Weight: 10,
 		Fn: func() {
@@ -63,4 +68,5 @@ func TestSpawnGoRoutines(t *testing.T) {
 	if runner.numClients != 10 {
 		t.Errorf("Number of goroutines mismatches, expected: 10, current count: %d\n", runner.numClients)
 	}
+	close(toMaster)
 }

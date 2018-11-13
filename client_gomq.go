@@ -5,18 +5,17 @@ package boomer
 import (
 	"fmt"
 	"log"
-	"net"
-	"os"
+	"runtime"
 	"runtime/debug"
-	"strings"
 
 	"github.com/zeromq/gomq"
 	"github.com/zeromq/gomq/zmtp"
 )
 
 type gomqSocketClient struct {
-	pushSocket *gomq.Socket
-	pullSocket *gomq.Socket
+	pushSocket     *gomq.PushSocket
+	pullSocket     *gomq.PullSocket
+	shutdownSignal chan bool
 }
 
 func newClient() client {
@@ -36,51 +35,29 @@ func newClient() client {
 	return client
 }
 
-func newGomqSocket(socketType zmtp.SocketType) *gomq.Socket {
-	socket := gomq.NewSocket(false, socketType, nil, zmtp.NewSecurityNull())
-	return socket
-}
-
-func getNetConn(addr string) net.Conn {
-	parts := strings.Split(addr, "://")
-	netConn, err := net.Dial(parts[0], parts[1])
-	if err != nil {
-		log.Fatal(err)
-	}
-	return netConn
-}
-
-func connectSock(socket *gomq.Socket, addr string) {
-	netConn := getNetConn(addr)
-	zmtpConn := zmtp.NewConnection(netConn)
-	_, err := zmtpConn.Prepare(socket.SecurityMechanism(), socket.SocketType(), nil, false, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	conn := gomq.NewConnection(netConn, zmtpConn)
-	socket.AddConnection(conn)
-	zmtpConn.Recv(socket.RecvChannel())
-}
-
 func newZmqClient(masterHost string, masterPort int) *gomqSocketClient {
 	pushAddr := fmt.Sprintf("tcp://%s:%d", masterHost, masterPort)
 	pullAddr := fmt.Sprintf("tcp://%s:%d", masterHost, masterPort+1)
 
-	pushSocket := newGomqSocket(zmtp.PushSocketType)
-	connectSock(pushSocket, pushAddr)
+	pushSocket := gomq.NewPush(zmtp.NewSecurityNull())
+	pullSocket := gomq.NewPull(zmtp.NewSecurityNull())
 
-	pullSocket := newGomqSocket(zmtp.PullSocketType)
-	connectSock(pullSocket, pullAddr)
-
+	pushSocket.Connect(pushAddr)
+	pullSocket.Connect(pullAddr)
 	log.Println("ZMQ sockets connected")
 
 	newClient := &gomqSocketClient{
-		pushSocket: pushSocket,
-		pullSocket: pullSocket,
+		pushSocket:     pushSocket,
+		pullSocket:     pullSocket,
+		shutdownSignal: make(chan bool, 1),
 	}
 	go newClient.recv()
 	go newClient.send()
 	return newClient
+}
+
+func (c *gomqSocketClient) close() {
+	close(c.shutdownSignal)
 }
 
 func (c *gomqSocketClient) recv() {
@@ -91,7 +68,7 @@ func (c *gomqSocketClient) recv() {
 			log.Printf("%v\n", err)
 			debug.PrintStack()
 			log.Printf("The underlying socket connected to master(%s:%d) may be broken, please restart both locust and boomer\n", masterHost, masterPort+1)
-			os.Exit(1)
+			runtime.Goexit()
 		}
 	}()
 	for {
@@ -103,12 +80,13 @@ func (c *gomqSocketClient) recv() {
 			fromMaster <- msgFromMaster
 		}
 	}
-
 }
 
 func (c *gomqSocketClient) send() {
 	for {
 		select {
+		case <-c.shutdownSignal:
+			return
 		case msg := <-toMaster:
 			c.sendMessage(msg)
 			if msg.Type == "quit" {
