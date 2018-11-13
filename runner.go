@@ -3,11 +3,11 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"math"
+	"os"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
-	"os"
-	"math"
 )
 
 const (
@@ -53,7 +53,6 @@ func (r *runner) safeRun(fn func()) {
 }
 
 func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
-
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
 	weightSum := 0
@@ -107,24 +106,11 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 	}
 
 	r.hatchComplete()
-
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
-
-	if r.state != stateRunning && r.state != stateHatching {
-		clearStatsChannel <- true
-		r.stopChannel = make(chan bool)
-	}
-
-	if r.state == stateRunning || r.state == stateHatching {
-		// stop previous goroutines without blocking
-		// those goroutines will exit when r.safeRun returns
-		close(r.stopChannel)
-	}
-
+	clearStatsChannel <- true
 	r.stopChannel = make(chan bool)
-	r.state = stateHatching
 
 	r.hatchRate = hatchRate
 	r.numClients = 0
@@ -132,12 +118,9 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 }
 
 func (r *runner) hatchComplete() {
-
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
 	toMaster <- newMessage("hatch_complete", data, r.nodeID)
-
-	r.state = stateRunning
 }
 
 func (r *runner) onQuiting() {
@@ -145,50 +128,78 @@ func (r *runner) onQuiting() {
 }
 
 func (r *runner) stop() {
+	// stop previous goroutines without blocking
+	// those goroutines will exit when r.safeRun returns
+	close(r.stopChannel)
+	if rpsControlEnabled {
+		stopRPSController()
+	}
+}
 
-	if r.state == stateRunning || r.state == stateHatching {
-		close(r.stopChannel)
-		r.state = stateStopped
-		log.Println("Recv stop message from master, all the goroutines are stopped")
+func (r *runner) onHatchMessage(msg *message, rpsControllerStartd bool) {
+	toMaster <- newMessage("hatching", nil, r.nodeID)
+	rate, _ := msg.Data["hatch_rate"]
+	clients, _ := msg.Data["num_clients"]
+	hatchRate := int(rate.(float64))
+	workers := 0
+	if _, ok := clients.(uint64); ok {
+		workers = int(clients.(uint64))
+	} else {
+		workers = int(clients.(int64))
+	}
+	if workers == 0 || hatchRate == 0 {
+		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
+			workers, hatchRate)
+	} else {
+		if rpsControlEnabled && !rpsControllerStartd {
+			startRPSController()
+		}
+		r.startHatching(workers, hatchRate)
+	}
+}
+
+// Runner acts as a state machine, and runs in one goroutine without any lock.
+func (r *runner) onMessage(msg *message) {
+	if msg.Type == "quit" {
+		log.Println("Got quit message from master, shutting down...")
+		os.Exit(0)
 	}
 
+	switch r.state {
+	case stateInit:
+		if msg.Type == "hatch" {
+			r.state = stateHatching
+			r.onHatchMessage(msg, false)
+			r.state = stateRunning
+		}
+	case stateHatching:
+		fallthrough
+	case stateRunning:
+		switch msg.Type {
+		case "hatch":
+			r.state = stateHatching
+			r.onHatchMessage(msg, true)
+			r.state = stateRunning
+		case "stop":
+			r.stop()
+			r.state = stateStopped
+			log.Println("Recv stop message from master, all the goroutines are stopped")
+			toMaster <- newMessage("client_stopped", nil, r.nodeID)
+			toMaster <- newMessage("client_ready", nil, r.nodeID)
+		}
+	case stateStopped:
+		if msg.Type == "hatch" {
+			r.state = stateHatching
+			r.onHatchMessage(msg, false)
+			r.state = stateRunning
+		}
+	}
 }
 
 func (r *runner) listener() {
 	for {
 		msg := <-fromMaster
-		switch msg.Type {
-		case "hatch":
-			toMaster <- newMessage("hatching", nil, r.nodeID)
-			rate, _ := msg.Data["hatch_rate"]
-			clients, _ := msg.Data["num_clients"]
-			hatchRate := int(rate.(float64))
-			workers := 0
-			if _, ok := clients.(uint64); ok {
-				workers = int(clients.(uint64))
-			} else {
-				workers = int(clients.(int64))
-			}
-			if workers == 0 || hatchRate == 0 {
-				log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
-					workers, hatchRate)
-			} else {
-				if rpsControlEnabled {
-					startRPSController()
-				}
-				r.startHatching(workers, hatchRate)
-			}
-		case "stop":
-			r.stop()
-			if rpsControlEnabled {
-				stopRPSController()
-			}
-			toMaster <- newMessage("client_stopped", nil, r.nodeID)
-			toMaster <- newMessage("client_ready", nil, r.nodeID)
-		case "quit":
-			log.Println("Got quit message from master, shutting down...")
-			os.Exit(0)
-		}
+		r.onMessage(msg)
 	}
 }
 
@@ -196,7 +207,7 @@ func startBucketUpdater() {
 	go func() {
 		for {
 			select {
-			case <- rpsControllerQuitChannel:
+			case <-rpsControllerQuitChannel:
 				return
 			default:
 				atomic.StoreInt64(&rpsThreshold, currentRPSThreshold)
@@ -214,7 +225,7 @@ func startRPSController() {
 	go func() {
 		for {
 			select {
-			case <- rpsControllerQuitChannel:
+			case <-rpsControllerQuitChannel:
 				return
 			default:
 				if requestIncreaseStep > 0 {
@@ -243,7 +254,6 @@ func stopRPSController() {
 }
 
 func (r *runner) getReady() {
-
 	r.state = stateInit
 
 	// listen to master
@@ -262,5 +272,4 @@ func (r *runner) getReady() {
 			}
 		}
 	}()
-
 }
