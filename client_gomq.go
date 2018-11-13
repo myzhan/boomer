@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/zeromq/gomq"
@@ -82,6 +84,16 @@ func newZmqClient(masterHost string, masterPort int) *gomqSocketClient {
 }
 
 func (c *gomqSocketClient) recv() {
+	defer func() {
+		// Temporary work around for https://github.com/zeromq/gomq/issues/75
+		err := recover()
+		if err != nil {
+			log.Printf("%v\n", err)
+			debug.PrintStack()
+			log.Printf("The underlying socket connected to master(%s:%d) may be broken, please restart both locust and boomer\n", masterHost, masterPort+1)
+			os.Exit(1)
+		}
+	}()
 	for {
 		msg, err := c.pullSocket.Recv()
 		if err != nil {
