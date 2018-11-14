@@ -136,7 +136,7 @@ func (r *runner) stop() {
 	}
 }
 
-func (r *runner) onHatchMessage(msg *message, rpsControllerStartd bool) {
+func (r *runner) onHatchMessage(msg *message, rpsControllerStarted bool) {
 	toMaster <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
@@ -151,7 +151,7 @@ func (r *runner) onHatchMessage(msg *message, rpsControllerStartd bool) {
 		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
 			workers, hatchRate)
 	} else {
-		if rpsControlEnabled && !rpsControllerStartd {
+		if rpsControlEnabled && !rpsControllerStarted {
 			startRPSController()
 		}
 		r.startHatching(workers, hatchRate)
