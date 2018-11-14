@@ -52,3 +52,10 @@ func TestGetNodeID(t *testing.T) {
 		t.Error("Invalid format of nodeID")
 	}
 }
+
+func TestNow(t *testing.T) {
+	now := Now()
+	if now < 1000000000000 || now > 2000000000000 {
+		t.Error("Invalid format of timestamp in milliseconds")
+	}
+}
