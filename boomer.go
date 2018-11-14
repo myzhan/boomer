@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,63 +14,19 @@ import (
 	"time"
 )
 
-var runTasks string
 var maxRPS int64
 var requestIncreaseRate string
-var requestIncreaseStep int64
-var requestIncreaseInterval time.Duration
-var currentRPSThreshold = int64(0)
-var rpsThreshold int64
-var rpsControlEnabled = false
-var rpsControlChannel = make(chan bool)
-var rpsControllerQuitChannel = make(chan bool)
-
+var runTasks string
 var memoryProfile string
 var cpuProfile string
 
 var initted uint32
 var initMutex = sync.Mutex{}
 
-func enableRPSControl() {
-	rpsControlEnabled = true
-	if maxRPS > 0 {
-		log.Println("Max RPS that boomer may generate is limited to", maxRPS)
-	}
-	if requestIncreaseRate != "-1" {
-		log.Println("Request increase rate is", requestIncreaseRate)
-		if strings.Contains(requestIncreaseRate, "/") {
-			tmp := strings.Split(requestIncreaseRate, "/")
-			if len(tmp) != 2 {
-				log.Fatalf("Wrong format of requestIncreaseRate, %s", requestIncreaseRate)
-			}
-			step, err := strconv.ParseInt(tmp[0], 10, 64)
-			if err != nil {
-				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-			}
-			requestIncreaseStep = step
-			requestIncreaseInterval, err = time.ParseDuration(tmp[1])
-			if err != nil {
-				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-			}
-		} else {
-			step, err := strconv.ParseInt(requestIncreaseRate, 10, 64)
-			if err != nil {
-				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-			}
-			requestIncreaseStep = step
-			requestIncreaseInterval = time.Second
-		}
-	}
-}
-
 // Init boomer
 func initBoomer() {
 	if atomic.LoadUint32(&initted) == 1 {
 		panic("Don't call boomer.Run() more than once.")
-	}
-
-	if maxRPS > 0 || requestIncreaseRate != "-1" {
-		enableRPSControl()
 	}
 
 	initEvents()
@@ -118,12 +73,7 @@ func Run(tasks ...*Task) {
 	initBoomer()
 	initMutex.Unlock()
 
-	runner := &runner{
-		tasks:  tasks,
-		client: newClient(),
-		nodeID: getNodeID(),
-	}
-	Events.Subscribe("boomer:quit", runner.onQuiting)
+	runner := newRunner(tasks, maxRPS, requestIncreaseRate)
 	runner.getReady()
 
 	if memoryProfile != "" {

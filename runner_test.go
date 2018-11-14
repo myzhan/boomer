@@ -5,35 +5,36 @@ import (
 	"time"
 )
 
+func TestParseRPSControlArgs(t *testing.T) {
+	r := newRunner(nil, int64(100), "100/2s")
+	r.parseRPSControlArgs()
+
+	if !r.rpsControlEnabled {
+		t.Error("r.rpsControlEnabled is, expected: true", r.rpsControlEnabled)
+	}
+	if r.requestIncreaseStep != 100 {
+		t.Error("r.requestIncreaseStep is", r.requestIncreaseStep, "expected:", 100)
+	}
+	if r.requestIncreaseInterval != 2*time.Second {
+		t.Error("requestIncreaseInterval is", r.requestIncreaseInterval, "expected: 2s")
+	}
+
+	// parse again
+	r.requestIncreaseRate = "200"
+	r.parseRPSControlArgs()
+	if r.requestIncreaseStep != 200 {
+		t.Error("r.requestIncreaseStep is", r.requestIncreaseStep, "expected:", 200)
+	}
+	if r.requestIncreaseInterval != time.Second {
+		t.Error("r.requestIncreaseInterval is", r.requestIncreaseInterval, "expected: 1s")
+	}
+}
+
 func TestSafeRun(t *testing.T) {
 	runner := &runner{}
 	runner.safeRun(func() {
 		panic("Runner will catch this panic")
 	})
-}
-
-func TestGetReady(t *testing.T) {
-	// FIXME: recreate global toMaster channel, this will make this test flaky
-	toMaster = make(chan *message, 10)
-	runner := &runner{
-		nodeID: "TestingGetReady",
-	}
-	runner.getReady()
-	if runner.state != stateInit {
-		t.Error("The state of runner is not stateInit")
-	}
-	msg := <-toMaster
-	t.Log(msg)
-	if msg.Type != "client_ready" {
-		t.Error("The msg type is not client_ready")
-	}
-	if msg.Data != nil {
-		t.Error("The msg data is not nil")
-	}
-	if msg.NodeID != "TestingGetReady" {
-		t.Error("The msg node_id is not TestingGetReady")
-	}
-	close(toMaster)
 }
 
 func TestSpawnGoRoutines(t *testing.T) {
@@ -57,11 +58,10 @@ func TestSpawnGoRoutines(t *testing.T) {
 	stopChannel := make(chan bool)
 	runner := &runner{
 		tasks:       tasks,
-		numClients:  0,
-		hatchRate:   10,
 		stopChannel: stopChannel,
 		nodeID:      "TestSpawnGoRoutines",
 	}
+	runner.hatchRate = 10
 	runner.spawnGoRoutines(10, runner.stopChannel)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
@@ -86,8 +86,6 @@ func TestHatchAndStop(t *testing.T) {
 	stopChannel := make(chan bool)
 	runner := &runner{
 		tasks:       tasks,
-		numClients:  0,
-		hatchRate:   10,
 		stopChannel: stopChannel,
 		nodeID:      "TestHatchAndStop",
 	}
@@ -145,8 +143,6 @@ func TestOnMessage(t *testing.T) {
 	stopChannel := make(chan bool)
 	runner := &runner{
 		tasks:       tasks,
-		numClients:  0,
-		hatchRate:   10,
 		stopChannel: stopChannel,
 		nodeID:      "TestOnMessage",
 	}
@@ -232,18 +228,16 @@ func TestOnMessage(t *testing.T) {
 }
 
 func TestStartBucketUpdater(t *testing.T) {
-	rpsThreshold = int64(0)
-	currentRPSThreshold = int64(100)
-	rpsControlChannel = make(chan bool)
-	rpsControllerQuitChannel = make(chan bool)
+	r := newRunner(nil, 100, "-1")
+	r.parseRPSControlArgs()
+	r.startBucketUpdater()
 
-	startBucketUpdater()
 	defer func() {
-		close(rpsControllerQuitChannel)
+		close(r.rpsControllerQuitChannel)
 	}()
 
 	time.Sleep(1 * time.Second)
-	if rpsThreshold != currentRPSThreshold {
-		t.Error("rpsThreshold is not updated by bucket updater, expected", currentRPSThreshold, ", but got", rpsThreshold)
+	if r.rpsThreshold != r.currentRPSThreshold {
+		t.Error("rpsThreshold is not updated by bucket updater, expected", r.currentRPSThreshold, ", but got", r.rpsThreshold)
 	}
 }

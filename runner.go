@@ -6,6 +6,8 @@ import (
 	"math"
 	"os"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -38,6 +40,65 @@ type runner struct {
 	state       string
 	client      client
 	nodeID      string
+
+	// RPS Control
+	maxRPS                   int64
+	requestIncreaseRate      string
+	requestIncreaseStep      int64
+	requestIncreaseInterval  time.Duration
+	currentRPSThreshold      int64
+	rpsThreshold             int64
+	rpsControlEnabled        bool
+	rpsControlChannel        chan bool
+	rpsControllerQuitChannel chan bool
+}
+
+func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string) (r *runner) {
+	r = &runner{
+		tasks:               tasks,
+		maxRPS:              maxRPS,
+		requestIncreaseRate: requestIncreaseRate,
+	}
+	r.nodeID = getNodeID()
+
+	if 0 < maxRPS || requestIncreaseRate != "-1" {
+		r.parseRPSControlArgs()
+	}
+	return r
+}
+
+func (r *runner) parseRPSControlArgs() {
+	r.rpsControlEnabled = true
+	r.rpsControlChannel = make(chan bool)
+	r.rpsControllerQuitChannel = make(chan bool)
+	if r.maxRPS > 0 {
+		log.Println("Max RPS that boomer may generate is limited to", r.maxRPS)
+	}
+	if r.requestIncreaseRate != "-1" {
+		log.Println("Request increase rate is", r.requestIncreaseRate)
+		if strings.Contains(r.requestIncreaseRate, "/") {
+			tmp := strings.Split(r.requestIncreaseRate, "/")
+			if len(tmp) != 2 {
+				log.Fatalf("Wrong format of requestIncreaseRate, %s", r.requestIncreaseRate)
+			}
+			step, err := strconv.ParseInt(tmp[0], 10, 64)
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+			r.requestIncreaseStep = step
+			r.requestIncreaseInterval, err = time.ParseDuration(tmp[1])
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+		} else {
+			step, err := strconv.ParseInt(r.requestIncreaseRate, 10, 64)
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+			r.requestIncreaseStep = step
+			r.requestIncreaseInterval = time.Second
+		}
+	}
 }
 
 func (r *runner) safeRun(fn func()) {
@@ -85,11 +146,11 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 						case <-quit:
 							return
 						default:
-							if rpsControlEnabled {
-								token := atomic.AddInt64(&rpsThreshold, -1)
+							if r.rpsControlEnabled {
+								token := atomic.AddInt64(&r.rpsThreshold, -1)
 								if token < 0 {
 									// RPS threshold is reached, wait until next second
-									<-rpsControlChannel
+									<-r.rpsControlChannel
 								} else {
 									r.safeRun(fn)
 								}
@@ -100,9 +161,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 					}
 				}(task.Fn)
 			}
-
 		}
-
 	}
 
 	r.hatchComplete()
@@ -131,8 +190,8 @@ func (r *runner) stop() {
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
 	close(r.stopChannel)
-	if rpsControlEnabled {
-		stopRPSController()
+	if r.rpsControlEnabled {
+		r.stopRPSController()
 	}
 }
 
@@ -151,8 +210,8 @@ func (r *runner) onHatchMessage(msg *message, rpsControllerStarted bool) {
 		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
 			workers, hatchRate)
 	} else {
-		if rpsControlEnabled && !rpsControllerStarted {
-			startRPSController()
+		if r.rpsControlEnabled && !rpsControllerStarted {
+			r.startRPSController()
 		}
 		r.startHatching(workers, hatchRate)
 	}
@@ -203,58 +262,59 @@ func (r *runner) listener() {
 	}
 }
 
-func startBucketUpdater() {
+func (r *runner) startBucketUpdater() {
 	go func() {
 		for {
 			select {
-			case <-rpsControllerQuitChannel:
+			case <-r.rpsControllerQuitChannel:
 				return
 			default:
-				atomic.StoreInt64(&rpsThreshold, currentRPSThreshold)
+				atomic.StoreInt64(&r.rpsThreshold, r.currentRPSThreshold)
 				time.Sleep(1 * time.Second)
 				// use channel to broadcast
-				close(rpsControlChannel)
-				rpsControlChannel = make(chan bool)
+				close(r.rpsControlChannel)
+				r.rpsControlChannel = make(chan bool)
 			}
 		}
 	}()
 }
 
-func startRPSController() {
-	rpsControllerQuitChannel = make(chan bool)
+func (r *runner) startRPSController() {
+	r.rpsControllerQuitChannel = make(chan bool)
 	go func() {
 		for {
 			select {
-			case <-rpsControllerQuitChannel:
+			case <-r.rpsControllerQuitChannel:
 				return
 			default:
-				if requestIncreaseStep > 0 {
-					currentRPSThreshold = currentRPSThreshold + requestIncreaseStep
-					if currentRPSThreshold < 0 {
+				if r.requestIncreaseStep > 0 {
+					r.currentRPSThreshold = r.currentRPSThreshold + r.requestIncreaseStep
+					if r.currentRPSThreshold < 0 {
 						// int64 overflow
-						currentRPSThreshold = int64(math.MaxInt64)
+						r.currentRPSThreshold = int64(math.MaxInt64)
 					}
-					if maxRPS > 0 && currentRPSThreshold > maxRPS {
-						currentRPSThreshold = maxRPS
+					if r.maxRPS > 0 && r.currentRPSThreshold > r.maxRPS {
+						r.currentRPSThreshold = r.maxRPS
 					}
 				} else {
-					if maxRPS > 0 {
-						currentRPSThreshold = maxRPS
+					if r.maxRPS > 0 {
+						r.currentRPSThreshold = r.maxRPS
 					}
 				}
-				time.Sleep(requestIncreaseInterval)
+				time.Sleep(r.requestIncreaseInterval)
 			}
 		}
 	}()
-	startBucketUpdater()
+	r.startBucketUpdater()
 }
 
-func stopRPSController() {
-	close(rpsControllerQuitChannel)
+func (r *runner) stopRPSController() {
+	close(r.rpsControllerQuitChannel)
 }
 
 func (r *runner) getReady() {
 	r.state = stateInit
+	r.client = newClient()
 
 	// listen to master
 	go r.listener()
@@ -272,4 +332,6 @@ func (r *runner) getReady() {
 			}
 		}
 	}()
+
+	Events.Subscribe("boomer:quit", r.onQuiting)
 }
