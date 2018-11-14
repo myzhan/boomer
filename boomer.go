@@ -32,46 +32,46 @@ var cpuProfile string
 var initted uint32
 var initMutex = sync.Mutex{}
 
+func enableRPSControl() {
+	rpsControlEnabled = true
+	if maxRPS > 0 {
+		log.Println("Max RPS that boomer may generate is limited to", maxRPS)
+	}
+	if requestIncreaseRate != "-1" {
+		log.Println("Request increase rate is", requestIncreaseRate)
+		if strings.Contains(requestIncreaseRate, "/") {
+			tmp := strings.Split(requestIncreaseRate, "/")
+			if len(tmp) != 2 {
+				log.Fatalf("Wrong format of requestIncreaseRate, %s", requestIncreaseRate)
+			}
+			step, err := strconv.ParseInt(tmp[0], 10, 64)
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+			requestIncreaseStep = step
+			requestIncreaseInterval, err = time.ParseDuration(tmp[1])
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+		} else {
+			step, err := strconv.ParseInt(requestIncreaseRate, 10, 64)
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+			requestIncreaseStep = step
+			requestIncreaseInterval = time.Second
+		}
+	}
+}
+
 // Init boomer
 func initBoomer() {
-
-	// support go version below 1.5
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	if !flag.Parsed() {
-		flag.Parse()
+	if atomic.LoadUint32(&initted) == 1 {
+		panic("Don't call boomer.Run() more than once.")
 	}
 
 	if maxRPS > 0 || requestIncreaseRate != "-1" {
-		rpsControlEnabled = true
-		if maxRPS > 0 {
-			log.Println("Max RPS that boomer may generate is limited to", maxRPS)
-		}
-		if requestIncreaseRate != "-1" {
-			log.Println("Request increase rate is", requestIncreaseRate)
-			if strings.Contains(requestIncreaseRate, "/") {
-				tmp := strings.Split(requestIncreaseRate, "/")
-				if len(tmp) != 2 {
-					log.Fatalf("Wrong format of requestIncreaseRate, %s", requestIncreaseRate)
-				}
-				step, err := strconv.ParseInt(tmp[0], 10, 64)
-				if err != nil {
-					log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-				}
-				requestIncreaseStep = step
-				requestIncreaseInterval, err = time.ParseDuration(tmp[1])
-				if err != nil {
-					log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-				}
-			} else {
-				step, err := strconv.ParseInt(requestIncreaseRate, 10, 64)
-				if err != nil {
-					log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-				}
-				requestIncreaseStep = step
-				requestIncreaseInterval = time.Second
-			}
-		}
+		enableRPSControl()
 	}
 
 	initEvents()
@@ -81,48 +81,50 @@ func initBoomer() {
 	atomic.StoreUint32(&initted, 1)
 }
 
+// Run tasks without connecting to the master.
+func runTasksForTest(tasks ...*Task) {
+	taskNames := strings.Split(runTasks, ",")
+	for _, task := range tasks {
+		if task.Name == "" {
+			continue
+		} else {
+			for _, name := range taskNames {
+				if name == task.Name {
+					log.Println("Running " + task.Name)
+					task.Fn()
+				}
+			}
+		}
+	}
+}
+
 // Run accepts a slice of Task and connects
 // to a locust master.
 func Run(tasks ...*Task) {
-
-	if atomic.LoadUint32(&initted) == 1 {
-		panic("Don't call boomer.Run() more than once.")
+	if !flag.Parsed() {
+		flag.Parse()
 	}
+
+	if runTasks != "" {
+		runTasksForTest(tasks...)
+		return
+	}
+
+	// support go version below 1.5
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// init boomer
 	initMutex.Lock()
 	initBoomer()
 	initMutex.Unlock()
 
-	if runTasks != "" {
-		// Run tasks without connecting to the master.
-		taskNames := strings.Split(runTasks, ",")
-		for _, task := range tasks {
-			if task.Name == "" {
-				continue
-			} else {
-				for _, name := range taskNames {
-					if name == task.Name {
-						log.Println("Running " + task.Name)
-						task.Fn()
-					}
-				}
-			}
-		}
-		return
-	}
-
-	var r *runner
-	client := newClient()
-	r = &runner{
+	runner := &runner{
 		tasks:  tasks,
-		client: client,
+		client: newClient(),
 		nodeID: getNodeID(),
 	}
-
-	Events.Subscribe("boomer:quit", r.onQuiting)
-
-	r.getReady()
+	Events.Subscribe("boomer:quit", runner.onQuiting)
+	runner.getReady()
 
 	if memoryProfile != "" {
 		startMemoryProfile()
@@ -141,7 +143,6 @@ func Run(tasks ...*Task) {
 	// wait for quit message is sent to master
 	<-disconnectedFromMaster
 	log.Println("shut down")
-
 }
 
 func startMemoryProfile() {
