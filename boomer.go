@@ -18,7 +18,9 @@ var maxRPS int64
 var requestIncreaseRate string
 var runTasks string
 var memoryProfile string
+var memoryProfileDuration time.Duration
 var cpuProfile string
+var cpuProfileDuration time.Duration
 
 var initted uint32
 var initMutex = sync.Mutex{}
@@ -100,7 +102,7 @@ func startMemoryProfile() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	time.AfterFunc(30*time.Second, func() {
+	time.AfterFunc(memoryProfileDuration, func() {
 		err = pprof.WriteHeapProfile(f)
 		if err != nil {
 			log.Println(err)
@@ -124,7 +126,7 @@ func startCPUProfile() {
 		return
 	}
 
-	time.AfterFunc(30*time.Second, func() {
+	time.AfterFunc(cpuProfileDuration, func() {
 		pprof.StopCPUProfile()
 		f.Close()
 		log.Println("Stop CPU profiling after 30 seconds")
@@ -138,6 +140,8 @@ func init() {
 	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
 	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
 	flag.StringVar(&rpc, "rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
-	flag.StringVar(&memoryProfile, "mem-profile", "", "Collect runtime heap profile after 30 seconds.")
-	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling for 30 seconds.")
+	flag.StringVar(&memoryProfile, "mem-profile", "", "Enable memory profiling.")
+	flag.DurationVar(&memoryProfileDuration, "mem-profile-duration", 30*time.Second, "Memory profile duration. Defaults to 30 seconds.")
+	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling.")
+	flag.DurationVar(&cpuProfileDuration, "cpu-profile-duration", 30*time.Second, "CPU profile duration. Defaults to 30 seconds.")
 }

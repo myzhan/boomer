@@ -132,6 +132,47 @@ locust 启动时，需要一个 locustfile，随便一个符合它要求的即�
 
 由于我们实际上使用 boomer 来施压，这个文件并不会影响到测试。
 
+## 调优
+
+如果你觉得压测工具有性能问题，可以使用内置的 pprof 来获取运行时的 CPU 和内存信息，进行排查和调优。
+
+虽然支持，但是不建议同时运行 CPU 和内存信息采样。
+
+### CPU 调优
+
+```bash
+# 1. 启动 locust。
+# 2. 启动 boomer，进行 30 秒的 CPU 信息采样。
+$ go run main.go -cpu-profile cpu.pprof -cpu-profile-duration 30s
+# 3. 在 Web 界面上启动测试。
+# 4. 运行 pprof。
+$ go tool pprof cpu.pprof
+Type: cpu
+Time: Nov 14, 2018 at 8:04pm (CST)
+Duration: 30.17s, Total samples = 12.07s (40.01%)
+Entering interactive mode (type "help" for commands, "o" for options)
+(pprof) web
+```
+
+### 内存调优
+
+```bash
+# 1. 启动 locust。
+# 2. 启动 boomer，进行 30 秒的内存信息采样。
+$ go run main.go -mem-profile mem.pprof -mem-profile-duration 30s
+# 3. 在 Web 界面上启动测试。
+# 4. 运行 pprof。
+$ go tool pprof -alloc_space mem.pprof
+Type: alloc_space
+Time: Nov 14, 2018 at 8:26pm (CST)
+Entering interactive mode (type "help" for commands, "o" for options)
+(pprof) top
+```
+
+## 贡献
+
+欢迎给 boomer 提交 PR，无论是新增功能或者是补充使用例子。
+
 ## License
 
 Open source licensed under the MIT license (see _LICENSE_ file for details).
