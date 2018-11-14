@@ -96,12 +96,12 @@ func TestPingPong(t *testing.T) {
 	toMaster = make(chan *message, 10)
 
 	server := newTestServer(masterHost, masterPort+1, masterPort)
-	defer server.close()
+	// defer server.close()
 	server.start()
 
 	// start client
-	client := newZmqClient(masterHost, masterPort)
-	defer client.close()
+	newZmqClient(masterHost, masterPort)
+	// defer client.close()
 
 	toMaster <- newMessage("ping", nil, "testing ping pong")
 	msg := <-server.fromClient
