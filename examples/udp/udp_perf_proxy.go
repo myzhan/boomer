@@ -41,9 +41,13 @@ type worker struct {
 
 func newWorker(remoteAddr string) *worker {
 	addr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	if err != nil {
+		log.Fatalln("Failed to create worker", err)
+		return nil
+	}
 	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
-		log.Println("Failed to create worker", err)
+		log.Fatalln("Failed to create worker", err)
 		return nil
 	}
 	requests := make(chan []byte, 1000)

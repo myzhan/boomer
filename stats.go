@@ -169,7 +169,7 @@ func (s *statsEntry) logResponseTime(responseTime int64) {
 		s.maxResponseTime = responseTime
 	}
 
-	roundedResponseTime := int64(0)
+	var roundedResponseTime int64
 
 	// to avoid to much data that has to be transferred to the master node when
 	// running in distributed mode, we save the response time rounded in a dict
