@@ -49,6 +49,8 @@ func worker() {
 		default:
 			boomer.Events.Publish("request_failure", "http", "unknown", elapsed, err.Error())
 		}
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
 		return
 	}
 
@@ -57,6 +59,9 @@ func worker() {
 	if verbose {
 		log.Println(string(resp.Body()))
 	}
+
+	fasthttp.ReleaseRequest(req)
+	fasthttp.ReleaseResponse(resp)
 }
 
 func main() {
