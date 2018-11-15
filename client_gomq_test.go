@@ -5,6 +5,7 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"runtime/debug"
 	"testing"
 
 	"github.com/zeromq/gomq"
@@ -46,6 +47,14 @@ func (s *testServer) send() {
 }
 
 func (s *testServer) sendMessage(msg *message) {
+	defer func() {
+		// don't panic
+		err := recover()
+		if err != nil {
+			log.Printf("%v\n", err)
+			debug.PrintStack()
+		}
+	}()
 	err := s.pushSocket.Send(msg.serialize())
 	if err != nil {
 		log.Printf("Error sending to client: %v\n", err)
@@ -96,12 +105,12 @@ func TestPingPong(t *testing.T) {
 	toMaster = make(chan *message, 10)
 
 	server := newTestServer(masterHost, masterPort+1, masterPort)
-	// defer server.close()
+	defer server.close()
 	server.start()
 
 	// start client
-	newZmqClient(masterHost, masterPort)
-	// defer client.close()
+	client := newZmqClient(masterHost, masterPort)
+	defer client.close()
 
 	toMaster <- newMessage("ping", nil, "testing ping pong")
 	msg := <-server.fromClient
