@@ -1,7 +1,9 @@
 package boomer
 
 import (
+	"os"
 	"testing"
+	"time"
 )
 
 func TestRunTasksForTest(t *testing.T) {
@@ -17,5 +19,31 @@ func TestRunTasksForTest(t *testing.T) {
 
 	if count != 1 {
 		t.Error("count is", count, "expected: 1")
+	}
+}
+
+func TestStartMemoryProfile(t *testing.T) {
+	if _, err := os.Stat("mem.pprof"); os.IsExist(err) {
+		os.Remove("mem.pprof")
+	}
+	startMemoryProfile("mem.pprof", 3*time.Second)
+	time.Sleep(4 * time.Second)
+	if _, err := os.Stat("mem.pprof"); os.IsNotExist(err) {
+		t.Error("File mem.pprof is not generated")
+	} else {
+		os.Remove("mem.pprof")
+	}
+}
+
+func TestStartCPUProfile(t *testing.T) {
+	if _, err := os.Stat("cpu.pprof"); os.IsExist(err) {
+		os.Remove("cpu.pprof")
+	}
+	startCPUProfile("cpu.pprof", 3*time.Second)
+	time.Sleep(4 * time.Second)
+	if _, err := os.Stat("cpu.pprof"); os.IsNotExist(err) {
+		t.Error("File cpu.pprof is not generated")
+	} else {
+		os.Remove("cpu.pprof")
 	}
 }

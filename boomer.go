@@ -79,11 +79,11 @@ func Run(tasks ...*Task) {
 	runner.getReady()
 
 	if memoryProfile != "" {
-		startMemoryProfile()
+		startMemoryProfile(memoryProfile, memoryProfileDuration)
 	}
 
 	if cpuProfile != "" {
-		startCPUProfile()
+		startCPUProfile(cpuProfile, cpuProfileDuration)
 	}
 
 	c := make(chan os.Signal)
@@ -97,24 +97,24 @@ func Run(tasks ...*Task) {
 	log.Println("shut down")
 }
 
-func startMemoryProfile() {
-	f, err := os.Create(memoryProfile)
+func startMemoryProfile(file string, duration time.Duration) {
+	f, err := os.Create(file)
 	if err != nil {
 		log.Fatal(err)
 	}
-	time.AfterFunc(memoryProfileDuration, func() {
+	time.AfterFunc(duration, func() {
 		err = pprof.WriteHeapProfile(f)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 		f.Close()
-		log.Println("Stop memory profiling after 30 seconds")
+		log.Println("Stop memory profiling after", duration)
 	})
 }
 
-func startCPUProfile() {
-	f, err := os.Create(cpuProfile)
+func startCPUProfile(file string, duration time.Duration) {
+	f, err := os.Create(file)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -126,10 +126,10 @@ func startCPUProfile() {
 		return
 	}
 
-	time.AfterFunc(cpuProfileDuration, func() {
+	time.AfterFunc(duration, func() {
 		pprof.StopCPUProfile()
 		f.Close()
-		log.Println("Stop CPU profiling after 30 seconds")
+		log.Println("Stop CPU profiling after", duration)
 	})
 }
 
