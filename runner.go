@@ -168,7 +168,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
-	clearStatsChannel <- true
+	defaultStats.clearStatsChannel <- true
 	r.stopChannel = make(chan bool)
 
 	r.hatchRate = hatchRate
@@ -326,7 +326,7 @@ func (r *runner) getReady() {
 	go func() {
 		for {
 			select {
-			case data := <-messageToRunner:
+			case data := <-defaultStats.messageToRunner:
 				data["user_count"] = r.numClients
 				toMaster <- newMessage("stats", data, r.nodeID)
 			}

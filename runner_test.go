@@ -97,7 +97,7 @@ func TestHatchAndStop(t *testing.T) {
 			case <-ticker.C:
 				t.Error("Timeout waiting for message sent by startHatching()")
 				return
-			case <-clearStatsChannel:
+			case <-defaultStats.clearStatsChannel:
 				// just quit
 				return
 			}
@@ -153,7 +153,7 @@ func TestOnMessage(t *testing.T) {
 		count := 0
 		for {
 			select {
-			case <-clearStatsChannel:
+			case <-defaultStats.clearStatsChannel:
 				// receive two hatch message from master
 				if count >= 2 {
 					return

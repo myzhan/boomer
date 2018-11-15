@@ -2,14 +2,15 @@ package boomer
 
 import (
 	"testing"
+	"time"
 )
 
 func TestLogRequest(t *testing.T) {
 	newStats := newRequestStats()
-	newStats.logRequest("http", "success", 1, 20)
 	newStats.logRequest("http", "success", 2, 30)
 	newStats.logRequest("http", "success", 3, 40)
 	newStats.logRequest("http", "success", 2, 40)
+	newStats.logRequest("http", "success", 1, 20)
 	entry := newStats.get("success", "http")
 
 	if entry.numRequests != 4 {
@@ -46,6 +47,31 @@ func TestLogRequest(t *testing.T) {
 	}
 }
 
+func TestRoundedResponseTime(t *testing.T) {
+	newStats := newRequestStats()
+	newStats.logRequest("http", "success", 147, 1)
+	newStats.logRequest("http", "success", 3432, 1)
+	newStats.logRequest("http", "success", 58760, 1)
+	entry := newStats.get("success", "http")
+	responseTimes := entry.responseTimes
+
+	if len(responseTimes) != 3 {
+		t.Error("len(responseTimes) is wrong, expected: 3, got:", len(responseTimes))
+	}
+
+	if val, ok := responseTimes[150]; !ok || val != 1 {
+		t.Error("Rounded response time should be", 150)
+	}
+
+	if val, ok := responseTimes[3400]; !ok || val != 1 {
+		t.Error("Rounded response time should be", 3400)
+	}
+
+	if val, ok := responseTimes[59000]; !ok || val != 1 {
+		t.Error("Rounded response time should be", 59000)
+	}
+}
+
 func TestLogError(t *testing.T) {
 	newStats := newRequestStats()
 	newStats.logError("http", "failure", "500 error")
@@ -78,7 +104,6 @@ func TestLogError(t *testing.T) {
 	if err400.occurences != 2 {
 		t.Error("Error occurences is wrong, expected: 2, got:", err400.occurences)
 	}
-
 }
 
 func TestClearAll(t *testing.T) {
@@ -140,5 +165,52 @@ func TestSerializeErrors(t *testing.T) {
 			}
 		}
 	}
+}
 
+func TestCollectReportData(t *testing.T) {
+	newStats := newRequestStats()
+	newStats.logRequest("http", "success", 2, 30)
+	newStats.logError("http", "failure", "500 error")
+	result := newStats.collectReportData()
+
+	if _, ok := result["stats"]; !ok {
+		t.Error("Key stats not found")
+	}
+	if _, ok := result["stats_total"]; !ok {
+		t.Error("Key stats not found")
+	}
+	if _, ok := result["errors"]; !ok {
+		t.Error("Key stats not found")
+	}
+}
+
+func TestStatsStart(t *testing.T) {
+	newStats := newRequestStats()
+	newStats.start()
+	defer newStats.close()
+
+	newStats.requestSuccessChannel <- &requestSuccess{
+		requestType:    "http",
+		name:           "success",
+		responseTime:   2,
+		responseLength: 30,
+	}
+
+	newStats.requestFailureChannel <- &requestFailure{
+		requestType:  "http",
+		name:         "failure",
+		responseTime: 1,
+		error:        "500 error",
+	}
+
+	var ticker = time.NewTicker(slaveReportInterval + 100*time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			t.Error("Timeout waiting for stats reports to runner")
+		case <-newStats.messageToRunner:
+			goto end
+		}
+	}
+end:
 }

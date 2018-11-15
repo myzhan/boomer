@@ -25,7 +25,7 @@ func convertResponseTime(origin interface{}) int64 {
 }
 
 func requestSuccessHandler(requestType string, name string, responseTime interface{}, responseLength int64) {
-	requestSuccessChannel <- &requestSuccess{
+	defaultStats.requestSuccessChannel <- &requestSuccess{
 		requestType:    requestType,
 		name:           name,
 		responseTime:   convertResponseTime(responseTime),
@@ -34,7 +34,7 @@ func requestSuccessHandler(requestType string, name string, responseTime interfa
 }
 
 func requestFailureHandler(requestType string, name string, responseTime interface{}, exception string) {
-	requestFailureChannel <- &requestFailure{
+	defaultStats.requestFailureChannel <- &requestFailure{
 		requestType:  requestType,
 		name:         name,
 		responseTime: convertResponseTime(responseTime),

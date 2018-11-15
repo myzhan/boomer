@@ -32,7 +32,7 @@ func initBoomer() {
 	}
 
 	initEvents()
-	initStats()
+	defaultStats.start()
 
 	// done
 	atomic.StoreUint32(&initted, 1)
