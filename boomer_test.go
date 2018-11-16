@@ -10,6 +10,7 @@ func TestInitBoomer(t *testing.T) {
 	initBoomer()
 	defer Events.Unsubscribe("request_success", requestSuccessHandler)
 	defer Events.Unsubscribe("request_failure", requestFailureHandler)
+	defer defaultStats.close()
 
 	defer func() {
 		err := recover()
