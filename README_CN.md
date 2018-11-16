@@ -112,22 +112,6 @@ go build -o a.out main.go
 ./a.out --request-increase-rate 10/1m
 ```
 
-如果 master 使用 zeromq。
-
-```bash
-locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-go build -o a.out main.go
-./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=zeromq
-```
-
-如果 master 使用 TCP Socket。
-
-```bash
-locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-go build -o a.out main.go
-./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=socket
-```
-
 locust 启动时，需要一个 locustfile，随便一个符合它要求的即可，这里提供了一个 dummy.py。
 
 由于我们实际上使用 boomer 来施压，这个文件并不会影响到测试。

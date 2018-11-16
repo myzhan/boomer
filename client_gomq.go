@@ -18,20 +18,10 @@ type gomqSocketClient struct {
 	shutdownSignal chan bool
 }
 
-func newClient() client {
+func newClient() (client *gomqSocketClient) {
 	log.Println("Boomer is built with gomq support.")
-	var message string
-	var client client
-	if rpc == "zeromq" {
-		client = newZmqClient(masterHost, masterPort)
-		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", masterHost, masterPort, masterPort+1)
-	} else if rpc == "socket" {
-		client = newSocketClient(masterHost, masterPort)
-		message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", masterHost, masterPort)
-	} else {
-		log.Fatal("Unknown rpc type:", rpc)
-	}
-	log.Println(message)
+	client = newZmqClient(masterHost, masterPort)
+	log.Printf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.\n", masterHost, masterPort, masterPort+1)
 	return client
 }
 
@@ -44,7 +34,6 @@ func newZmqClient(masterHost string, masterPort int) *gomqSocketClient {
 
 	pushSocket.Connect(pushAddr)
 	pullSocket.Connect(pullAddr)
-	log.Println("ZMQ sockets connected")
 
 	newClient := &gomqSocketClient{
 		pushSocket:     pushSocket,

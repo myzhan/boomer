@@ -122,22 +122,6 @@ go build -o a.out main.go
 ./a.out --request-increase-rate 10/1m
 ```
 
-If master is listening on zeromq socket.
-
-```bash
-locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-go build -o a.out main.go
-./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=zeromq
-```
-
-If master is listening on tcp socket.
-
-```bash
-locust -f dummy.py --master --master-bind-host=127.0.0.1 --master-bind-port=5557
-go build -o a.out main.go
-./a.out --master-host=127.0.0.1 --master-port=5557 --rpc=socket
-```
-
 So far, dummy.py is necessary when starting a master, because locust needs such a file.
 
 Don't worry, dummy.py has nothing to do with your test.
