@@ -92,7 +92,7 @@ func Run(tasks ...*Task) {
 	}
 
 	c := make(chan os.Signal)
-	signal.Notify(c, syscall.SIGINT)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
 	<-c
 	Events.Publish("boomer:quit")
