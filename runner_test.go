@@ -39,8 +39,6 @@ func TestSafeRun(t *testing.T) {
 }
 
 func TestSpawnGoRoutines(t *testing.T) {
-	// FIXME: recreate global toMaster channel, this will make this test flaky
-	toMaster = make(chan *message, 10)
 	taskA := &Task{
 		Weight: 10,
 		Fn: func() {
@@ -56,23 +54,17 @@ func TestSpawnGoRoutines(t *testing.T) {
 		Name: "TaskB",
 	}
 	tasks := []*Task{taskA, taskB}
-	stopChannel := make(chan bool)
-	runner := &runner{
-		tasks:       tasks,
-		stopChannel: stopChannel,
-		nodeID:      "TestSpawnGoRoutines",
-	}
+	runner := newRunner(tasks, 100, "-1")
+	defer runner.close()
+	runner.client = newClient("localhost", 5557)
 	runner.hatchRate = 10
 	runner.spawnGoRoutines(10, runner.stopChannel)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
-	close(toMaster)
 }
 
 func TestHatchAndStop(t *testing.T) {
-	// FIXME: recreate global toMaster channel, this will make this test flaky
-	toMaster = make(chan *message, 20)
 	taskA := &Task{
 		Fn: func() {
 			time.Sleep(time.Second)
@@ -84,12 +76,9 @@ func TestHatchAndStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	stopChannel := make(chan bool)
-	runner := &runner{
-		tasks:       tasks,
-		stopChannel: stopChannel,
-		nodeID:      "TestHatchAndStop",
-	}
+	runner := newRunner(tasks, 100, "-1")
+	defer runner.close()
+	runner.client = newClient("localhost", 5557)
 
 	go func() {
 		var ticker = time.NewTicker(time.Second)
@@ -112,24 +101,20 @@ func TestHatchAndStop(t *testing.T) {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
 
-	msg := <-toMaster
+	msg := <-runner.client.sendChannel()
 	if msg.Type != "hatch_complete" {
 		t.Error("Runner should send hatch_complete message when hatching completed, got", msg.Type)
 	}
 	runner.stop()
 
 	runner.onQuiting()
-	msg = <-toMaster
+	msg = <-runner.client.sendChannel()
 	if msg.Type != "quit" {
 		t.Error("Runner should send quit message on quitting, got", msg.Type)
 	}
-
-	close(toMaster)
 }
 
 func TestOnMessage(t *testing.T) {
-	// FIXME: recreate global toMaster channel, this will make this test flaky
-	toMaster = make(chan *message, 20)
 	taskA := &Task{
 		Fn: func() {
 			time.Sleep(time.Second)
@@ -141,12 +126,9 @@ func TestOnMessage(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	stopChannel := make(chan bool)
-	runner := &runner{
-		tasks:       tasks,
-		stopChannel: stopChannel,
-		nodeID:      "TestOnMessage",
-	}
+	runner := newRunner(tasks, 100, "-1")
+	defer runner.close()
+	runner.client = newClient("localhost", 5557)
 	runner.state = stateInit
 
 	go func() {
@@ -170,7 +152,7 @@ func TestOnMessage(t *testing.T) {
 		"num_clients": int64(10),
 	}, runner.nodeID))
 
-	msg := <-toMaster
+	msg := <-runner.client.sendChannel()
 	if msg.Type != "hatching" {
 		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
 	}
@@ -183,7 +165,7 @@ func TestOnMessage(t *testing.T) {
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
 	}
-	msg = <-toMaster
+	msg = <-runner.client.sendChannel()
 	if msg.Type != "hatch_complete" {
 		t.Error("Runner should send hatch_complete message when hatch completed, got", msg.Type)
 	}
@@ -194,7 +176,7 @@ func TestOnMessage(t *testing.T) {
 		"num_clients": int64(20),
 	}, runner.nodeID))
 
-	msg = <-toMaster
+	msg = <-runner.client.sendChannel()
 	if msg.Type != "hatching" {
 		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
 	}
@@ -206,7 +188,7 @@ func TestOnMessage(t *testing.T) {
 	if runner.numClients != 20 {
 		t.Error("Number of goroutines mismatches, expected: 20, current count:", runner.numClients)
 	}
-	msg = <-toMaster
+	msg = <-runner.client.sendChannel()
 	if msg.Type != "hatch_complete" {
 		t.Error("Runner should send hatch_complete message when hatch completed, got", msg.Type)
 	}
@@ -216,16 +198,14 @@ func TestOnMessage(t *testing.T) {
 	if runner.state != stateStopped {
 		t.Error("State of runner is not stopped, got", runner.state)
 	}
-	msg = <-toMaster
+	msg = <-runner.client.sendChannel()
 	if msg.Type != "client_stopped" {
 		t.Error("Runner should send client_stopped message, got", msg.Type)
 	}
-	msg = <-toMaster
+	msg = <-runner.client.sendChannel()
 	if msg.Type != "client_ready" {
 		t.Error("Runner should send client_ready message, got", msg.Type)
 	}
-
-	close(toMaster)
 }
 
 func TestStartBucketUpdater(t *testing.T) {

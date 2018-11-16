@@ -102,24 +102,24 @@ func (s *testServer) start() {
 func TestPingPong(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 5557
-	toMaster = make(chan *message, 10)
 
 	server := newTestServer(masterHost, masterPort+1, masterPort)
 	defer server.close()
 	server.start()
 
 	// start client
-	client := newZmqClient(masterHost, masterPort)
+	client := newClient(masterHost, masterPort)
+	client.connect()
 	defer client.close()
 
-	toMaster <- newMessage("ping", nil, "testing ping pong")
+	client.sendChannel() <- newMessage("ping", nil, "testing ping pong")
 	msg := <-server.fromClient
 	if msg.Type != "ping" || msg.NodeID != "testing ping pong" {
 		t.Error("server doesn't recv ping message")
 	}
 
 	server.toClient <- newMessage("pong", nil, "testing ping pong")
-	msg = <-fromMaster
+	msg = <-client.recvChannel()
 	if msg.Type != "pong" || msg.NodeID != "testing ping pong" {
 		t.Error("client doesn't recv pong message")
 	}

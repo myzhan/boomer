@@ -1,14 +1,9 @@
 package boomer
 
 type client interface {
-	recv()
-	send()
+	connect()
+	close()
+	recvChannel() chan *message
+	sendChannel() chan *message
+	disconnectedChannel() chan bool
 }
-
-var fromMaster = make(chan *message, 100)
-var toMaster = make(chan *message, 100)
-var disconnectedFromMaster = make(chan bool)
-
-var masterHost string
-var masterPort int
-var rpc string

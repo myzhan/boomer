@@ -39,6 +39,8 @@ type runner struct {
 	stopChannel    chan bool
 	shutdownSignal chan bool
 	state          string
+	masterHost     string
+	masterPort     int
 	client         client
 	nodeID         string
 
@@ -181,11 +183,11 @@ func (r *runner) startHatching(spawnCount int, hatchRate int) {
 func (r *runner) hatchComplete() {
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
-	toMaster <- newMessage("hatch_complete", data, r.nodeID)
+	r.client.sendChannel() <- newMessage("hatch_complete", data, r.nodeID)
 }
 
 func (r *runner) onQuiting() {
-	toMaster <- newMessage("quit", nil, r.nodeID)
+	r.client.sendChannel() <- newMessage("quit", nil, r.nodeID)
 }
 
 func (r *runner) stop() {
@@ -198,11 +200,14 @@ func (r *runner) stop() {
 }
 
 func (r *runner) close() {
+	if r.client != nil {
+		r.client.close()
+	}
 	close(r.shutdownSignal)
 }
 
 func (r *runner) onHatchMessage(msg *message, rpsControllerStarted bool) {
-	toMaster <- newMessage("hatching", nil, r.nodeID)
+	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
 	hatchRate := int(rate.(float64))
@@ -249,8 +254,8 @@ func (r *runner) onMessage(msg *message) {
 			r.stop()
 			r.state = stateStopped
 			log.Println("Recv stop message from master, all the goroutines are stopped")
-			toMaster <- newMessage("client_stopped", nil, r.nodeID)
-			toMaster <- newMessage("client_ready", nil, r.nodeID)
+			r.client.sendChannel() <- newMessage("client_stopped", nil, r.nodeID)
+			r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
 		}
 	case stateStopped:
 		if msg.Type == "hatch" {
@@ -265,7 +270,7 @@ func (r *runner) startListener() {
 	go func() {
 		for {
 			select {
-			case msg := <-fromMaster:
+			case msg := <-r.client.recvChannel():
 				r.onMessage(msg)
 			case <-r.shutdownSignal:
 				return
@@ -330,13 +335,14 @@ func (r *runner) stopRPSController() {
 
 func (r *runner) getReady() {
 	r.state = stateInit
-	r.client = newClient()
+	r.client = newClient(r.masterHost, r.masterPort)
+	r.client.connect()
 
 	// listen to master
 	r.startListener()
 
 	// tell master, I'm ready
-	toMaster <- newMessage("client_ready", nil, r.nodeID)
+	r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
 
 	// report to master
 	go func() {
@@ -344,7 +350,7 @@ func (r *runner) getReady() {
 			select {
 			case data := <-defaultStats.messageToRunner:
 				data["user_count"] = r.numClients
-				toMaster <- newMessage("stats", data, r.nodeID)
+				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
 			case <-r.shutdownSignal:
 				return
 			}

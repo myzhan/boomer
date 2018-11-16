@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+var masterHost string
+var masterPort int
+
 var maxRPS int64
 var requestIncreaseRate string
 var runTasks string
@@ -76,6 +79,8 @@ func Run(tasks ...*Task) {
 	initMutex.Unlock()
 
 	runner := newRunner(tasks, maxRPS, requestIncreaseRate)
+	runner.masterHost = masterHost
+	runner.masterPort = masterPort
 	runner.getReady()
 
 	if memoryProfile != "" {
@@ -93,7 +98,7 @@ func Run(tasks ...*Task) {
 	Events.Publish("boomer:quit")
 
 	// wait for quit message is sent to master
-	<-disconnectedFromMaster
+	<-runner.client.disconnectedChannel()
 	log.Println("shut down")
 }
 
@@ -139,7 +144,6 @@ func init() {
 	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
 	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
 	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
-	flag.StringVar(&rpc, "rpc", "zeromq", "Choose zeromq or tcp socket to communicate with master, don't mix them up.")
 	flag.StringVar(&memoryProfile, "mem-profile", "", "Enable memory profiling.")
 	flag.DurationVar(&memoryProfileDuration, "mem-profile-duration", 30*time.Second, "Memory profile duration. Defaults to 30 seconds.")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling.")
