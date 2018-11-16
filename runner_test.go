@@ -249,3 +249,39 @@ func TestRPSControllerWithIncreaseRate(t *testing.T) {
 	}
 	r.stopRPSController()
 }
+
+func TestGetReady(t *testing.T) {
+	masterHost := "127.0.0.1"
+	masterPort := 6557
+
+	server := newTestServer(masterHost, masterPort+1, masterPort)
+	defer server.close()
+	server.start()
+
+	r := newRunner(nil, 100, "-1")
+	r.masterHost = masterHost
+	r.masterPort = masterPort
+	defer r.close()
+	defer Events.Unsubscribe("boomer:quit", r.onQuiting)
+
+	r.getReady()
+
+	msg := <-server.fromClient
+	if msg.Type != "client_ready" {
+		t.Error("Runner should send client_ready message to server.")
+	}
+
+	r.numClients = 10
+	data := make(map[string]interface{})
+	defaultStats.messageToRunner <- data
+
+	msg = <-server.fromClient
+	if msg.Type != "stats" {
+		t.Error("Runner should send stats message to server.")
+	}
+
+	userCount := msg.Data["user_count"].(int64)
+	if userCount != int64(10) {
+		t.Error("User count mismatch, expect: 10, got:", userCount)
+	}
+}
