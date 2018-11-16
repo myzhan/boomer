@@ -241,3 +241,27 @@ func TestStartBucketUpdater(t *testing.T) {
 		t.Error("rpsThreshold is not updated by bucket updater, expected", r.currentRPSThreshold, ", but got", r.rpsThreshold)
 	}
 }
+
+func TestRPSController(t *testing.T) {
+	r := newRunner(nil, 1000, "-1")
+	r.parseRPSControlArgs()
+	r.startRPSController()
+
+	time.Sleep(1*time.Second + 100*time.Millisecond)
+	if r.currentRPSThreshold != 1000 {
+		t.Error("currentRPSThreshold is not updated by RPS Controller")
+	}
+	r.stopRPSController()
+}
+
+func TestRPSControllerWithIncreaseRate(t *testing.T) {
+	r := newRunner(nil, 1000, "200/1s")
+	r.parseRPSControlArgs()
+	r.startRPSController()
+
+	time.Sleep(5*time.Second + 100*time.Millisecond)
+	if r.currentRPSThreshold != 1000 {
+		t.Error("currentRPSThreshold is not updated by RPS Controller")
+	}
+	r.stopRPSController()
+}
