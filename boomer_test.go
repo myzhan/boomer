@@ -6,6 +6,20 @@ import (
 	"time"
 )
 
+func TestInitBoomer(t *testing.T) {
+	initBoomer()
+	defer Events.Unsubscribe("request_success", requestSuccessHandler)
+	defer Events.Unsubscribe("request_failure", requestFailureHandler)
+
+	defer func() {
+		err := recover()
+		if err == nil {
+			t.Error("It should panic if initBoomer is called more than once.")
+		}
+	}()
+	initBoomer()
+}
+
 func TestRunTasksForTest(t *testing.T) {
 	count := 0
 	taskA := &Task{
