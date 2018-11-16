@@ -7,6 +7,7 @@ import (
 
 func TestParseRPSControlArgs(t *testing.T) {
 	r := newRunner(nil, int64(100), "100/2s")
+	defer r.close()
 	r.parseRPSControlArgs()
 
 	if !r.rpsControlEnabled {
@@ -229,6 +230,7 @@ func TestOnMessage(t *testing.T) {
 
 func TestStartBucketUpdater(t *testing.T) {
 	r := newRunner(nil, 100, "-1")
+	defer r.close()
 	r.parseRPSControlArgs()
 	r.startBucketUpdater()
 
@@ -244,6 +246,7 @@ func TestStartBucketUpdater(t *testing.T) {
 
 func TestRPSController(t *testing.T) {
 	r := newRunner(nil, 1000, "-1")
+	defer r.close()
 	r.parseRPSControlArgs()
 	r.startRPSController()
 
@@ -256,6 +259,7 @@ func TestRPSController(t *testing.T) {
 
 func TestRPSControllerWithIncreaseRate(t *testing.T) {
 	r := newRunner(nil, 1000, "200/1s")
+	defer r.close()
 	r.parseRPSControlArgs()
 	r.startRPSController()
 

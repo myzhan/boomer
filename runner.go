@@ -33,13 +33,14 @@ type Task struct {
 }
 
 type runner struct {
-	tasks       []*Task
-	numClients  int32
-	hatchRate   int
-	stopChannel chan bool
-	state       string
-	client      client
-	nodeID      string
+	tasks          []*Task
+	numClients     int32
+	hatchRate      int
+	stopChannel    chan bool
+	shutdownSignal chan bool
+	state          string
+	client         client
+	nodeID         string
 
 	// RPS Control
 	maxRPS                   int64
@@ -60,6 +61,7 @@ func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string) (r *runn
 		requestIncreaseRate: requestIncreaseRate,
 	}
 	r.nodeID = getNodeID()
+	r.shutdownSignal = make(chan bool)
 
 	if 0 < maxRPS || requestIncreaseRate != "-1" {
 		r.parseRPSControlArgs()
@@ -195,6 +197,10 @@ func (r *runner) stop() {
 	}
 }
 
+func (r *runner) close() {
+	close(r.shutdownSignal)
+}
+
 func (r *runner) onHatchMessage(msg *message, rpsControllerStarted bool) {
 	toMaster <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
@@ -255,17 +261,25 @@ func (r *runner) onMessage(msg *message) {
 	}
 }
 
-func (r *runner) listener() {
-	for {
-		msg := <-fromMaster
-		r.onMessage(msg)
-	}
+func (r *runner) startListener() {
+	go func() {
+		for {
+			select {
+			case msg := <-fromMaster:
+				r.onMessage(msg)
+			case <-r.shutdownSignal:
+				return
+			}
+		}
+	}()
 }
 
 func (r *runner) startBucketUpdater() {
 	go func() {
 		for {
 			select {
+			case <-r.shutdownSignal:
+				return
 			case <-r.rpsControllerQuitChannel:
 				return
 			default:
@@ -284,6 +298,8 @@ func (r *runner) startRPSController() {
 	go func() {
 		for {
 			select {
+			case <-r.shutdownSignal:
+				return
 			case <-r.rpsControllerQuitChannel:
 				return
 			default:
@@ -317,7 +333,7 @@ func (r *runner) getReady() {
 	r.client = newClient()
 
 	// listen to master
-	go r.listener()
+	r.startListener()
 
 	// tell master, I'm ready
 	toMaster <- newMessage("client_ready", nil, r.nodeID)
@@ -329,6 +345,8 @@ func (r *runner) getReady() {
 			case data := <-defaultStats.messageToRunner:
 				data["user_count"] = r.numClients
 				toMaster <- newMessage("stats", data, r.nodeID)
+			case <-r.shutdownSignal:
+				return
 			}
 		}
 	}()
