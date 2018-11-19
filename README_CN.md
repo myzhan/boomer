@@ -94,7 +94,9 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
-限制单个 boomer 实例的最高 RPS，在一些指定 RPS 的场景下使用。
+--max-rps 表示一秒内所有 Task.Fn 函数能被调用的最多次数。
+
+下面这种情况，如果在同一个 Task.Fn 函数里面多次调用 boomer.Events.Publish("request_success")，那么统计到的 RPS 会超过 10000。
 
 ```bash
 go build -o a.out main.go

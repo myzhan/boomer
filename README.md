@@ -104,7 +104,9 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
-If you want to limit max RPS that a single instance of boomer can generate.
+--max-rps means the max count that all the Task.Fn can be called in one second.
+
+The result may be misleading if you call boomer.Events.Publish("request_success") more than once in Task.Fn.
 
 ```bash
 go build -o a.out main.go
