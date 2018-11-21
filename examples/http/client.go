@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/myzhan/boomer"
@@ -55,7 +56,7 @@ func worker() {
 			boomer.Events.Publish("request_success", "http", "200",
 				elapsed, response.ContentLength)
 		} else {
-			boomer.Events.Publish("request_success", "http", string(response.StatusCode),
+			boomer.Events.Publish("request_success", "http", strconv.Itoa(response.StatusCode),
 				elapsed, response.ContentLength)
 		}
 

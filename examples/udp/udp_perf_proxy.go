@@ -33,43 +33,72 @@ import (
 // See also:
 // udpcopy: https://github.com/wangbin579/udpcopy
 
-func sendReq(req []byte, addr string) {
+type worker struct {
+	conn     *net.UDPConn
+	requests chan []byte
+	recvBuff []byte
+}
 
-	a, err := net.ResolveUDPAddr("udp", addr)
-
-	conn, err := net.DialUDP("udp", nil, a)
+func newWorker(remoteAddr string) *worker {
+	addr, err := net.ResolveUDPAddr("udp", remoteAddr)
 	if err != nil {
-		boomer.Events.Publish("request_failure", "udp-dial", name, 0.0, err.Error())
-		return
+		log.Fatalln("Failed to create worker", err)
+		return nil
 	}
+	conn, err := net.DialUDP("udp", nil, addr)
+	if err != nil {
+		log.Fatalln("Failed to create worker", err)
+		return nil
+	}
+	requests := make(chan []byte, 1000)
+	recvBuff := make([]byte, *udpBufferSize)
+	go func() {
+		for {
+			req := <-requests
+			for n := 0; n < *number; n++ {
+				startTime := boomer.Now()
+				wn, err := conn.Write(req)
+				if err != nil {
+					boomer.Events.Publish("request_failure", "udp-write", name, 0.0, err.Error())
+					continue
+				}
 
-	conn.SetReadDeadline(time.Now().Add(backendTimeout))
-
-	for n := 0; n < *number; n++ {
-
-		startTime := boomer.Now()
-
-		_, err = conn.Write(req)
-		if err != nil {
-			boomer.Events.Publish("request_failure", "udp-write", name, 0.0, err.Error())
-			return
+				if *dontRead {
+					elapsed := boomer.Now() - startTime
+					boomer.Events.Publish("request_success", "udp-write", name, elapsed, int64(wn))
+				} else {
+					conn.SetReadDeadline(time.Now().Add(backendTimeout))
+					respLength, err := conn.Read(recvBuff)
+					if err != nil {
+						boomer.Events.Publish("request_failure", "udp-read", name, 0.0, err.Error())
+						continue
+					}
+					elapsed := boomer.Now() - startTime
+					boomer.Events.Publish("request_success", "udp-resp", name, elapsed, int64(respLength))
+				}
+			}
 		}
+	}()
 
-		resp := make([]byte, *udpBufferSize)
-		respLength, err := conn.Read(resp)
-		if err != nil {
-			boomer.Events.Publish("request_failure", "udp-read", name, 0.0, err.Error())
-			return
-		}
-
-		elapsed := boomer.Now() - startTime
-
-		boomer.Events.Publish("request_success", "udp-resp", name, elapsed, int64(respLength))
+	return &worker{
+		conn:     conn,
+		requests: requests,
+		recvBuff: recvBuff,
 	}
 
 }
 
+func createWorkers() {
+	workersPool = make([]*worker, *workersCount)
+	for n := 0; n < *workersCount; n++ {
+		workersPool[n] = newWorker(*backendAddr)
+	}
+}
+
 func proxy() {
+
+	// Pooling workers
+	createWorkers()
 
 	listener, err := net.ListenUDP("udp", &net.UDPAddr{
 		IP:   net.ParseIP(*proxyHost),
@@ -78,6 +107,8 @@ func proxy() {
 	if err != nil {
 		log.Fatal("error binding on port:", *proxyPort, err)
 	}
+
+	workerIndex := uint64(0)
 
 	for {
 		data := make([]byte, *udpBufferSize)
@@ -94,14 +125,16 @@ func proxy() {
 			// test is not started, drop current request.
 			continue
 		}
-		go sendReq(data[:n], *backendAddr)
+
+		// Round-robin selection
+		workerIndex = workerIndex + 1
+		selectedWorker := workersPool[workerIndex%(uint64(*workersCount))]
+		selectedWorker.requests <- data[:n]
 	}
 }
 
 func deadend() {
-
 	testStarted = true
-
 	for {
 		time.Sleep(time.Second * 100)
 	}
@@ -123,23 +156,29 @@ func main() {
 const name = "udproxy"
 
 var testStarted = false
+var workersPool []*worker
 
+// command line arguments
 var backendAddr *string
 var backendTimeout time.Duration
 var proxyHost *string
 var proxyPort *int
 var udpBufferSize *int
 var number *int
+var workersCount *int
+var dontRead *bool
 
 func init() {
 
 	backendAddr = flag.String("backend-addr", "127.0.0.1:44444", "backend address")
 	timeout := flag.Int("backend-timeout", 1000, "backend timeout(ms)")
-	backendTimeout = time.Duration(*timeout) * time.Millisecond
 	proxyHost = flag.String("proxy-host", "0.0.0.0", "proxy bind-host")
 	proxyPort = flag.Int("proxy-port", 23333, "proxy bind-port")
-	udpBufferSize = flag.Int("udp-buffer-size", 10240, "udp recv buffer size")
+	workersCount = flag.Int("workers", 20, "UDP workers")
+	udpBufferSize = flag.Int("udp-buffer-size", 4096, "udp recv buffer size")
 	number = flag.Int("number", 1, "the number of replication for multi-copying")
+	dontRead = flag.Bool("dontread", false, "do not wait for backend's response")
 	flag.Parse()
 
+	backendTimeout = time.Duration(*timeout) * time.Millisecond
 }

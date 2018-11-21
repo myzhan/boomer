@@ -1,8 +1,6 @@
 package boomer
 
 import (
-	"log"
-
 	"github.com/ugorji/go/codec"
 )
 
@@ -11,9 +9,9 @@ var (
 )
 
 type message struct {
-	Type   string                 `codec: "type"`
-	Data   map[string]interface{} `codec: "data"`
-	NodeID string                 `codec: "node_id"`
+	Type   string                 `codec:"type"`
+	Data   map[string]interface{} `codec:"data"`
+	NodeID string                 `codec:"node_id"`
 }
 
 func newMessage(t string, data map[string]interface{}, nodeID string) (msg *message) {
@@ -24,23 +22,17 @@ func newMessage(t string, data map[string]interface{}, nodeID string) (msg *mess
 	}
 }
 
-func (m *message) serialize() (out []byte) {
+func (m *message) serialize() (out []byte, err error) {
 	mh.StructToArray = true
 	enc := codec.NewEncoderBytes(&out, &mh)
-	err := enc.Encode(m)
-	if err != nil {
-		log.Fatal("[msgpack] encode fail")
-	}
-	return
+	err = enc.Encode(m)
+	return out, err
 }
 
-func newMessageFromBytes(raw []byte) *message {
+func newMessageFromBytes(raw []byte) (newMsg *message, err error) {
 	mh.StructToArray = true
 	dec := codec.NewDecoderBytes(raw, &mh)
-	var newMsg = &message{}
-	err := dec.Decode(newMsg)
-	if err != nil {
-		log.Fatal("[msgpack] decode fail")
-	}
-	return newMsg
+	newMsg = &message{}
+	err = dec.Decode(newMsg)
+	return newMsg, err
 }

@@ -3,21 +3,24 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
 
 const (
-	stateInit     string = "ready"
-	stateHatching string = "hatching"
-	stateRunning  string = "running"
-	stateStopped  string = "stopped"
+	stateInit     = "ready"
+	stateHatching = "hatching"
+	stateRunning  = "running"
+	stateStopped  = "stopped"
 )
 
 const (
-	slaveReportInterval time.Duration = 3 * time.Second
+	slaveReportInterval = 3 * time.Second
 )
 
 // Task is like locust's task.
@@ -30,13 +33,76 @@ type Task struct {
 }
 
 type runner struct {
-	tasks       []*Task
-	numClients  int
-	hatchRate   int
-	stopChannel chan bool
-	state       string
-	client      client
-	nodeID      string
+	tasks          []*Task
+	numClients     int32
+	hatchRate      int
+	stopChannel    chan bool
+	shutdownSignal chan bool
+	state          string
+	masterHost     string
+	masterPort     int
+	client         client
+	nodeID         string
+
+	// RPS Control
+	maxRPS                   int64
+	requestIncreaseRate      string
+	requestIncreaseStep      int64
+	requestIncreaseInterval  time.Duration
+	currentRPSThreshold      int64
+	rpsThreshold             int64
+	rpsControlEnabled        bool
+	rpsControlChannel        chan bool
+	rpsControllerQuitChannel chan bool
+}
+
+func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string) (r *runner) {
+	r = &runner{
+		tasks:               tasks,
+		maxRPS:              maxRPS,
+		requestIncreaseRate: requestIncreaseRate,
+	}
+	r.nodeID = getNodeID()
+	r.shutdownSignal = make(chan bool)
+
+	if 0 < maxRPS || requestIncreaseRate != "-1" {
+		r.parseRPSControlArgs()
+	}
+	return r
+}
+
+func (r *runner) parseRPSControlArgs() {
+	r.rpsControlEnabled = true
+	r.rpsControlChannel = make(chan bool)
+	r.rpsControllerQuitChannel = make(chan bool)
+	if r.maxRPS > 0 {
+		log.Println("Max RPS that boomer may generate is limited to", r.maxRPS)
+	}
+	if r.requestIncreaseRate != "-1" {
+		log.Println("Request increase rate is", r.requestIncreaseRate)
+		if strings.Contains(r.requestIncreaseRate, "/") {
+			tmp := strings.Split(r.requestIncreaseRate, "/")
+			if len(tmp) != 2 {
+				log.Fatalf("Wrong format of requestIncreaseRate, %s", r.requestIncreaseRate)
+			}
+			step, err := strconv.ParseInt(tmp[0], 10, 64)
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+			r.requestIncreaseStep = step
+			r.requestIncreaseInterval, err = time.ParseDuration(tmp[1])
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+		} else {
+			step, err := strconv.ParseInt(r.requestIncreaseRate, 10, 64)
+			if err != nil {
+				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
+			}
+			r.requestIncreaseStep = step
+			r.requestIncreaseInterval = time.Second
+		}
+	}
 }
 
 func (r *runner) safeRun(fn func()) {
@@ -52,7 +118,6 @@ func (r *runner) safeRun(fn func()) {
 }
 
 func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
-
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
 	weightSum := 0
@@ -70,137 +135,227 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 		}
 
 		for i := 1; i <= amount; i++ {
-			if i%r.hatchRate == 0 {
-				time.Sleep(1 * time.Second)
-			}
-			go func(fn func()) {
-				for {
-					select {
-					case <-quit:
-						return
-					default:
-						if maxRPSEnabled {
-							token := atomic.AddInt64(&maxRPSThreshold, -1)
-							if token < 0 {
-								// max RPS is reached, wait until next second
-								<-maxRPSControlChannel
+			select {
+			case <-quit:
+				// quit hatching goroutine
+				return
+			default:
+				if i%r.hatchRate == 0 {
+					time.Sleep(1 * time.Second)
+				}
+				atomic.AddInt32(&r.numClients, 1)
+				go func(fn func()) {
+					for {
+						select {
+						case <-quit:
+							return
+						default:
+							if r.rpsControlEnabled {
+								token := atomic.AddInt64(&r.rpsThreshold, -1)
+								if token < 0 {
+									// RPS threshold is reached, wait until next second
+									<-r.rpsControlChannel
+								} else {
+									r.safeRun(fn)
+								}
 							} else {
 								r.safeRun(fn)
 							}
-						} else {
-							r.safeRun(fn)
 						}
 					}
-				}
-			}(task.Fn)
+				}(task.Fn)
+			}
 		}
-
 	}
 
 	r.hatchComplete()
-
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
-
-	if r.state != stateRunning && r.state != stateHatching {
-		clearStatsChannel <- true
-		r.stopChannel = make(chan bool)
-	}
-
-	if r.state == stateRunning {
-		// stop previous goroutines without blocking
-		// those goroutines will exit when r.safeRun returns
-		close(r.stopChannel)
-	}
-
+	defaultStats.clearStatsChannel <- true
 	r.stopChannel = make(chan bool)
-	r.state = stateHatching
 
 	r.hatchRate = hatchRate
-	r.numClients = spawnCount
-	r.spawnGoRoutines(r.numClients, r.stopChannel)
-
+	r.numClients = 0
+	go r.spawnGoRoutines(spawnCount, r.stopChannel)
 }
 
 func (r *runner) hatchComplete() {
-
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
-	toServer <- newMessage("hatch_complete", data, r.nodeID)
-
-	r.state = stateRunning
+	r.client.sendChannel() <- newMessage("hatch_complete", data, r.nodeID)
 }
 
 func (r *runner) onQuiting() {
-	toServer <- newMessage("quit", nil, r.nodeID)
+	r.client.sendChannel() <- newMessage("quit", nil, r.nodeID)
 }
 
 func (r *runner) stop() {
-
-	if r.state == stateRunning {
-		close(r.stopChannel)
-		r.state = stateStopped
-		log.Println("Recv stop message from master, all the goroutines are stopped")
+	// stop previous goroutines without blocking
+	// those goroutines will exit when r.safeRun returns
+	close(r.stopChannel)
+	if r.rpsControlEnabled {
+		r.stopRPSController()
 	}
-
 }
 
-func (r *runner) getReady() {
+func (r *runner) close() {
+	if r.client != nil {
+		r.client.close()
+	}
+	close(r.shutdownSignal)
+}
 
-	r.state = stateInit
-
-	// read message from server
-	go func() {
-		for {
-			msg := <-fromServer
-			switch msg.Type {
-			case "hatch":
-				toServer <- newMessage("hatching", nil, r.nodeID)
-				rate, _ := msg.Data["hatch_rate"]
-				clients, _ := msg.Data["num_clients"]
-				hatchRate := rate.(float64)
-				workers := 0
-				if _, ok := clients.(uint64); ok {
-					workers = int(clients.(uint64))
-				} else {
-					workers = int(clients.(int64))
-				}
-				r.startHatching(workers, int(hatchRate))
-			case "stop":
-				r.stop()
-				toServer <- newMessage("client_stopped", nil, r.nodeID)
-				toServer <- newMessage("client_ready", nil, r.nodeID)
-			case "quit":
-				log.Println("Got quit message from master, shutting down...")
-				os.Exit(0)
-			}
+func (r *runner) onHatchMessage(msg *message, rpsControllerStarted bool) {
+	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
+	rate, _ := msg.Data["hatch_rate"]
+	clients, _ := msg.Data["num_clients"]
+	hatchRate := int(rate.(float64))
+	workers := 0
+	if _, ok := clients.(uint64); ok {
+		workers = int(clients.(uint64))
+	} else {
+		workers = int(clients.(int64))
+	}
+	if workers == 0 || hatchRate == 0 {
+		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
+			workers, hatchRate)
+	} else {
+		if r.rpsControlEnabled && !rpsControllerStarted {
+			r.startRPSController()
 		}
-	}()
+		r.startHatching(workers, hatchRate)
+	}
+}
 
-	// tell master, I'm ready
-	toServer <- newMessage("client_ready", nil, r.nodeID)
+// Runner acts as a state machine, and runs in one goroutine without any lock.
+func (r *runner) onMessage(msg *message) {
+	if msg.Type == "quit" {
+		log.Println("Got quit message from master, shutting down...")
+		os.Exit(0)
+	}
 
-	// report to server
+	switch r.state {
+	case stateInit:
+		if msg.Type == "hatch" {
+			r.state = stateHatching
+			r.onHatchMessage(msg, false)
+			r.state = stateRunning
+		}
+	case stateHatching:
+		fallthrough
+	case stateRunning:
+		switch msg.Type {
+		case "hatch":
+			r.state = stateHatching
+			r.onHatchMessage(msg, true)
+			r.state = stateRunning
+		case "stop":
+			r.stop()
+			r.state = stateStopped
+			log.Println("Recv stop message from master, all the goroutines are stopped")
+			r.client.sendChannel() <- newMessage("client_stopped", nil, r.nodeID)
+			r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
+		}
+	case stateStopped:
+		if msg.Type == "hatch" {
+			r.state = stateHatching
+			r.onHatchMessage(msg, false)
+			r.state = stateRunning
+		}
+	}
+}
+
+func (r *runner) startListener() {
 	go func() {
 		for {
 			select {
-			case data := <-messageToServerChannel:
+			case msg := <-r.client.recvChannel():
+				r.onMessage(msg)
+			case <-r.shutdownSignal:
+				return
+			}
+		}
+	}()
+}
+
+func (r *runner) startBucketUpdater() {
+	go func() {
+		for {
+			select {
+			case <-r.shutdownSignal:
+				return
+			case <-r.rpsControllerQuitChannel:
+				return
+			default:
+				atomic.StoreInt64(&r.rpsThreshold, r.currentRPSThreshold)
+				time.Sleep(1 * time.Second)
+				// use channel to broadcast
+				close(r.rpsControlChannel)
+				r.rpsControlChannel = make(chan bool)
+			}
+		}
+	}()
+}
+
+func (r *runner) startRPSController() {
+	r.rpsControllerQuitChannel = make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-r.shutdownSignal:
+				return
+			case <-r.rpsControllerQuitChannel:
+				return
+			default:
+				if r.requestIncreaseStep > 0 {
+					r.currentRPSThreshold = r.currentRPSThreshold + r.requestIncreaseStep
+					if r.currentRPSThreshold < 0 {
+						// int64 overflow
+						r.currentRPSThreshold = int64(math.MaxInt64)
+					}
+					if r.maxRPS > 0 && r.currentRPSThreshold > r.maxRPS {
+						r.currentRPSThreshold = r.maxRPS
+					}
+				} else {
+					if r.maxRPS > 0 {
+						r.currentRPSThreshold = r.maxRPS
+					}
+				}
+				time.Sleep(r.requestIncreaseInterval)
+			}
+		}
+	}()
+	r.startBucketUpdater()
+}
+
+func (r *runner) stopRPSController() {
+	close(r.rpsControllerQuitChannel)
+}
+
+func (r *runner) getReady() {
+	r.state = stateInit
+	r.client = newClient(r.masterHost, r.masterPort)
+	r.client.connect()
+
+	// listen to master
+	r.startListener()
+
+	// tell master, I'm ready
+	r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
+
+	// report to master
+	go func() {
+		for {
+			select {
+			case data := <-defaultStats.messageToRunner:
 				data["user_count"] = r.numClients
-				toServer <- newMessage("stats", data, r.nodeID)
+				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
+			case <-r.shutdownSignal:
+				return
 			}
 		}
 	}()
 
-	if maxRPSEnabled {
-		go func() {
-			for {
-				atomic.StoreInt64(&maxRPSThreshold, maxRPS)
-				time.Sleep(1 * time.Second)
-				// use channel to broadcast
-				close(maxRPSControlChannel)
-				maxRPSControlChannel = make(chan bool)
-			}
-		}()
-	}
+	Events.Subscribe("boomer:quit", r.onQuiting)
 }

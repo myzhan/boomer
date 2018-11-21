@@ -10,64 +10,89 @@ import (
 )
 
 type czmqSocketClient struct {
-	pushConn *goczmq.Sock
-	pullConn *goczmq.Sock
+	masterHost string
+	pushPort   int
+	pullPort   int
+
+	pushConn       *goczmq.Sock
+	pullConn       *goczmq.Sock
+	shutdownSignal chan bool
+
+	fromMaster             chan *message
+	toMaster               chan *message
+	disconnectedFromMaster chan bool
 }
 
-func newClient() client {
+func newClient(masterHost string, masterPort int) (client *czmqSocketClient) {
 	log.Println("Boomer is built with goczmq support.")
-	var client client
-	var message string
-	if *rpc == "zeromq" {
-		client = newZmqClient(*masterHost, *masterPort)
-		message = fmt.Sprintf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.", *masterHost, *masterPort, *masterPort+1)
-	} else if *rpc == "socket" {
-		client = newSocketClient(*masterHost, *masterPort)
-		message = fmt.Sprintf("Boomer is connected to master(%s:%d) press Ctrl+c to quit.", *masterHost, *masterPort)
-	} else {
-		log.Fatal("Unknown rpc type:", *rpc)
+	client = &czmqSocketClient{
+		masterHost:             masterHost,
+		pushPort:               masterPort,
+		pullPort:               masterPort + 1,
+		shutdownSignal:         make(chan bool),
+		fromMaster:             make(chan *message, 100),
+		toMaster:               make(chan *message, 100),
+		disconnectedFromMaster: make(chan bool),
 	}
-	log.Println(message)
+
 	return client
 }
 
-func newZmqClient(masterHost string, masterPort int) *czmqSocketClient {
-	tcpAddr := fmt.Sprintf("tcp://%s:%d", masterHost, masterPort)
+func (c *czmqSocketClient) connect() {
+	tcpAddr := fmt.Sprintf("tcp://%s:%d", c.masterHost, c.pushPort)
 	pushConn, err := goczmq.NewPush(tcpAddr)
 	if err != nil {
 		log.Fatalf("Failed to create zeromq pusher, %s", err)
 	}
-	tcpAddr = fmt.Sprintf(">tcp://%s:%d", masterHost, masterPort+1)
+	c.pushConn = pushConn
+
+	tcpAddr = fmt.Sprintf(">tcp://%s:%d", c.masterHost, c.pullPort)
 	pullConn, err := goczmq.NewPull(tcpAddr)
 	if err != nil {
 		log.Fatalf("Failed to create zeromq puller, %s", err)
 	}
-	log.Println("ZMQ sockets connected")
-	newClient := &czmqSocketClient{
-		pushConn: pushConn,
-		pullConn: pullConn,
-	}
-	go newClient.recv()
-	go newClient.send()
-	return newClient
+	c.pullConn = pullConn
+
+	log.Printf("Boomer is connected to master(%s:%d|%d) press Ctrl+c to quit.\n", c.masterHost, c.pushPort, c.pullPort)
+
+	go c.recv()
+	go c.send()
+}
+
+func (c *czmqSocketClient) close() {
+	close(c.shutdownSignal)
+}
+
+func (c *czmqSocketClient) recvChannel() chan *message {
+	return c.fromMaster
 }
 
 func (c *czmqSocketClient) recv() {
 	for {
-		msg, _, _ := c.pullConn.RecvFrame()
-		msgFromMaster := newMessageFromBytes(msg)
-		fromServer <- msgFromMaster
+		select {
+		case <-c.shutdownSignal:
+			return
+		default:
+			msg, _, _ := c.pullConn.RecvFrame()
+			msgFromMaster := newMessageFromBytes(msg)
+			c.fromMaster <- msgFromMaster
+		}
 	}
+}
 
+func (c *czmqSocketClient) sendChannel() chan *message {
+	return c.toMaster
 }
 
 func (c *czmqSocketClient) send() {
 	for {
 		select {
-		case msg := <-toServer:
+		case <-c.shutdownSignal:
+			return
+		case msg := <-c.toMaster:
 			c.sendMessage(msg)
 			if msg.Type == "quit" {
-				disconnectedFromServer <- true
+				c.disconnectedFromMaster <- true
 			}
 		}
 	}
@@ -75,4 +100,8 @@ func (c *czmqSocketClient) send() {
 
 func (c *czmqSocketClient) sendMessage(msg *message) {
 	c.pushConn.SendFrame(msg.serialize(), 0)
+}
+
+func (c *czmqSocketClient) disconnectedChannel() chan bool {
+	return c.disconnectedFromMaster
 }

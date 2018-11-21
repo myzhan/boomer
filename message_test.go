@@ -1,6 +1,8 @@
 package boomer
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestEncodeAndDecode(t *testing.T) {
 
@@ -9,8 +11,14 @@ func TestEncodeAndDecode(t *testing.T) {
 	data["b"] = "hello"
 	msg := newMessage("test", data, "nodeID")
 
-	encoded := msg.serialize()
-	decoded := newMessageFromBytes(encoded)
+	encoded, err := msg.serialize()
+	if err != nil {
+		t.Error(err)
+	}
+	decoded, err := newMessageFromBytes(encoded)
+	if err != nil {
+		t.Error(err)
+	}
 
 	if msg.Type != decoded.Type {
 		t.Error("message type mismatched.")

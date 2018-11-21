@@ -5,10 +5,15 @@ notifications:
 
 go:
   - 1.5
+  - tip
 
 install:
   - go get github.com/asaskevich/EventBus
   - go get github.com/ugorji/go/codec
+  - go get github.com/zeromq/gomq
 
 script:
-  - go test -v .
+  - go test -coverprofile=coverage.txt -covermode=atomic
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
