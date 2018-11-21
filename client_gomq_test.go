@@ -55,7 +55,12 @@ func (s *testServer) sendMessage(msg *message) {
 			debug.PrintStack()
 		}
 	}()
-	err := s.pushSocket.Send(msg.serialize())
+	serializedMessage, err := msg.serialize()
+	if err != nil {
+		log.Println("Msgpack encode fail:", err)
+		return
+	}
+	err = s.pushSocket.Send(serializedMessage)
 	if err != nil {
 		log.Printf("Error sending to client: %v\n", err)
 	}
@@ -72,8 +77,12 @@ func (s *testServer) recv() {
 			if err != nil {
 				log.Printf("Error reading: %v\n", err)
 			} else {
-				msgFromClient := newMessageFromBytes(msg)
-				s.fromClient <- msgFromClient
+				msgFromClient, err := newMessageFromBytes(msg)
+				if err != nil {
+					log.Println("Msgpack decode fail:", err)
+				} else {
+					s.fromClient <- msgFromClient
+				}
 			}
 		}
 	}
