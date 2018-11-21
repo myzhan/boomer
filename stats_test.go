@@ -116,6 +116,18 @@ func TestClearAll(t *testing.T) {
 	}
 }
 
+func TestClearAllByChannel(t *testing.T) {
+	newStats := newRequestStats()
+	newStats.start()
+	defer newStats.close()
+	newStats.logRequest("http", "success", 1, 20)
+	newStats.clearStatsChannel <- true
+
+	if newStats.total.numRequests != 0 {
+		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.numRequests)
+	}
+}
+
 func TestSerializeStats(t *testing.T) {
 	newStats := newRequestStats()
 	newStats.logRequest("http", "success", 1, 20)
