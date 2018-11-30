@@ -47,6 +47,13 @@ func TestLogRequest(t *testing.T) {
 	}
 }
 
+func BenchmarkLogRequest(b *testing.B) {
+	newStats := newRequestStats()
+	for i := 0; i < b.N; i++ {
+		newStats.logRequest("http", "success", 2, 30)
+	}
+}
+
 func TestRoundedResponseTime(t *testing.T) {
 	newStats := newRequestStats()
 	newStats.logRequest("http", "success", 147, 1)
@@ -103,6 +110,15 @@ func TestLogError(t *testing.T) {
 	}
 	if err400.occurences != 2 {
 		t.Error("Error occurences is wrong, expected: 2, got:", err400.occurences)
+	}
+}
+
+func BenchmarkLogError(b *testing.B) {
+	newStats := newRequestStats()
+	for i := 0; i < b.N; i++ {
+		// LogError use md5 to calculate hash keys, it may slow down the only goroutine,
+		// which consumes both requestSuccessChannel and requestFailureChannel.
+		newStats.logError("http", "failure", "500 error")
 	}
 }
 
