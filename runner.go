@@ -248,6 +248,7 @@ func (r *runner) onMessage(msg *message) {
 		switch msg.Type {
 		case "hatch":
 			r.state = stateHatching
+			r.stop()
 			r.onHatchMessage(msg, true)
 			r.state = stateRunning
 		case "stop":
