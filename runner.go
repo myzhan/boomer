@@ -206,7 +206,7 @@ func (r *runner) close() {
 	close(r.shutdownSignal)
 }
 
-func (r *runner) onHatchMessage(msg *message, rpsControllerStarted bool) {
+func (r *runner) onHatchMessage(msg *message) {
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
@@ -221,7 +221,7 @@ func (r *runner) onHatchMessage(msg *message, rpsControllerStarted bool) {
 		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
 			workers, hatchRate)
 	} else {
-		if r.rpsControlEnabled && !rpsControllerStarted {
+		if r.rpsControlEnabled {
 			r.startRPSController()
 		}
 		r.startHatching(workers, hatchRate)
@@ -239,7 +239,7 @@ func (r *runner) onMessage(msg *message) {
 	case stateInit:
 		if msg.Type == "hatch" {
 			r.state = stateHatching
-			r.onHatchMessage(msg, false)
+			r.onHatchMessage(msg)
 			r.state = stateRunning
 		}
 	case stateHatching:
@@ -249,7 +249,7 @@ func (r *runner) onMessage(msg *message) {
 		case "hatch":
 			r.state = stateHatching
 			r.stop()
-			r.onHatchMessage(msg, true)
+			r.onHatchMessage(msg)
 			r.state = stateRunning
 		case "stop":
 			r.stop()
@@ -261,7 +261,7 @@ func (r *runner) onMessage(msg *message) {
 	case stateStopped:
 		if msg.Type == "hatch" {
 			r.state = stateHatching
-			r.onHatchMessage(msg, false)
+			r.onHatchMessage(msg)
 			r.state = stateRunning
 		}
 	}
