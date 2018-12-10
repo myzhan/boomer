@@ -19,6 +19,7 @@ var masterPort int
 
 var maxRPS int64
 var requestIncreaseRate string
+var hatchBaseOnRate bool
 var runTasks string
 var memoryProfile string
 var memoryProfileDuration time.Duration
@@ -78,7 +79,7 @@ func Run(tasks ...*Task) {
 	initBoomer()
 	initMutex.Unlock()
 
-	runner := newRunner(tasks, maxRPS, requestIncreaseRate)
+	runner := newRunner(tasks, maxRPS, requestIncreaseRate, hatchBaseOnRate)
 	runner.masterHost = masterHost
 	runner.masterPort = masterPort
 	runner.getReady()
@@ -141,9 +142,10 @@ func startCPUProfile(file string, duration time.Duration) {
 func init() {
 	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate, disabled by default.")
 	flag.StringVar(&requestIncreaseRate, "request-increase-rate", "-1", "Request increase rate, disabled by default.")
+	flag.BoolVar(&hatchBaseOnRate, "hatch-base-on-rate", false, "generate requests based on rate,these requests are sent  well-proportioned in one second instead of a mere instant at the beginning of the second and closed by default.")
 	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
 	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
-	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
+	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5558.")
 	flag.StringVar(&memoryProfile, "mem-profile", "", "Enable memory profiling.")
 	flag.DurationVar(&memoryProfileDuration, "mem-profile-duration", 30*time.Second, "Memory profile duration. Defaults to 30 seconds.")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling.")

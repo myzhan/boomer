@@ -47,6 +47,7 @@ type runner struct {
 	// RPS Control
 	maxRPS                   int64
 	requestIncreaseRate      string
+	hatchBaseOnRate            bool
 	requestIncreaseStep      int64
 	requestIncreaseInterval  time.Duration
 	currentRPSThreshold      int64
@@ -56,11 +57,12 @@ type runner struct {
 	rpsControllerQuitChannel chan bool
 }
 
-func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string) (r *runner) {
+func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string, hatchBaseOnRate bool) (r *runner) {
 	r = &runner{
 		tasks:               tasks,
 		maxRPS:              maxRPS,
 		requestIncreaseRate: requestIncreaseRate,
+		hatchBaseOnRate:       hatchBaseOnRate,
 	}
 	r.nodeID = getNodeID()
 	r.shutdownSignal = make(chan bool)
@@ -140,7 +142,9 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 				// quit hatching goroutine
 				return
 			default:
-				if i%r.hatchRate == 0 {
+				if r.hatchBaseOnRate {
+					time.Sleep(time.Duration(1000/r.hatchRate) * time.Millisecond)
+				} else if i%r.hatchRate == 0 {
 					time.Sleep(1 * time.Second)
 				}
 				atomic.AddInt32(&r.numClients, 1)
