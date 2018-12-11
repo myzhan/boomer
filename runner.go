@@ -72,7 +72,7 @@ func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string, hatchTyp
 	}
 
 	if hatchType != "asap" && hatchType != "smooth" {
-		log.Fatalf("Wrong type of hatch-type(asap/smooth), %s", hatchType)
+		log.Fatalf("Wrong hatch-type, expected asap or smooth, was %s\n", hatchType)
 	}
 
 	return r
