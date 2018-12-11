@@ -6,7 +6,7 @@ import (
 )
 
 func TestParseRPSControlArgs(t *testing.T) {
-	r := newRunner(nil, int64(100), "100/2s")
+	r := newRunner(nil, int64(100), "100/2s", "asap")
 	defer r.close()
 	r.parseRPSControlArgs()
 
@@ -54,7 +54,7 @@ func TestSpawnGoRoutines(t *testing.T) {
 		Name: "TaskB",
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newRunner(tasks, 100, "-1")
+	runner := newRunner(tasks, 100, "-1", "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557)
 	runner.hatchRate = 10
@@ -76,7 +76,7 @@ func TestHatchAndStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newRunner(tasks, 100, "-1")
+	runner := newRunner(tasks, 100, "-1", "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557)
 
@@ -126,7 +126,7 @@ func TestOnMessage(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newRunner(tasks, 100, "-1")
+	runner := newRunner(tasks, 100, "-1", "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557)
 	runner.state = stateInit
@@ -209,7 +209,7 @@ func TestOnMessage(t *testing.T) {
 }
 
 func TestStartBucketUpdater(t *testing.T) {
-	r := newRunner(nil, 100, "-1")
+	r := newRunner(nil, 100, "-1", "asap")
 	defer r.close()
 	r.parseRPSControlArgs()
 	r.startBucketUpdater()
@@ -225,7 +225,7 @@ func TestStartBucketUpdater(t *testing.T) {
 }
 
 func TestRPSController(t *testing.T) {
-	r := newRunner(nil, 1000, "-1")
+	r := newRunner(nil, 1000, "-1", "asap")
 	defer r.close()
 	r.parseRPSControlArgs()
 	r.startRPSController()
@@ -238,7 +238,7 @@ func TestRPSController(t *testing.T) {
 }
 
 func TestRPSControllerWithIncreaseRate(t *testing.T) {
-	r := newRunner(nil, 1000, "200/1s")
+	r := newRunner(nil, 1000, "200/1s", "asap")
 	defer r.close()
 	r.parseRPSControlArgs()
 	r.startRPSController()
@@ -258,7 +258,7 @@ func TestGetReady(t *testing.T) {
 	defer server.close()
 	server.start()
 
-	r := newRunner(nil, 100, "-1")
+	r := newRunner(nil, 100, "-1", "asap")
 	r.masterHost = masterHost
 	r.masterPort = masterPort
 	defer r.close()
