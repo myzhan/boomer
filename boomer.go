@@ -142,12 +142,12 @@ func startCPUProfile(file string, duration time.Duration) {
 func init() {
 	flag.Int64Var(&maxRPS, "max-rps", 0, "Max RPS that boomer can generate, disabled by default.")
 	flag.StringVar(&requestIncreaseRate, "request-increase-rate", "-1", "Request increase rate, disabled by default.")
-	flag.StringVar(&hatchType, "hatch-type", "asap", "How to create goroutines according to hatch rate, 'asap' will do it as soon as possible while 'smooth' means a constant pace. Defaults to asap.")
+	flag.StringVar(&hatchType, "hatch-type", "asap", "How to create goroutines according to hatch rate, 'asap' will do it as soon as possible while 'smooth' means a constant pace.")
 	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
-	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing. Defaults to 127.0.0.1.")
-	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing. Defaults to 5557.")
+	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing.")
+	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing.")
 	flag.StringVar(&memoryProfile, "mem-profile", "", "Enable memory profiling.")
-	flag.DurationVar(&memoryProfileDuration, "mem-profile-duration", 30*time.Second, "Memory profile duration. Defaults to 30 seconds.")
+	flag.DurationVar(&memoryProfileDuration, "mem-profile-duration", 30*time.Second, "Memory profile duration.")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling.")
-	flag.DurationVar(&cpuProfileDuration, "cpu-profile-duration", 30*time.Second, "CPU profile duration. Defaults to 30 seconds.")
+	flag.DurationVar(&cpuProfileDuration, "cpu-profile-duration", 30*time.Second, "CPU profile duration.")
 }
