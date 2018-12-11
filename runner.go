@@ -47,7 +47,7 @@ type runner struct {
 	// RPS Control
 	maxRPS                   int64
 	requestIncreaseRate      string
-	hatchBaseOnRate            bool
+	hatchType                string
 	requestIncreaseStep      int64
 	requestIncreaseInterval  time.Duration
 	currentRPSThreshold      int64
@@ -57,12 +57,12 @@ type runner struct {
 	rpsControllerQuitChannel chan bool
 }
 
-func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string, hatchBaseOnRate bool) (r *runner) {
+func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string, hatchType string) (r *runner) {
 	r = &runner{
 		tasks:               tasks,
 		maxRPS:              maxRPS,
 		requestIncreaseRate: requestIncreaseRate,
-		hatchBaseOnRate:       hatchBaseOnRate,
+		hatchType:           hatchType,
 	}
 	r.nodeID = getNodeID()
 	r.shutdownSignal = make(chan bool)
@@ -70,6 +70,11 @@ func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string, hatchBas
 	if 0 < maxRPS || requestIncreaseRate != "-1" {
 		r.parseRPSControlArgs()
 	}
+
+	if hatchType != "asap" && hatchType != "smooth" {
+		log.Fatalf("Wrong type of hatch-type(asap/smooth), %s", hatchType)
+	}
+
 	return r
 }
 
@@ -142,8 +147,8 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 				// quit hatching goroutine
 				return
 			default:
-				if r.hatchBaseOnRate {
-					time.Sleep(time.Duration(1000/r.hatchRate) * time.Millisecond)
+				if r.hatchType == "smooth" {
+					time.Sleep(time.Duration(1000000/r.hatchRate) * time.Microsecond)
 				} else if i%r.hatchRate == 0 {
 					time.Sleep(1 * time.Second)
 				}
