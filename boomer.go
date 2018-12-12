@@ -3,6 +3,7 @@ package boomer
 import (
 	"flag"
 	"log"
+	"math"
 	"os"
 	"os/signal"
 	"runtime"
@@ -79,7 +80,23 @@ func Run(tasks ...*Task) {
 	initBoomer()
 	initMutex.Unlock()
 
-	runner := newRunner(tasks, maxRPS, requestIncreaseRate, hatchType)
+	var rateLimiter rateLimiter
+	if requestIncreaseRate != "-1" {
+		if maxRPS > 0 {
+			log.Println("The max RPS that boomer may generate is limited to", maxRPS, "with a increase rate", requestIncreaseRate)
+			rateLimiter = newWarmUpRateLimiter(maxRPS, requestIncreaseRate, time.Second)
+		} else {
+			log.Println("The max RPS that boomer may generate is limited by a increase rate", requestIncreaseRate)
+			rateLimiter = newWarmUpRateLimiter(math.MaxInt64, requestIncreaseRate, time.Second)
+		}
+	} else {
+		if maxRPS > 0 {
+			log.Println("The max RPS that boomer may generate is limited to", maxRPS)
+			rateLimiter = newStableRateLimiter(maxRPS, time.Second)
+		}
+	}
+
+	runner := newRunner(tasks, rateLimiter, hatchType)
 	runner.masterHost = masterHost
 	runner.masterPort = masterPort
 	runner.getReady()

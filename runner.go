@@ -3,11 +3,8 @@ package boomer
 import (
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"runtime/debug"
-	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -24,8 +21,7 @@ const (
 )
 
 // Task is like locust's task.
-// when boomer receive start message, it will spawn several
-// goroutines to run Task.Fn .
+// when boomer receive start message, it will spawn several goroutines to run Task.Fn.
 type Task struct {
 	Weight int
 	Fn     func()
@@ -33,42 +29,32 @@ type Task struct {
 }
 
 type runner struct {
-	tasks          []*Task
-	numClients     int32
-	hatchRate      int
-	stopChannel    chan bool
-	shutdownSignal chan bool
-	state          string
-	masterHost     string
-	masterPort     int
-	client         client
-	nodeID         string
-
-	// RPS Control
-	maxRPS                   int64
-	requestIncreaseRate      string
-	hatchType                string
-	requestIncreaseStep      int64
-	requestIncreaseInterval  time.Duration
-	currentRPSThreshold      int64
-	rpsThreshold             int64
-	rpsControlEnabled        bool
-	rpsControlChannel        chan bool
-	rpsControllerQuitChannel chan bool
+	tasks            []*Task
+	numClients       int32
+	hatchRate        int
+	stopChannel      chan bool
+	shutdownSignal   chan bool
+	state            string
+	masterHost       string
+	masterPort       int
+	client           client
+	nodeID           string
+	hatchType        string
+	rateLimiter      rateLimiter
+	rateLimitEnabled bool
 }
 
-func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string, hatchType string) (r *runner) {
+func newRunner(tasks []*Task, rateLimiter rateLimiter, hatchType string) (r *runner) {
 	r = &runner{
-		tasks:               tasks,
-		maxRPS:              maxRPS,
-		requestIncreaseRate: requestIncreaseRate,
-		hatchType:           hatchType,
+		tasks:     tasks,
+		hatchType: hatchType,
 	}
 	r.nodeID = getNodeID()
 	r.shutdownSignal = make(chan bool)
 
-	if 0 < maxRPS || requestIncreaseRate != "-1" {
-		r.parseRPSControlArgs()
+	if rateLimiter != nil {
+		r.rateLimitEnabled = true
+		r.rateLimiter = rateLimiter
 	}
 
 	if hatchType != "asap" && hatchType != "smooth" {
@@ -76,40 +62,6 @@ func newRunner(tasks []*Task, maxRPS int64, requestIncreaseRate string, hatchTyp
 	}
 
 	return r
-}
-
-func (r *runner) parseRPSControlArgs() {
-	r.rpsControlEnabled = true
-	r.rpsControlChannel = make(chan bool)
-	r.rpsControllerQuitChannel = make(chan bool)
-	if r.maxRPS > 0 {
-		log.Println("Max RPS that boomer may generate is limited to", r.maxRPS)
-	}
-	if r.requestIncreaseRate != "-1" {
-		log.Println("Request increase rate is", r.requestIncreaseRate)
-		if strings.Contains(r.requestIncreaseRate, "/") {
-			tmp := strings.Split(r.requestIncreaseRate, "/")
-			if len(tmp) != 2 {
-				log.Fatalf("Wrong format of requestIncreaseRate, %s", r.requestIncreaseRate)
-			}
-			step, err := strconv.ParseInt(tmp[0], 10, 64)
-			if err != nil {
-				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-			}
-			r.requestIncreaseStep = step
-			r.requestIncreaseInterval, err = time.ParseDuration(tmp[1])
-			if err != nil {
-				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-			}
-		} else {
-			step, err := strconv.ParseInt(r.requestIncreaseRate, 10, 64)
-			if err != nil {
-				log.Fatalf("Failed to parse requestIncreaseRate, %v", err)
-			}
-			r.requestIncreaseStep = step
-			r.requestIncreaseInterval = time.Second
-		}
-	}
 }
 
 func (r *runner) safeRun(fn func()) {
@@ -133,7 +85,6 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 	}
 
 	for _, task := range r.tasks {
-
 		percent := float64(task.Weight) / float64(weightSum)
 		amount := int(round(float64(spawnCount)*percent, .5, 0))
 
@@ -152,6 +103,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 				} else if i%r.hatchRate == 0 {
 					time.Sleep(1 * time.Second)
 				}
+
 				atomic.AddInt32(&r.numClients, 1)
 				go func(fn func()) {
 					for {
@@ -159,12 +111,9 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 						case <-quit:
 							return
 						default:
-							if r.rpsControlEnabled {
-								token := atomic.AddInt64(&r.rpsThreshold, -1)
-								if token < 0 {
-									// RPS threshold is reached, wait until next second
-									<-r.rpsControlChannel
-								} else {
+							if r.rateLimitEnabled {
+								blocked := r.rateLimiter.acquire()
+								if !blocked {
 									r.safeRun(fn)
 								}
 							} else {
@@ -203,8 +152,8 @@ func (r *runner) stop() {
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
 	close(r.stopChannel)
-	if r.rpsControlEnabled {
-		r.stopRPSController()
+	if r.rateLimitEnabled {
+		r.rateLimiter.stop()
 	}
 }
 
@@ -230,8 +179,8 @@ func (r *runner) onHatchMessage(msg *message) {
 		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
 			workers, hatchRate)
 	} else {
-		if r.rpsControlEnabled {
-			r.startRPSController()
+		if r.rateLimitEnabled {
+			r.rateLimiter.start()
 		}
 		r.startHatching(workers, hatchRate)
 	}
@@ -287,60 +236,6 @@ func (r *runner) startListener() {
 			}
 		}
 	}()
-}
-
-func (r *runner) startBucketUpdater() {
-	go func() {
-		for {
-			select {
-			case <-r.shutdownSignal:
-				return
-			case <-r.rpsControllerQuitChannel:
-				return
-			default:
-				atomic.StoreInt64(&r.rpsThreshold, r.currentRPSThreshold)
-				time.Sleep(1 * time.Second)
-				// use channel to broadcast
-				close(r.rpsControlChannel)
-				r.rpsControlChannel = make(chan bool)
-			}
-		}
-	}()
-}
-
-func (r *runner) startRPSController() {
-	r.rpsControllerQuitChannel = make(chan bool)
-	go func() {
-		for {
-			select {
-			case <-r.shutdownSignal:
-				return
-			case <-r.rpsControllerQuitChannel:
-				return
-			default:
-				if r.requestIncreaseStep > 0 {
-					r.currentRPSThreshold = r.currentRPSThreshold + r.requestIncreaseStep
-					if r.currentRPSThreshold < 0 {
-						// int64 overflow
-						r.currentRPSThreshold = int64(math.MaxInt64)
-					}
-					if r.maxRPS > 0 && r.currentRPSThreshold > r.maxRPS {
-						r.currentRPSThreshold = r.maxRPS
-					}
-				} else {
-					if r.maxRPS > 0 {
-						r.currentRPSThreshold = r.maxRPS
-					}
-				}
-				time.Sleep(r.requestIncreaseInterval)
-			}
-		}
-	}()
-	r.startBucketUpdater()
-}
-
-func (r *runner) stopRPSController() {
-	close(r.rpsControllerQuitChannel)
 }
 
 func (r *runner) getReady() {

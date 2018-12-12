@@ -5,32 +5,6 @@ import (
 	"time"
 )
 
-func TestParseRPSControlArgs(t *testing.T) {
-	r := newRunner(nil, int64(100), "100/2s", "asap")
-	defer r.close()
-	r.parseRPSControlArgs()
-
-	if !r.rpsControlEnabled {
-		t.Error("r.rpsControlEnabled is, expected: true", r.rpsControlEnabled)
-	}
-	if r.requestIncreaseStep != 100 {
-		t.Error("r.requestIncreaseStep is", r.requestIncreaseStep, "expected:", 100)
-	}
-	if r.requestIncreaseInterval != 2*time.Second {
-		t.Error("requestIncreaseInterval is", r.requestIncreaseInterval, "expected: 2s")
-	}
-
-	// parse again
-	r.requestIncreaseRate = "200"
-	r.parseRPSControlArgs()
-	if r.requestIncreaseStep != 200 {
-		t.Error("r.requestIncreaseStep is", r.requestIncreaseStep, "expected:", 200)
-	}
-	if r.requestIncreaseInterval != time.Second {
-		t.Error("r.requestIncreaseInterval is", r.requestIncreaseInterval, "expected: 1s")
-	}
-}
-
 func TestSafeRun(t *testing.T) {
 	runner := &runner{}
 	runner.safeRun(func() {
@@ -54,7 +28,9 @@ func TestSpawnGoRoutines(t *testing.T) {
 		Name: "TaskB",
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newRunner(tasks, 100, "-1", "asap")
+	rateLimiter := newStableRateLimiter(100, time.Second)
+
+	runner := newRunner(tasks, rateLimiter, "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557)
 	runner.hatchRate = 10
@@ -76,7 +52,7 @@ func TestHatchAndStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newRunner(tasks, 100, "-1", "asap")
+	runner := newRunner(tasks, nil, "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557)
 
@@ -126,7 +102,8 @@ func TestOnMessage(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newRunner(tasks, 100, "-1", "asap")
+
+	runner := newRunner(tasks, nil, "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557)
 	runner.state = stateInit
@@ -208,48 +185,6 @@ func TestOnMessage(t *testing.T) {
 	}
 }
 
-func TestStartBucketUpdater(t *testing.T) {
-	r := newRunner(nil, 100, "-1", "asap")
-	defer r.close()
-	r.parseRPSControlArgs()
-	r.startBucketUpdater()
-
-	defer func() {
-		close(r.rpsControllerQuitChannel)
-	}()
-
-	time.Sleep(1 * time.Second)
-	if r.rpsThreshold != r.currentRPSThreshold {
-		t.Error("rpsThreshold is not updated by bucket updater, expected", r.currentRPSThreshold, ", but got", r.rpsThreshold)
-	}
-}
-
-func TestRPSController(t *testing.T) {
-	r := newRunner(nil, 1000, "-1", "asap")
-	defer r.close()
-	r.parseRPSControlArgs()
-	r.startRPSController()
-
-	time.Sleep(1*time.Second + 100*time.Millisecond)
-	if r.currentRPSThreshold != 1000 {
-		t.Error("currentRPSThreshold is not updated by RPS Controller")
-	}
-	r.stopRPSController()
-}
-
-func TestRPSControllerWithIncreaseRate(t *testing.T) {
-	r := newRunner(nil, 1000, "200/1s", "asap")
-	defer r.close()
-	r.parseRPSControlArgs()
-	r.startRPSController()
-
-	time.Sleep(5*time.Second + 100*time.Millisecond)
-	if r.currentRPSThreshold != 1000 {
-		t.Error("currentRPSThreshold is not updated by RPS Controller")
-	}
-	r.stopRPSController()
-}
-
 func TestGetReady(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 6557
@@ -258,7 +193,8 @@ func TestGetReady(t *testing.T) {
 	defer server.close()
 	server.start()
 
-	r := newRunner(nil, 100, "-1", "asap")
+	rateLimiter := newStableRateLimiter(100, time.Second)
+	r := newRunner(nil, rateLimiter, "asap")
 	r.masterHost = masterHost
 	r.masterPort = masterPort
 	defer r.close()
