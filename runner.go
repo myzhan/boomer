@@ -155,6 +155,10 @@ func (r *runner) stop() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.stop()
 	}
+
+	// publish the boomer stop event
+	// user's code can subscribe to this event and do thins like cleaning up
+	Events.Publish("boomer:stop")
 }
 
 func (r *runner) close() {

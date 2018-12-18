@@ -90,6 +90,30 @@ func TestHatchAndStop(t *testing.T) {
 	}
 }
 
+func TestStop(t *testing.T) {
+	taskA := &Task{
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+	}
+	tasks := []*Task{taskA}
+	runner := newRunner(tasks, nil, "asap")
+	runner.stopChannel = make(chan bool)
+
+	stopped := false
+	handler := func() {
+		stopped = true
+	}
+	Events.Subscribe("boomer:stop", handler)
+	defer Events.Unsubscribe("boomer:stop", handler)
+
+	runner.stop()
+
+	if stopped != true {
+		t.Error("Expected stopped to be true, was", stopped)
+	}
+}
+
 func TestOnMessage(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {
