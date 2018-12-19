@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -29,14 +30,40 @@ func TestSpawnGoRoutines(t *testing.T) {
 	}
 	tasks := []*Task{taskA, taskB}
 	rateLimiter := newStableRateLimiter(100, time.Second)
-
 	runner := newRunner(tasks, rateLimiter, "asap")
 	defer runner.close()
+
 	runner.client = newClient("localhost", 5557)
 	runner.hatchRate = 10
+
 	runner.spawnGoRoutines(10, runner.stopChannel)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
+	}
+}
+
+func TestSpawnGoRoutinesSmoothly(t *testing.T) {
+	taskA := &Task{
+		Weight: 10,
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+		Name: "TaskA",
+	}
+	tasks := []*Task{taskA}
+
+	runner := newRunner(tasks, nil, "smooth")
+	defer runner.close()
+
+	runner.client = newClient("localhost", 5557)
+	runner.hatchRate = 10
+
+	go runner.spawnGoRoutines(10, runner.stopChannel)
+	time.Sleep(2 * time.Millisecond)
+
+	currentClients := atomic.LoadInt32(&runner.numClients)
+	if currentClients > 3 {
+		t.Error("Spawning goroutines too fast, current count", currentClients)
 	}
 }
 
@@ -188,6 +215,44 @@ func TestOnMessage(t *testing.T) {
 	}
 	if runner.numClients != 20 {
 		t.Error("Number of goroutines mismatches, expected: 20, current count:", runner.numClients)
+	}
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "hatch_complete" {
+		t.Error("Runner should send hatch_complete message when hatch completed, got", msg.Type)
+	}
+
+	// stop all the workers
+	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	if runner.state != stateStopped {
+		t.Error("State of runner is not stopped, got", runner.state)
+	}
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "client_stopped" {
+		t.Error("Runner should send client_stopped message, got", msg.Type)
+	}
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "client_ready" {
+		t.Error("Runner should send client_ready message, got", msg.Type)
+	}
+
+	// hatch again
+	runner.onMessage(newMessage("hatch", map[string]interface{}{
+		"hatch_rate":  float64(10),
+		"num_clients": uint64(10),
+	}, runner.nodeID))
+
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "hatching" {
+		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
+	}
+
+	// hatch complete and running
+	time.Sleep(100 * time.Millisecond)
+	if runner.state != stateRunning {
+		t.Error("State of runner is not running after hatch, got", runner.state)
+	}
+	if runner.numClients != 10 {
+		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
 	}
 	msg = <-runner.client.sendChannel()
 	if msg.Type != "hatch_complete" {
