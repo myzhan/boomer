@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"math"
 	"os"
 	"testing"
 	"time"
@@ -34,6 +35,47 @@ func TestRunTasksForTest(t *testing.T) {
 
 	if count != 1 {
 		t.Error("count is", count, "expected: 1")
+	}
+}
+
+func TestCreateRatelimiter(t *testing.T) {
+	rateLimiter, _ := createRateLimiter(100, "-1")
+	if stableRateLimiter, ok := rateLimiter.(*stableRateLimiter); !ok {
+		t.Error("Expected stableRateLimiter")
+	} else {
+		if stableRateLimiter.threshold != 100 {
+			t.Error("threshold should be equals to math.MaxInt64, was", stableRateLimiter.threshold)
+		}
+	}
+
+	rateLimiter, _ = createRateLimiter(0, "1")
+	if warmUpRateLimiter, ok := rateLimiter.(*warmUpRateLimiter); !ok {
+		t.Error("Expected warmUpRateLimiter")
+	} else {
+		if warmUpRateLimiter.maxThreshold != math.MaxInt64 {
+			t.Error("maxThreshold should be equals to math.MaxInt64, was", warmUpRateLimiter.maxThreshold)
+		}
+		if warmUpRateLimiter.warmUpRate != "1" {
+			t.Error("warmUpRate should be equals to \"1\", was", warmUpRateLimiter.warmUpRate)
+		}
+	}
+
+	rateLimiter, _ = createRateLimiter(10, "2/2s")
+	if warmUpRateLimiter, ok := rateLimiter.(*warmUpRateLimiter); !ok {
+		t.Error("Expected warmUpRateLimiter")
+	} else {
+		if warmUpRateLimiter.maxThreshold != 10 {
+			t.Error("maxThreshold should be equals to 10, was", warmUpRateLimiter.maxThreshold)
+		}
+		if warmUpRateLimiter.warmUpRate != "2/2s" {
+			t.Error("warmUpRate should be equals to \"2/2s\", was", warmUpRateLimiter.warmUpRate)
+		}
+		if warmUpRateLimiter.warmUpStep != 2 {
+			t.Error("warmUpStep should be equals to 2, was", warmUpRateLimiter.warmUpStep)
+		}
+		if warmUpRateLimiter.warmUpPeroid != 2*time.Second {
+			t.Error("warmUpPeroid should be equals to 2 seconds, was", warmUpRateLimiter.warmUpPeroid)
+		}
 	}
 }
 

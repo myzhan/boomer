@@ -60,6 +60,24 @@ func runTasksForTest(tasks ...*Task) {
 	}
 }
 
+func createRateLimiter(maxRPS int64, requestIncreaseRate string) (rateLimiter rateLimiter, err error) {
+	if requestIncreaseRate != "-1" {
+		if maxRPS > 0 {
+			log.Println("The max RPS that boomer may generate is limited to", maxRPS, "with a increase rate", requestIncreaseRate)
+			rateLimiter, err = newWarmUpRateLimiter(maxRPS, requestIncreaseRate, time.Second)
+		} else {
+			log.Println("The max RPS that boomer may generate is limited by a increase rate", requestIncreaseRate)
+			rateLimiter, err = newWarmUpRateLimiter(math.MaxInt64, requestIncreaseRate, time.Second)
+		}
+	} else {
+		if maxRPS > 0 {
+			log.Println("The max RPS that boomer may generate is limited to", maxRPS)
+			rateLimiter = newStableRateLimiter(maxRPS, time.Second)
+		}
+	}
+	return rateLimiter, err
+}
+
 // Run accepts a slice of Task and connects
 // to a locust master.
 func Run(tasks ...*Task) {
@@ -80,20 +98,9 @@ func Run(tasks ...*Task) {
 	initBoomer()
 	initMutex.Unlock()
 
-	var rateLimiter rateLimiter
-	if requestIncreaseRate != "-1" {
-		if maxRPS > 0 {
-			log.Println("The max RPS that boomer may generate is limited to", maxRPS, "with a increase rate", requestIncreaseRate)
-			rateLimiter = newWarmUpRateLimiter(maxRPS, requestIncreaseRate, time.Second)
-		} else {
-			log.Println("The max RPS that boomer may generate is limited by a increase rate", requestIncreaseRate)
-			rateLimiter = newWarmUpRateLimiter(math.MaxInt64, requestIncreaseRate, time.Second)
-		}
-	} else {
-		if maxRPS > 0 {
-			log.Println("The max RPS that boomer may generate is limited to", maxRPS)
-			rateLimiter = newStableRateLimiter(maxRPS, time.Second)
-		}
+	rateLimiter, err := createRateLimiter(maxRPS, requestIncreaseRate)
+	if err != nil {
+		log.Fatalf("Failed to create rate limiter, %v\n", err)
 	}
 
 	runner := newRunner(tasks, rateLimiter, hatchType)

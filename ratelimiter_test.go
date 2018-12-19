@@ -20,7 +20,7 @@ func TestStableRateLimiter(t *testing.T) {
 }
 
 func TestWarmUpRateLimiter(t *testing.T) {
-	rateLimiter := newWarmUpRateLimiter(100, "10/1s", 100*time.Millisecond)
+	rateLimiter, _ := newWarmUpRateLimiter(100, "10/1s", 100*time.Millisecond)
 	rateLimiter.start()
 	time.Sleep(time.Second)
 
@@ -54,18 +54,28 @@ func TestWarmUpRateLimiter(t *testing.T) {
 
 func TestParseWarmUpRate(t *testing.T) {
 	rateLimiter := &warmUpRateLimiter{}
-	warmUpStep, warmUpPeroid := rateLimiter.parseWarmUpRate("100")
+	warmUpStep, warmUpPeroid, _ := rateLimiter.parseWarmUpRate("100")
 	if warmUpStep != 100 {
 		t.Error("Wrong warmUpStep, expected: 100, was:", warmUpStep)
 	}
 	if warmUpPeroid != time.Second {
 		t.Error("Wrong warmUpPeroid, expected: 1s, was:", warmUpPeroid)
 	}
-	warmUpStep, warmUpPeroid = rateLimiter.parseWarmUpRate("200/10s")
+	warmUpStep, warmUpPeroid, _ = rateLimiter.parseWarmUpRate("200/10s")
 	if warmUpStep != 200 {
 		t.Error("Wrong warmUpStep, expected: 200, was:", warmUpStep)
 	}
 	if warmUpPeroid != 10*time.Second {
 		t.Error("Wrong warmUpPeroid, expected: 10s, was:", warmUpPeroid)
+	}
+
+	warmUpStep, warmUpPeroid, err := rateLimiter.parseWarmUpRate("200/1s/")
+	if err == nil || err != ErrParsingWarmUpRate {
+		t.Error("Expected ErrParsingWarmUpRate")
+	}
+
+	warmUpStep, warmUpPeroid, err = rateLimiter.parseWarmUpRate("200/1")
+	if err == nil || err != ErrParsingWarmUpRate {
+		t.Error("Expected ErrParsingWarmUpRate")
 	}
 }

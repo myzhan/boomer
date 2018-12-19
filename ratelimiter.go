@@ -1,7 +1,7 @@
 package boomer
 
 import (
-	"log"
+	"errors"
 	"math"
 	"strconv"
 	"strings"
@@ -70,6 +70,9 @@ func (limiter *stableRateLimiter) stop() {
 	close(limiter.quitChannel)
 }
 
+// ErrParsingWarmUpRate is the error returned if the format of warmUpRate is invalid.
+var ErrParsingWarmUpRate = errors.New("ratelimiter: invalid format of warmUpRate, try \"1\" or \"1/1s\"")
+
 // warmUpRateLimiter uses the token bucket algorithm.
 // the threshold is updated according to the warm up rate.
 // the bucket is refilled according to the refill period, no burst is allowed.
@@ -86,7 +89,7 @@ type warmUpRateLimiter struct {
 	quitChannel      chan bool
 }
 
-func newWarmUpRateLimiter(maxThreshold int64, warmUpRate string, refillPeroid time.Duration) (rateLimiter *warmUpRateLimiter) {
+func newWarmUpRateLimiter(maxThreshold int64, warmUpRate string, refillPeroid time.Duration) (rateLimiter *warmUpRateLimiter, err error) {
 	rateLimiter = &warmUpRateLimiter{
 		maxThreshold:     maxThreshold,
 		nextThreshold:    0,
@@ -95,33 +98,36 @@ func newWarmUpRateLimiter(maxThreshold int64, warmUpRate string, refillPeroid ti
 		refillPeroid:     refillPeroid,
 		broadcastChannel: make(chan bool),
 	}
-	rateLimiter.warmUpStep, rateLimiter.warmUpPeroid = rateLimiter.parseWarmUpRate(rateLimiter.warmUpRate)
-	return rateLimiter
+	rateLimiter.warmUpStep, rateLimiter.warmUpPeroid, err = rateLimiter.parseWarmUpRate(rateLimiter.warmUpRate)
+	if err != nil {
+		return nil, err
+	}
+	return rateLimiter, nil
 }
 
-func (limiter *warmUpRateLimiter) parseWarmUpRate(warmUpRate string) (int64, time.Duration) {
+func (limiter *warmUpRateLimiter) parseWarmUpRate(warmUpRate string) (warmUpStep int64, warmUpPeroid time.Duration, err error) {
 	if strings.Contains(warmUpRate, "/") {
 		tmp := strings.Split(warmUpRate, "/")
 		if len(tmp) != 2 {
-			log.Fatalf("Wrong format of warmUpRate, %s", warmUpRate)
+			return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
 		}
 		warmUpStep, err := strconv.ParseInt(tmp[0], 10, 64)
 		if err != nil {
-			log.Fatalf("Failed to parse warmUpRate, %v", err)
+			return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
 		}
 		warmUpPeroid, err := time.ParseDuration(tmp[1])
 		if err != nil {
-			log.Fatalf("Failed to parse warmUpRate, %v", err)
+			return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
 		}
-		return warmUpStep, warmUpPeroid
+		return warmUpStep, warmUpPeroid, nil
 	}
 
-	warmUpStep, err := strconv.ParseInt(warmUpRate, 10, 64)
+	warmUpStep, err = strconv.ParseInt(warmUpRate, 10, 64)
 	if err != nil {
-		log.Fatalf("Failed to parse warmUpRate, %v", err)
+		return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
 	}
-	warmUpPeroid := time.Second
-	return warmUpStep, warmUpPeroid
+	warmUpPeroid = time.Second
+	return warmUpStep, warmUpPeroid, nil
 }
 
 func (limiter *warmUpRateLimiter) start() {
