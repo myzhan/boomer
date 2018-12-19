@@ -109,7 +109,7 @@ func (s *testServer) start() {
 }
 
 func TestPingPong(t *testing.T) {
-	masterHost := "127.0.0.1"
+	masterHost := "0.0.0.0"
 	masterPort := 5557
 
 	server := newTestServer(masterHost, masterPort+1, masterPort)
