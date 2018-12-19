@@ -11,6 +11,7 @@ Boomer is a better load generator for locust, written in golang. It can spawn th
 
 It will listen and report to the locust master automatically, your test results will be displayed on the master's web UI.
 
+Use it as a library, not a general-purpose benchmarking tool.
 
 ## Install
 
@@ -18,9 +19,9 @@ It will listen and report to the locust master automatically, your test results 
 go get github.com/myzhan/boomer
 ```
 
-### Zeromq support
+### Build
 
-Boomer use gomq by default, which is a pure Go implementation of the ZeroMQ.
+Boomer use [gomq](https://github.com/zeromq/gomq) by default, which is a pure Go implementation of the ZeroMQ protocol.
 
 Becase of the instability of gomq, you can switch to [goczmq](https://github.com/zeromq/goczmq).
 
@@ -38,18 +39,15 @@ go get -u github.com/zeromq/gomq
 ```
 
 ## Examples(main.go)
-This is a example of boomer's API. You can find more in "examples" directory.
+This is a example of boomer's API. You can find more in the "examples" directory.
 
 ```go
 package main
 
-
-import "github.com/myzhan/boomer"
 import "time"
-
+import "github.com/myzhan/boomer"
 
 func foo(){
-
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
@@ -61,9 +59,7 @@ func foo(){
     boomer.Events.Publish("request_success", "http", "foo", elapsed, int64(10))
 }
 
-
 func bar(){
-
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
@@ -75,9 +71,7 @@ func bar(){
     boomer.Events.Publish("request_failure", "udp", "bar", elapsed, "udp error")
 }
 
-
 func main(){
-
     task1 := &boomer.Task{
         Name: "foo",
         Weight: 10,
@@ -91,11 +85,10 @@ func main(){
     }
 
     boomer.Run(task1, task2)
-
 }
 ```
 
-## Usage
+## Run
 
 For debug purpose, you can run tasks without connecting to the master.
 

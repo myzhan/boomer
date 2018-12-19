@@ -12,7 +12,7 @@ boomer 完整地实现了 locust 的通讯协议，运行在 slave 模式下，�
 go get github.com/myzhan/boomer
 ```
 
-### zeromq 支持
+### 编译
 boomer 默认使用 gomq，一个纯 Go 语言实现的 ZeroMQ 客户端。
 
 由于 gomq 还不稳定，可以改用 [goczmq](https://github.com/zeromq/goczmq)。
@@ -36,13 +36,10 @@ go get -u github.com/zeromq/gomq
 ```go
 package main
 
-
-import "github.com/myzhan/boomer"
 import "time"
-
+import "github.com/myzhan/boomer"
 
 func foo(){
-
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
@@ -53,9 +50,7 @@ func foo(){
     boomer.Events.Publish("request_success", "http", "foo", elapsed, int64(10))
 }
 
-
 func bar(){
-
     start := boomer.Now()
     time.Sleep(100 * time.Millisecond)
     elapsed := boomer.Now() - start
@@ -66,9 +61,7 @@ func bar(){
     boomer.Events.Publish("request_failure", "udp", "bar", elapsed, "udp error")
 }
 
-
 func main(){
-
     task1 := &boomer.Task{
         Weight: 10,
         Fn: foo,
@@ -81,7 +74,6 @@ func main(){
 
     // 连接到 master，等待页面上下发指令，支持多个 Task
     boomer.Run(task1, task2)
-
 }
 ```
 
