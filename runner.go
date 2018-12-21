@@ -194,6 +194,7 @@ func (r *runner) onHatchMessage(msg *message) {
 func (r *runner) onMessage(msg *message) {
 	if msg.Type == "quit" {
 		log.Println("Got quit message from master, shutting down...")
+		Events.Publish("boomer:quit")
 		os.Exit(0)
 	}
 
