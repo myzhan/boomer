@@ -5,6 +5,7 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"runtime/debug"
 	"testing"
 
@@ -101,6 +102,7 @@ func (s *testServer) start() {
 
 	go pushSocket.Bind(pushAddr)
 	go pullSocket.Bind(pullAddr)
+
 	s.pushSocket = pushSocket
 	s.pullSocket = pullSocket
 
@@ -110,10 +112,12 @@ func (s *testServer) start() {
 
 func TestPingPong(t *testing.T) {
 	masterHost := "0.0.0.0"
-	masterPort := 5557
+	masterPort := rand.Intn(1000) + 10240
 
 	server := newTestServer(masterHost, masterPort+1, masterPort)
 	defer server.close()
+
+	log.Println(fmt.Sprintf("Starting to serve on %s:(%d|%d)", masterHost, masterPort, masterPort+1))
 	server.start()
 
 	// start client
