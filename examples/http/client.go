@@ -50,13 +50,13 @@ func worker() {
 		if verbose {
 			log.Printf("%v\n", err)
 		}
-		boomer.Events.Publish("request_failure", "http", "error", 0.0, err.Error())
+		boomer.RecordFailure("http", "error", 0.0, err.Error())
 	} else {
 		if response.StatusCode == http.StatusOK {
-			boomer.Events.Publish("request_success", "http", "200",
+			boomer.RecordSuccess("http", "200",
 				elapsed, response.ContentLength)
 		} else {
-			boomer.Events.Publish("request_success", "http", strconv.Itoa(response.StatusCode),
+			boomer.RecordSuccess("http", strconv.Itoa(response.StatusCode),
 				elapsed, response.ContentLength)
 		}
 
@@ -143,5 +143,4 @@ verbose: %t`, method, url, timeout, postFile, contentType, disableCompression, d
 	}
 
 	boomer.Run(task)
-
 }

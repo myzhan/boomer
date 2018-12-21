@@ -41,20 +41,20 @@ func worker() {
 	if err != nil {
 		switch err {
 		case fasthttp.ErrTimeout:
-			boomer.Events.Publish("request_failure", "http", "timeout", elapsed, err.Error())
+			boomer.RecordFailure("http", "timeout", elapsed, err.Error())
 		case fasthttp.ErrNoFreeConns:
 			// all Client.MaxConnsPerHost connections to the requested host are busy
 			// try to increase MaxConnsPerHost
-			boomer.Events.Publish("request_failure", "http", "connections all busy", elapsed, err.Error())
+			boomer.RecordFailure("http", "connections all busy", elapsed, err.Error())
 		default:
-			boomer.Events.Publish("request_failure", "http", "unknown", elapsed, err.Error())
+			boomer.RecordFailure("http", "unknown", elapsed, err.Error())
 		}
 		fasthttp.ReleaseRequest(req)
 		fasthttp.ReleaseResponse(resp)
 		return
 	}
 
-	boomer.Events.Publish("request_success", "http", strconv.Itoa(resp.StatusCode()), elapsed, int64(len(resp.Body())))
+	boomer.RecordSuccess("http", strconv.Itoa(resp.StatusCode()), elapsed, int64(len(resp.Body())))
 
 	if verbose {
 		log.Println(string(resp.Body()))
@@ -118,5 +118,4 @@ verbose: %t`, method, url, timeout, postFile, contentType, disableKeepalive, ver
 	}
 
 	boomer.Run(task)
-
 }

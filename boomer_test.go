@@ -9,8 +9,8 @@ import (
 
 func TestInitBoomer(t *testing.T) {
 	initBoomer()
-	defer Events.Unsubscribe("request_success", requestSuccessHandler)
-	defer Events.Unsubscribe("request_failure", requestFailureHandler)
+	defer Events.Unsubscribe("request_success", legacySuccessHandler)
+	defer Events.Unsubscribe("request_failure", legacyFailureHandler)
 	defer defaultStats.close()
 
 	defer func() {

@@ -47,7 +47,7 @@ func foo(){
     /*
     汇报一个成功的结果，实际使用时，根据实际场景，自行判断成功还是失败
     */
-    boomer.Events.Publish("request_success", "http", "foo", elapsed, int64(10))
+    boomer.RecordSuccess("http", "foo", elapsed, int64(10))
 }
 
 func bar(){
@@ -58,7 +58,7 @@ func bar(){
     /*
     汇报一个失败的结果，实际使用时，根据实际场景，自行判断成功还是失败
     */
-    boomer.Events.Publish("request_failure", "udp", "bar", elapsed, "udp error")
+    boomer.RecordFailure("udp", "bar", elapsed, "udp error")
 }
 
 func main(){
@@ -88,7 +88,7 @@ go build -o a.out main.go
 
 --max-rps 表示一秒内所有 Task.Fn 函数能被调用的最多次数。
 
-下面这种情况，如果在同一个 Task.Fn 函数里面多次调用 boomer.Events.Publish("request_success")，那么统计到的 RPS 会超过 10000。
+下面这种情况，如果在同一个 Task.Fn 函数里面多次调用 boomer.RecordSuccess()，那么统计到的 RPS 会超过 10000。
 
 ```bash
 go build -o a.out main.go

@@ -56,7 +56,7 @@ func foo(){
     Report your test result as a success, if you write it in locust, it will looks like this
     events.request_success.fire(request_type="http", name="foo", response_time=100, response_length=10)
     */
-    boomer.Events.Publish("request_success", "http", "foo", elapsed, int64(10))
+    boomer.RecordSuccess("http", "foo", elapsed, int64(10))
 }
 
 func bar(){
@@ -68,7 +68,7 @@ func bar(){
     Report your test result as a failure, if you write it in locust, it will looks like this
     events.request_failure.fire(request_type="udp", name="bar", response_time=100, exception=Exception("udp error"))
     */
-    boomer.Events.Publish("request_failure", "udp", "bar", elapsed, "udp error")
+    boomer.RecordFailure("udp", "bar", elapsed, "udp error")
 }
 
 func main(){
@@ -99,7 +99,7 @@ go build -o a.out main.go
 
 --max-rps means the max count that all the Task.Fn can be called in one second.
 
-The result may be misleading if you call boomer.Events.Publish("request_success") more than once in Task.Fn.
+The result may be misleading if you call boomer.RecordSuccess() more than once in Task.Fn.
 
 ```bash
 go build -o a.out main.go

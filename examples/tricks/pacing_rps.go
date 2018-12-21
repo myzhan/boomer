@@ -2,9 +2,9 @@ package main
 
 import "github.com/myzhan/boomer"
 import (
+	"log"
 	"sync/atomic"
 	"time"
-	"log"
 )
 
 var step = int64(1)
@@ -20,7 +20,7 @@ func coworker() {
 		return
 	}
 
-	boomer.Events.Publish("request_success", "rps", "pacing", int64(1), int64(10))
+	boomer.RecordSuccess("rps", "pacing", int64(1), int64(10))
 
 }
 
@@ -52,5 +52,4 @@ func main() {
 	go updateThreshold()
 
 	boomer.Run(task)
-
 }

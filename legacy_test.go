@@ -23,7 +23,7 @@ func TestConvertResponseTime(t *testing.T) {
 }
 
 func TestInitEvents(t *testing.T) {
-	initEvents()
+	initLegacyEventHandlers()
 	Events.Publish("request_success", "http", "foo", int64(1), int64(10))
 	Events.Publish("request_failure", "udp", "bar", int64(2), "udp error")
 
@@ -46,6 +46,6 @@ func TestInitEvents(t *testing.T) {
 		t.Error("Expected: udp error, got:", requestFailureMsg.error)
 	}
 
-	Events.Unsubscribe("request_success", requestSuccessHandler)
-	Events.Unsubscribe("request_failure", requestFailureHandler)
+	Events.Unsubscribe("request_success", legacySuccessHandler)
+	Events.Unsubscribe("request_failure", legacyFailureHandler)
 }

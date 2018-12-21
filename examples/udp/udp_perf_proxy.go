@@ -59,22 +59,22 @@ func newWorker(remoteAddr string) *worker {
 				startTime := boomer.Now()
 				wn, err := conn.Write(req)
 				if err != nil {
-					boomer.Events.Publish("request_failure", "udp-write", name, 0.0, err.Error())
+					boomer.RecordFailure("udp-write", name, 0.0, err.Error())
 					continue
 				}
 
 				if *dontRead {
 					elapsed := boomer.Now() - startTime
-					boomer.Events.Publish("request_success", "udp-write", name, elapsed, int64(wn))
+					boomer.RecordSuccess("udp-write", name, elapsed, int64(wn))
 				} else {
 					conn.SetReadDeadline(time.Now().Add(backendTimeout))
 					respLength, err := conn.Read(recvBuff)
 					if err != nil {
-						boomer.Events.Publish("request_failure", "udp-read", name, 0.0, err.Error())
+						boomer.RecordFailure("udp-read", name, 0.0, err.Error())
 						continue
 					}
 					elapsed := boomer.Now() - startTime
-					boomer.Events.Publish("request_success", "udp-resp", name, elapsed, int64(respLength))
+					boomer.RecordSuccess("udp-resp", name, elapsed, int64(respLength))
 				}
 			}
 		}

@@ -36,7 +36,9 @@ func initBoomer() {
 		panic("Don't call boomer.Run() more than once.")
 	}
 
-	initEvents()
+	// TODO: to be removed
+	initLegacyEventHandlers()
+
 	defaultStats.start()
 
 	// done
