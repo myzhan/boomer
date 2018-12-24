@@ -14,6 +14,7 @@ const (
 	stateHatching = "hatching"
 	stateRunning  = "running"
 	stateStopped  = "stopped"
+	stateQuitting = "quitting"
 )
 
 const (
@@ -145,7 +146,9 @@ func (r *runner) hatchComplete() {
 }
 
 func (r *runner) onQuiting() {
-	r.client.sendChannel() <- newMessage("quit", nil, r.nodeID)
+	if r.state != stateQuitting {
+		r.client.sendChannel() <- newMessage("quit", nil, r.nodeID)
+	}
 }
 
 func (r *runner) stop() {
@@ -194,6 +197,7 @@ func (r *runner) onHatchMessage(msg *message) {
 func (r *runner) onMessage(msg *message) {
 	if msg.Type == "quit" {
 		log.Println("Got quit message from master, shutting down...")
+		r.state = stateQuitting
 		Events.Publish("boomer:quit")
 		os.Exit(0)
 	}
