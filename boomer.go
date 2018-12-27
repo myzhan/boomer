@@ -6,7 +6,6 @@ import (
 	"math"
 	"os"
 	"os/signal"
-	"runtime"
 	"runtime/pprof"
 	"strings"
 	"sync"
@@ -91,9 +90,6 @@ func Run(tasks ...*Task) {
 		runTasksForTest(tasks...)
 		return
 	}
-
-	// support go version below 1.5
-	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// init boomer
 	initMutex.Lock()
