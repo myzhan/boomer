@@ -75,7 +75,7 @@ func (r *runner) safeRun(fn func()) {
 			os.Stderr.Write([]byte(errMsg))
 			os.Stderr.Write([]byte("\n"))
 			os.Stderr.Write(stackTrace)
-			RecordFailure("unknown", "panic", 0.0, errMsg)
+			RecordFailure("unknown", "panic", int64(0), errMsg)
 		}
 	}()
 	fn()
