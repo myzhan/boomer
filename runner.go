@@ -70,8 +70,12 @@ func (r *runner) safeRun(fn func()) {
 		// don't panic
 		err := recover()
 		if err != nil {
-			debug.PrintStack()
-			Events.Publish("request_failure", "unknown", "panic", 0.0, fmt.Sprintf("%v", err))
+			stackTrace := debug.Stack()
+			errMsg := fmt.Sprintf("%v", err)
+			os.Stderr.Write([]byte(errMsg))
+			os.Stderr.Write([]byte("\n"))
+			os.Stderr.Write(stackTrace)
+			RecordFailure("unknown", "panic", 0.0, errMsg)
 		}
 	}()
 	fn()
