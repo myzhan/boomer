@@ -7,8 +7,8 @@ import (
 	"sync"
 )
 
-var successRetiredWarnning = &sync.Once{}
-var failureRetiredWarnning = &sync.Once{}
+var successRetiredWarning = &sync.Once{}
+var failureRetiredWarning = &sync.Once{}
 
 // According to locust, responseTime should be int64, in milliseconds.
 // But previous version of boomer required responseTime to be float64, so sad.
@@ -25,7 +25,7 @@ func convertResponseTime(origin interface{}) int64 {
 }
 
 func legacySuccessHandler(requestType string, name string, responseTime interface{}, responseLength int64) {
-	successRetiredWarnning.Do(func() {
+	successRetiredWarning.Do(func() {
 		log.Println("boomer.Events.Publish(\"request_success\") is less performant and deprecated, use boomer.RecordSuccess() instead.")
 	})
 	defaultStats.requestSuccessChannel <- &requestSuccess{
@@ -37,7 +37,7 @@ func legacySuccessHandler(requestType string, name string, responseTime interfac
 }
 
 func legacyFailureHandler(requestType string, name string, responseTime interface{}, exception string) {
-	failureRetiredWarnning.Do(func() {
+	failureRetiredWarning.Do(func() {
 		log.Println("boomer.Events.Publish(\"request_failure\") is less performant and deprecated, use boomer.RecordFailure() instead.")
 	})
 	defaultStats.requestFailureChannel <- &requestFailure{

@@ -26,12 +26,12 @@ var memoryProfileDuration time.Duration
 var cpuProfile string
 var cpuProfileDuration time.Duration
 
-var initted uint32
+var initiated uint32
 var initMutex = sync.Mutex{}
 
 // Init boomer
 func initBoomer() {
-	if atomic.LoadUint32(&initted) == 1 {
+	if atomic.LoadUint32(&initiated) == 1 {
 		panic("Don't call boomer.Run() more than once.")
 	}
 
@@ -41,7 +41,7 @@ func initBoomer() {
 	defaultStats.start()
 
 	// done
-	atomic.StoreUint32(&initted, 1)
+	atomic.StoreUint32(&initiated, 1)
 }
 
 // Run tasks without connecting to the master.

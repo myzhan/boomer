@@ -23,7 +23,7 @@ go get github.com/myzhan/boomer
 
 Boomer use [gomq](https://github.com/zeromq/gomq) by default, which is a pure Go implementation of the ZeroMQ protocol.
 
-Becase of the instability of gomq, you can switch to [goczmq](https://github.com/zeromq/goczmq).
+Because of the instability of gomq, you can switch to [goczmq](https://github.com/zeromq/goczmq).
 
 ```bash
 # use gomq
@@ -32,7 +32,7 @@ go build -o a.out main.go
 go build -tags 'goczmq' -o a.out main.go
 ```
 
-If you fail to compile boomer with gomq, try to update gomq fisrt.
+If you fail to compile boomer with gomq, try to update gomq first.
 
 ```bash
 go get -u github.com/zeromq/gomq
