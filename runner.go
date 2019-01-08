@@ -156,16 +156,16 @@ func (r *runner) onQuiting() {
 }
 
 func (r *runner) stop() {
+	// publish the boomer stop event
+	// user's code can subscribe to this event and do thins like cleaning up
+	Events.Publish("boomer:stop")
+
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
 	close(r.stopChannel)
 	if r.rateLimitEnabled {
 		r.rateLimiter.stop()
 	}
-
-	// publish the boomer stop event
-	// user's code can subscribe to this event and do thins like cleaning up
-	Events.Publish("boomer:stop")
 }
 
 func (r *runner) close() {
