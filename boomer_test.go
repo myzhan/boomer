@@ -49,32 +49,32 @@ func TestCreateRatelimiter(t *testing.T) {
 	}
 
 	rateLimiter, _ = createRateLimiter(0, "1")
-	if warmUpRateLimiter, ok := rateLimiter.(*warmUpRateLimiter); !ok {
-		t.Error("Expected warmUpRateLimiter")
+	if rampUpRateLimiter, ok := rateLimiter.(*rampUpRateLimiter); !ok {
+		t.Error("Expected rampUpRateLimiter")
 	} else {
-		if warmUpRateLimiter.maxThreshold != math.MaxInt64 {
-			t.Error("maxThreshold should be equals to math.MaxInt64, was", warmUpRateLimiter.maxThreshold)
+		if rampUpRateLimiter.maxThreshold != math.MaxInt64 {
+			t.Error("maxThreshold should be equals to math.MaxInt64, was", rampUpRateLimiter.maxThreshold)
 		}
-		if warmUpRateLimiter.warmUpRate != "1" {
-			t.Error("warmUpRate should be equals to \"1\", was", warmUpRateLimiter.warmUpRate)
+		if rampUpRateLimiter.rampUpRate != "1" {
+			t.Error("rampUpRate should be equals to \"1\", was", rampUpRateLimiter.rampUpRate)
 		}
 	}
 
 	rateLimiter, _ = createRateLimiter(10, "2/2s")
-	if warmUpRateLimiter, ok := rateLimiter.(*warmUpRateLimiter); !ok {
-		t.Error("Expected warmUpRateLimiter")
+	if rampUpRateLimiter, ok := rateLimiter.(*rampUpRateLimiter); !ok {
+		t.Error("Expected rampUpRateLimiter")
 	} else {
-		if warmUpRateLimiter.maxThreshold != 10 {
-			t.Error("maxThreshold should be equals to 10, was", warmUpRateLimiter.maxThreshold)
+		if rampUpRateLimiter.maxThreshold != 10 {
+			t.Error("maxThreshold should be equals to 10, was", rampUpRateLimiter.maxThreshold)
 		}
-		if warmUpRateLimiter.warmUpRate != "2/2s" {
-			t.Error("warmUpRate should be equals to \"2/2s\", was", warmUpRateLimiter.warmUpRate)
+		if rampUpRateLimiter.rampUpRate != "2/2s" {
+			t.Error("rampUpRate should be equals to \"2/2s\", was", rampUpRateLimiter.rampUpRate)
 		}
-		if warmUpRateLimiter.warmUpStep != 2 {
-			t.Error("warmUpStep should be equals to 2, was", warmUpRateLimiter.warmUpStep)
+		if rampUpRateLimiter.rampUpStep != 2 {
+			t.Error("rampUpStep should be equals to 2, was", rampUpRateLimiter.rampUpStep)
 		}
-		if warmUpRateLimiter.warmUpPeroid != 2*time.Second {
-			t.Error("warmUpPeroid should be equals to 2 seconds, was", warmUpRateLimiter.warmUpPeroid)
+		if rampUpRateLimiter.rampUpPeroid != 2*time.Second {
+			t.Error("rampUpPeroid should be equals to 2 seconds, was", rampUpRateLimiter.rampUpPeroid)
 		}
 	}
 }

@@ -70,67 +70,67 @@ func (limiter *stableRateLimiter) stop() {
 	close(limiter.quitChannel)
 }
 
-// ErrParsingWarmUpRate is the error returned if the format of warmUpRate is invalid.
-var ErrParsingWarmUpRate = errors.New("ratelimiter: invalid format of warmUpRate, try \"1\" or \"1/1s\"")
+// ErrParsingRampUpRate is the error returned if the format of rampUpRate is invalid.
+var ErrParsingRampUpRate = errors.New("ratelimiter: invalid format of rampUpRate, try \"1\" or \"1/1s\"")
 
-// warmUpRateLimiter uses the token bucket algorithm.
+// rampUpRateLimiter uses the token bucket algorithm.
 // the threshold is updated according to the warm up rate.
 // the bucket is refilled according to the refill period, no burst is allowed.
-type warmUpRateLimiter struct {
+type rampUpRateLimiter struct {
 	maxThreshold     int64
 	nextThreshold    int64
 	currentThreshold int64
 	refillPeroid     time.Duration
-	warmUpRate       string
-	warmUpStep       int64
-	warmUpPeroid     time.Duration
+	rampUpRate       string
+	rampUpStep       int64
+	rampUpPeroid     time.Duration
 	broadcastChannel chan bool
-	warmUpChannel    chan bool
+	rampUpChannel    chan bool
 	quitChannel      chan bool
 }
 
-func newWarmUpRateLimiter(maxThreshold int64, warmUpRate string, refillPeroid time.Duration) (rateLimiter *warmUpRateLimiter, err error) {
-	rateLimiter = &warmUpRateLimiter{
+func newRampUpRateLimiter(maxThreshold int64, rampUpRate string, refillPeroid time.Duration) (rateLimiter *rampUpRateLimiter, err error) {
+	rateLimiter = &rampUpRateLimiter{
 		maxThreshold:     maxThreshold,
 		nextThreshold:    0,
 		currentThreshold: 0,
-		warmUpRate:       warmUpRate,
+		rampUpRate:       rampUpRate,
 		refillPeroid:     refillPeroid,
 		broadcastChannel: make(chan bool),
 	}
-	rateLimiter.warmUpStep, rateLimiter.warmUpPeroid, err = rateLimiter.parseWarmUpRate(rateLimiter.warmUpRate)
+	rateLimiter.rampUpStep, rateLimiter.rampUpPeroid, err = rateLimiter.parseRampUpRate(rateLimiter.rampUpRate)
 	if err != nil {
 		return nil, err
 	}
 	return rateLimiter, nil
 }
 
-func (limiter *warmUpRateLimiter) parseWarmUpRate(warmUpRate string) (warmUpStep int64, warmUpPeroid time.Duration, err error) {
-	if strings.Contains(warmUpRate, "/") {
-		tmp := strings.Split(warmUpRate, "/")
+func (limiter *rampUpRateLimiter) parseRampUpRate(rampUpRate string) (rampUpStep int64, rampUpPeroid time.Duration, err error) {
+	if strings.Contains(rampUpRate, "/") {
+		tmp := strings.Split(rampUpRate, "/")
 		if len(tmp) != 2 {
-			return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
+			return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
 		}
-		warmUpStep, err := strconv.ParseInt(tmp[0], 10, 64)
+		rampUpStep, err := strconv.ParseInt(tmp[0], 10, 64)
 		if err != nil {
-			return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
+			return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
 		}
-		warmUpPeroid, err := time.ParseDuration(tmp[1])
+		rampUpPeroid, err := time.ParseDuration(tmp[1])
 		if err != nil {
-			return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
+			return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
 		}
-		return warmUpStep, warmUpPeroid, nil
+		return rampUpStep, rampUpPeroid, nil
 	}
 
-	warmUpStep, err = strconv.ParseInt(warmUpRate, 10, 64)
+	rampUpStep, err = strconv.ParseInt(rampUpRate, 10, 64)
 	if err != nil {
-		return warmUpStep, warmUpPeroid, ErrParsingWarmUpRate
+		return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
 	}
-	warmUpPeroid = time.Second
-	return warmUpStep, warmUpPeroid, nil
+	rampUpPeroid = time.Second
+	return rampUpStep, rampUpPeroid, nil
 }
 
-func (limiter *warmUpRateLimiter) start() {
+func (limiter *rampUpRateLimiter) start() {
 	limiter.quitChannel = make(chan bool)
 	quitChannel := limiter.quitChannel
 	// bucket updater
@@ -154,7 +154,7 @@ func (limiter *warmUpRateLimiter) start() {
 			case <-quitChannel:
 				return
 			default:
-				limiter.nextThreshold = limiter.nextThreshold + limiter.warmUpStep
+				limiter.nextThreshold = limiter.nextThreshold + limiter.rampUpStep
 				if limiter.nextThreshold < 0 {
 					// int64 overflow
 					limiter.nextThreshold = int64(math.MaxInt64)
@@ -162,13 +162,13 @@ func (limiter *warmUpRateLimiter) start() {
 				if limiter.nextThreshold > limiter.maxThreshold {
 					limiter.nextThreshold = limiter.maxThreshold
 				}
-				time.Sleep(limiter.warmUpPeroid)
+				time.Sleep(limiter.rampUpPeroid)
 			}
 		}
 	}()
 }
 
-func (limiter *warmUpRateLimiter) acquire() (blocked bool) {
+func (limiter *rampUpRateLimiter) acquire() (blocked bool) {
 	permit := atomic.AddInt64(&limiter.currentThreshold, -1)
 	if permit < 0 {
 		blocked = true
@@ -180,7 +180,7 @@ func (limiter *warmUpRateLimiter) acquire() (blocked bool) {
 	return blocked
 }
 
-func (limiter *warmUpRateLimiter) stop() {
+func (limiter *rampUpRateLimiter) stop() {
 	limiter.nextThreshold = 0
 	close(limiter.quitChannel)
 }

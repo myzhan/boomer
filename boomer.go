@@ -65,10 +65,10 @@ func createRateLimiter(maxRPS int64, requestIncreaseRate string) (rateLimiter ra
 	if requestIncreaseRate != "-1" {
 		if maxRPS > 0 {
 			log.Println("The max RPS that boomer may generate is limited to", maxRPS, "with a increase rate", requestIncreaseRate)
-			rateLimiter, err = newWarmUpRateLimiter(maxRPS, requestIncreaseRate, time.Second)
+			rateLimiter, err = newRampUpRateLimiter(maxRPS, requestIncreaseRate, time.Second)
 		} else {
 			log.Println("The max RPS that boomer may generate is limited by a increase rate", requestIncreaseRate)
-			rateLimiter, err = newWarmUpRateLimiter(math.MaxInt64, requestIncreaseRate, time.Second)
+			rateLimiter, err = newRampUpRateLimiter(math.MaxInt64, requestIncreaseRate, time.Second)
 		}
 	} else {
 		if maxRPS > 0 {

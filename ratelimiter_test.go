@@ -19,8 +19,8 @@ func TestStableRateLimiter(t *testing.T) {
 	rateLimiter.stop()
 }
 
-func TestWarmUpRateLimiter(t *testing.T) {
-	rateLimiter, _ := newWarmUpRateLimiter(100, "10/1s", 100*time.Millisecond)
+func TestRampUpRateLimiter(t *testing.T) {
+	rateLimiter, _ := newRampUpRateLimiter(100, "10/1s", 100*time.Millisecond)
 	rateLimiter.start()
 	time.Sleep(time.Second)
 
@@ -52,30 +52,30 @@ func TestWarmUpRateLimiter(t *testing.T) {
 	rateLimiter.stop()
 }
 
-func TestParseWarmUpRate(t *testing.T) {
-	rateLimiter := &warmUpRateLimiter{}
-	warmUpStep, warmUpPeroid, _ := rateLimiter.parseWarmUpRate("100")
-	if warmUpStep != 100 {
-		t.Error("Wrong warmUpStep, expected: 100, was:", warmUpStep)
+func TestParseRampUpRate(t *testing.T) {
+	rateLimiter := &rampUpRateLimiter{}
+	rampUpStep, rampUpPeroid, _ := rateLimiter.parseRampUpRate("100")
+	if rampUpStep != 100 {
+		t.Error("Wrong rampUpStep, expected: 100, was:", rampUpStep)
 	}
-	if warmUpPeroid != time.Second {
-		t.Error("Wrong warmUpPeroid, expected: 1s, was:", warmUpPeroid)
+	if rampUpPeroid != time.Second {
+		t.Error("Wrong rampUpPeroid, expected: 1s, was:", rampUpPeroid)
 	}
-	warmUpStep, warmUpPeroid, _ = rateLimiter.parseWarmUpRate("200/10s")
-	if warmUpStep != 200 {
-		t.Error("Wrong warmUpStep, expected: 200, was:", warmUpStep)
+	rampUpStep, rampUpPeroid, _ = rateLimiter.parseRampUpRate("200/10s")
+	if rampUpStep != 200 {
+		t.Error("Wrong rampUpStep, expected: 200, was:", rampUpStep)
 	}
-	if warmUpPeroid != 10*time.Second {
-		t.Error("Wrong warmUpPeroid, expected: 10s, was:", warmUpPeroid)
-	}
-
-	warmUpStep, warmUpPeroid, err := rateLimiter.parseWarmUpRate("200/1s/")
-	if err == nil || err != ErrParsingWarmUpRate {
-		t.Error("Expected ErrParsingWarmUpRate")
+	if rampUpPeroid != 10*time.Second {
+		t.Error("Wrong rampUpPeroid, expected: 10s, was:", rampUpPeroid)
 	}
 
-	warmUpStep, warmUpPeroid, err = rateLimiter.parseWarmUpRate("200/1")
-	if err == nil || err != ErrParsingWarmUpRate {
-		t.Error("Expected ErrParsingWarmUpRate")
+	rampUpStep, rampUpPeroid, err := rateLimiter.parseRampUpRate("200/1s/")
+	if err == nil || err != ErrParsingRampUpRate {
+		t.Error("Expected ErrParsingRampUpRate")
+	}
+
+	rampUpStep, rampUpPeroid, err = rateLimiter.parseRampUpRate("200/1")
+	if err == nil || err != ErrParsingRampUpRate {
+		t.Error("Expected ErrParsingRampUpRate")
 	}
 }
