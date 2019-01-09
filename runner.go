@@ -267,6 +267,9 @@ func (r *runner) getReady() {
 		for {
 			select {
 			case data := <-defaultStats.messageToRunner:
+				if r.state == stateInit || r.state == stateStopped {
+					continue
+				}
 				data["user_count"] = r.numClients
 				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
 			case <-r.shutdownSignal:
