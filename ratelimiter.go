@@ -154,14 +154,15 @@ func (limiter *rampUpRateLimiter) start() {
 			case <-quitChannel:
 				return
 			default:
-				limiter.nextThreshold = limiter.nextThreshold + limiter.rampUpStep
-				if limiter.nextThreshold < 0 {
+				nextValue := limiter.nextThreshold + limiter.rampUpStep
+				if nextValue < 0 {
 					// int64 overflow
-					limiter.nextThreshold = int64(math.MaxInt64)
+					nextValue = int64(math.MaxInt64)
 				}
-				if limiter.nextThreshold > limiter.maxThreshold {
-					limiter.nextThreshold = limiter.maxThreshold
+				if nextValue > limiter.maxThreshold {
+					nextValue = limiter.maxThreshold
 				}
+				atomic.StoreInt64(&limiter.nextThreshold, nextValue)
 				time.Sleep(limiter.rampUpPeroid)
 			}
 		}
