@@ -13,7 +13,7 @@ install:
   - go get github.com/zeromq/gomq
 
 script:
-  - go test -coverprofile=coverage.txt -covermode=atomic
+  - go test -timeout 1m -coverprofile=coverage.txt -covermode=atomic
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
