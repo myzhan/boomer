@@ -297,6 +297,8 @@ func TestGetReady(t *testing.T) {
 	}
 
 	r.numClients = 10
+	// it's not really running
+	r.state = stateRunning
 	data := make(map[string]interface{})
 	defaultStats.messageToRunner <- data
 
