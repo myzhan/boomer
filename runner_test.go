@@ -141,6 +141,50 @@ func TestStop(t *testing.T) {
 	}
 }
 
+func TestOnHatchMessage(t *testing.T) {
+	taskA := &Task{
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+	}
+	runner := newRunner([]*Task{taskA}, nil, "asap")
+	defer runner.close()
+	runner.client = newClient("localhost", 5557)
+	runner.state = stateInit
+
+	workers, hatchRate := 0, 0
+	callback := func(param1, param2 int) {
+		workers = param1
+		hatchRate = param2
+	}
+	Events.Subscribe("boomer:hatch", callback)
+	defer Events.Unsubscribe("boomer:hatch", callback)
+
+	go func() {
+		// consumes clearStatsChannel
+		for {
+			select {
+			case <-defaultStats.clearStatsChannel:
+				return
+			}
+		}
+	}()
+
+	runner.onHatchMessage(newMessage("hatch", map[string]interface{}{
+		"hatch_rate":  float64(20),
+		"num_clients": int64(20),
+	}, runner.nodeID))
+
+	if workers != 20 {
+		t.Error("workers should be overwrote by callback function, expected: 20, was:", workers)
+	}
+	if hatchRate != 20 {
+		t.Error("hatchRate should be overwrote by callback function, expected: 20, was:", hatchRate)
+	}
+
+	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+}
+
 func TestOnMessage(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {

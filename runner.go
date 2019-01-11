@@ -190,6 +190,8 @@ func (r *runner) onHatchMessage(msg *message) {
 		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
 			workers, hatchRate)
 	} else {
+		Events.Publish("boomer:hatch", workers, hatchRate)
+
 		if r.rateLimitEnabled {
 			r.rateLimiter.start()
 		}
