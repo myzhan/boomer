@@ -11,7 +11,6 @@ func TestInitBoomer(t *testing.T) {
 	initBoomer()
 	defer Events.Unsubscribe("request_success", legacySuccessHandler)
 	defer Events.Unsubscribe("request_failure", legacyFailureHandler)
-	defer defaultStats.close()
 
 	defer func() {
 		err := recover()

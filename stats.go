@@ -18,8 +18,6 @@ type requestFailure struct {
 	error        string
 }
 
-var defaultStats = newRequestStats()
-
 type requestStats struct {
 	entries   map[string]*statsEntry
 	errors    map[string]*statsError
@@ -31,9 +29,6 @@ type requestStats struct {
 	clearStatsChannel     chan bool
 	messageToRunner       chan map[string]interface{}
 	shutdownSignal        chan bool
-
-	// cache of current time in second
-	now int64
 }
 
 func newRequestStats() (stats *requestStats) {
@@ -49,7 +44,6 @@ func newRequestStats() (stats *requestStats) {
 	stats.clearStatsChannel = make(chan bool)
 	stats.messageToRunner = make(chan map[string]interface{}, 10)
 	stats.shutdownSignal = make(chan bool)
-	stats.now = time.Now().Unix()
 
 	stats.total = &statsEntry{
 		name:   "Total",
@@ -158,18 +152,6 @@ func (s *requestStats) start() {
 			}
 		}
 	}()
-
-	go func() {
-		var ticker = time.NewTicker(time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				s.now = time.Now().Unix()
-			case <-s.shutdownSignal:
-				return
-			}
-		}
-	}()
 }
 
 // close is used by unit tests to avoid leakage of goroutines
@@ -217,7 +199,7 @@ func (s *statsEntry) log(responseTime int64, contentLength int64) {
 func (s *statsEntry) logTimeOfRequest() {
 	// 'now' is updated by another goroutine
 	// make a copy to avoid race condition
-	key := defaultStats.now
+	key := defaultRunner.now
 	_, ok := s.numReqsPerSec[key]
 	if !ok {
 		s.numReqsPerSec[key] = 1

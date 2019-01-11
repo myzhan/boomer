@@ -9,7 +9,7 @@ var Events = EventBus.New()
 
 // RecordSuccess reports a success
 func RecordSuccess(requestType, name string, responseTime int64, responseLength int64) {
-	defaultStats.requestSuccessChannel <- &requestSuccess{
+	defaultRunner.stats.requestSuccessChannel <- &requestSuccess{
 		requestType:    requestType,
 		name:           name,
 		responseTime:   responseTime,
@@ -19,7 +19,7 @@ func RecordSuccess(requestType, name string, responseTime int64, responseLength 
 
 // RecordFailure reports a failure
 func RecordFailure(requestType, name string, responseTime int64, exception string) {
-	defaultStats.requestFailureChannel <- &requestFailure{
+	defaultRunner.stats.requestFailureChannel <- &requestFailure{
 		requestType:  requestType,
 		name:         name,
 		responseTime: responseTime,

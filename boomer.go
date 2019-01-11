@@ -26,6 +26,8 @@ var memoryProfileDuration time.Duration
 var cpuProfile string
 var cpuProfileDuration time.Duration
 
+var defaultRunner *runner
+
 var initiated uint32
 var initMutex = sync.Mutex{}
 
@@ -37,8 +39,6 @@ func initBoomer() {
 
 	// TODO: to be removed
 	initLegacyEventHandlers()
-
-	defaultStats.start()
 
 	// done
 	atomic.StoreUint32(&initiated, 1)
@@ -101,10 +101,10 @@ func Run(tasks ...*Task) {
 		log.Fatalf("Failed to create rate limiter, %v\n", err)
 	}
 
-	runner := newRunner(tasks, rateLimiter, hatchType)
-	runner.masterHost = masterHost
-	runner.masterPort = masterPort
-	runner.getReady()
+	defaultRunner = newRunner(tasks, rateLimiter, hatchType)
+	defaultRunner.masterHost = masterHost
+	defaultRunner.masterPort = masterPort
+	defaultRunner.getReady()
 
 	if memoryProfile != "" {
 		startMemoryProfile(memoryProfile, memoryProfileDuration)
@@ -121,7 +121,7 @@ func Run(tasks ...*Task) {
 	Events.Publish("boomer:quit")
 
 	// wait for quit message is sent to master
-	<-runner.client.disconnectedChannel()
+	<-defaultRunner.client.disconnectedChannel()
 	log.Println("shut down")
 }
 

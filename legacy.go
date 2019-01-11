@@ -28,7 +28,7 @@ func legacySuccessHandler(requestType string, name string, responseTime interfac
 	successRetiredWarning.Do(func() {
 		log.Println("boomer.Events.Publish(\"request_success\") is less performant and deprecated, use boomer.RecordSuccess() instead.")
 	})
-	defaultStats.requestSuccessChannel <- &requestSuccess{
+	defaultRunner.stats.requestSuccessChannel <- &requestSuccess{
 		requestType:    requestType,
 		name:           name,
 		responseTime:   convertResponseTime(responseTime),
@@ -40,7 +40,7 @@ func legacyFailureHandler(requestType string, name string, responseTime interfac
 	failureRetiredWarning.Do(func() {
 		log.Println("boomer.Events.Publish(\"request_failure\") is less performant and deprecated, use boomer.RecordFailure() instead.")
 	})
-	defaultStats.requestFailureChannel <- &requestFailure{
+	defaultRunner.stats.requestFailureChannel <- &requestFailure{
 		requestType:  requestType,
 		name:         name,
 		responseTime: convertResponseTime(responseTime),

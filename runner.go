@@ -43,6 +43,9 @@ type runner struct {
 	hatchType        string
 	rateLimiter      rateLimiter
 	rateLimitEnabled bool
+	stats            *requestStats
+	// cache of current time in second
+	now int64
 }
 
 func newRunner(tasks []*Task, rateLimiter rateLimiter, hatchType string) (r *runner) {
@@ -61,6 +64,8 @@ func newRunner(tasks []*Task, rateLimiter rateLimiter, hatchType string) (r *run
 	if hatchType != "asap" && hatchType != "smooth" {
 		log.Fatalf("Wrong hatch-type, expected asap or smooth, was %s\n", hatchType)
 	}
+
+	r.stats = newRequestStats()
 
 	return r
 }
@@ -135,7 +140,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
-	defaultStats.clearStatsChannel <- true
+	r.stats.clearStatsChannel <- true
 	r.stopChannel = make(chan bool)
 
 	r.hatchRate = hatchRate
@@ -171,6 +176,9 @@ func (r *runner) stop() {
 func (r *runner) close() {
 	if r.client != nil {
 		r.client.close()
+	}
+	if r.stats != nil {
+		r.stats.close()
 	}
 	close(r.shutdownSignal)
 }
@@ -261,6 +269,8 @@ func (r *runner) getReady() {
 	// listen to master
 	r.startListener()
 
+	r.stats.start()
+
 	// tell master, I'm ready
 	r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
 
@@ -268,12 +278,24 @@ func (r *runner) getReady() {
 	go func() {
 		for {
 			select {
-			case data := <-defaultStats.messageToRunner:
+			case data := <-r.stats.messageToRunner:
 				if r.state == stateInit || r.state == stateStopped {
 					continue
 				}
 				data["user_count"] = r.numClients
 				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
+			case <-r.shutdownSignal:
+				return
+			}
+		}
+	}()
+
+	go func() {
+		var ticker = time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				r.now = time.Now().Unix()
 			case <-r.shutdownSignal:
 				return
 			}
