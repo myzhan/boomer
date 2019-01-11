@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/zeromq/gomq"
 	"github.com/zeromq/gomq/zmtp"
@@ -120,10 +121,14 @@ func TestPingPong(t *testing.T) {
 	log.Println(fmt.Sprintf("Starting to serve on %s:(%d|%d)", masterHost, masterPort, masterPort+1))
 	server.start()
 
+	time.Sleep(20 * time.Millisecond)
+
 	// start client
 	client := newClient(masterHost, masterPort)
 	client.connect()
 	defer client.close()
+
+	time.Sleep(20 * time.Millisecond)
 
 	client.sendChannel() <- newMessage("ping", nil, "testing ping pong")
 	msg := <-server.fromClient
