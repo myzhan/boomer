@@ -7,10 +7,11 @@ import (
 )
 
 func TestSafeRun(t *testing.T) {
-	runner := &runner{}
-	runner.safeRun(func() {
+	defaultRunner = newRunner(nil, nil, "asap")
+	defaultRunner.safeRun(func() {
 		panic("Runner will catch this panic")
 	})
+	defaultRunner = nil
 }
 
 func TestSpawnGoRoutines(t *testing.T) {

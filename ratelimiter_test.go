@@ -20,9 +20,9 @@ func TestStableRateLimiter(t *testing.T) {
 }
 
 func TestRampUpRateLimiter(t *testing.T) {
-	rateLimiter, _ := newRampUpRateLimiter(100, "10/1s", 100*time.Millisecond)
+	rateLimiter, _ := newRampUpRateLimiter(100, "10/200ms", 100*time.Millisecond)
 	rateLimiter.start()
-	time.Sleep(time.Second)
+	time.Sleep(110 * time.Millisecond)
 
 	for i := 0; i < 10; i++ {
 		blocked := rateLimiter.acquire()
@@ -35,7 +35,7 @@ func TestRampUpRateLimiter(t *testing.T) {
 		t.Error("Should be blocked")
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(110 * time.Millisecond)
 
 	// now, the threshold is 20
 	for i := 0; i < 20; i++ {

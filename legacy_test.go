@@ -51,4 +51,6 @@ func TestInitEvents(t *testing.T) {
 
 	Events.Unsubscribe("request_success", legacySuccessHandler)
 	Events.Unsubscribe("request_failure", legacyFailureHandler)
+
+	defaultRunner = nil
 }
