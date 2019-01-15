@@ -26,12 +26,23 @@ import (
 // While requests from udpcopy passing through this udp server, it keeps track of qps and timeout.
 // Also, it can multi-copy the original request for more stress.
 
-// Known Issues:
-// 1. Once locust start the test, it can't be stopped by locust. You should restart locust and this udp server if you
-//    want to restart.
-
 // See also:
 // udpcopy: https://github.com/wangbin579/udpcopy
+
+const name = "udpproxy"
+
+var testStarted = false
+var workersPool []*worker
+
+// command line arguments
+var backendAddr *string
+var backendTimeout time.Duration
+var proxyHost *string
+var proxyPort *int
+var udpBufferSize *int
+var number *int
+var workersCount *int
+var dontRead *bool
 
 type worker struct {
 	conn     *net.UDPConn
@@ -53,28 +64,27 @@ func newWorker(remoteAddr string) *worker {
 	requests := make(chan []byte, 1000)
 	recvBuff := make([]byte, *udpBufferSize)
 	go func() {
-		for {
-			req := <-requests
+		for req := range requests {
 			for n := 0; n < *number; n++ {
 				startTime := boomer.Now()
 				wn, err := conn.Write(req)
 				if err != nil {
-					boomer.RecordFailure("udp-write", name, 0.0, err.Error())
+					boomer.RecordFailure(name, "udp-write", 0.0, err.Error())
 					continue
 				}
 
 				if *dontRead {
 					elapsed := boomer.Now() - startTime
-					boomer.RecordSuccess("udp-write", name, elapsed, int64(wn))
+					boomer.RecordSuccess(name, "udp-write", elapsed, int64(wn))
 				} else {
 					conn.SetReadDeadline(time.Now().Add(backendTimeout))
 					respLength, err := conn.Read(recvBuff)
 					if err != nil {
-						boomer.RecordFailure("udp-read", name, 0.0, err.Error())
+						boomer.RecordFailure(name, "udp-read", 0.0, err.Error())
 						continue
 					}
 					elapsed := boomer.Now() - startTime
-					boomer.RecordSuccess("udp-resp", name, elapsed, int64(respLength))
+					boomer.RecordSuccess(name, "udp-resp", elapsed, int64(respLength))
 				}
 			}
 		}
@@ -85,7 +95,6 @@ func newWorker(remoteAddr string) *worker {
 		requests: requests,
 		recvBuff: recvBuff,
 	}
-
 }
 
 func createWorkers() {
@@ -96,7 +105,6 @@ func createWorkers() {
 }
 
 func proxy() {
-
 	// Pooling workers
 	createWorkers()
 
@@ -133,14 +141,23 @@ func proxy() {
 	}
 }
 
-func deadend() {
+func startTest(workers, hatchRate int) {
 	testStarted = true
+}
+
+func stopTest() {
+	testStarted = false
+}
+
+func deadend() {
 	for {
 		time.Sleep(time.Second * 100)
 	}
 }
 
 func main() {
+	boomer.Events.Subscribe("boomer:hatch", startTest)
+	boomer.Events.Subscribe("boomer:stop", stopTest)
 
 	task := &boomer.Task{
 		Name:   "udproxy",
@@ -153,23 +170,7 @@ func main() {
 	boomer.Run(task)
 }
 
-const name = "udproxy"
-
-var testStarted = false
-var workersPool []*worker
-
-// command line arguments
-var backendAddr *string
-var backendTimeout time.Duration
-var proxyHost *string
-var proxyPort *int
-var udpBufferSize *int
-var number *int
-var workersCount *int
-var dontRead *bool
-
 func init() {
-
 	backendAddr = flag.String("backend-addr", "127.0.0.1:44444", "backend address")
 	timeout := flag.Int("backend-timeout", 1000, "backend timeout(ms)")
 	proxyHost = flag.String("proxy-host", "0.0.0.0", "proxy bind-host")
