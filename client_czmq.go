@@ -61,6 +61,8 @@ func (c *czmqSocketClient) connect() {
 
 func (c *czmqSocketClient) close() {
 	close(c.shutdownSignal)
+	c.pushConn.Destroy()
+	c.pullConn.Destroy()
 }
 
 func (c *czmqSocketClient) recvChannel() chan *message {
@@ -74,8 +76,12 @@ func (c *czmqSocketClient) recv() {
 			return
 		default:
 			msg, _, _ := c.pullConn.RecvFrame()
-			msgFromMaster := newMessageFromBytes(msg)
-			c.fromMaster <- msgFromMaster
+			msgFromMaster, err := newMessageFromBytes(msg)
+			if err != nil {
+				log.Printf("Msgpack decode fail: %v\n", err)
+			} else {
+				c.fromMaster <- msgFromMaster
+			}
 		}
 	}
 }
@@ -99,7 +105,15 @@ func (c *czmqSocketClient) send() {
 }
 
 func (c *czmqSocketClient) sendMessage(msg *message) {
-	c.pushConn.SendFrame(msg.serialize(), 0)
+	serializedMessage, err := msg.serialize()
+	if err != nil {
+		log.Printf("Msgpack encode fail: %v\n", err)
+		return
+	}
+	err = c.pushConn.SendFrame(serializedMessage, 0)
+	if err != nil {
+		log.Printf("Error sending: %v\n", err)
+	}
 }
 
 func (c *czmqSocketClient) disconnectedChannel() chan bool {

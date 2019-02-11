@@ -82,11 +82,10 @@ func (c *gomqSocketClient) recv() {
 		} else {
 			msgFromMaster, err := newMessageFromBytes(msg)
 			if err != nil {
-				log.Println("Msgpack decode fail:", err)
+				log.Printf("Msgpack decode fail: %v\n", err)
 			} else {
 				c.fromMaster <- msgFromMaster
 			}
-
 		}
 	}
 }
@@ -112,7 +111,7 @@ func (c *gomqSocketClient) send() {
 func (c *gomqSocketClient) sendMessage(msg *message) {
 	serializedMessage, err := msg.serialize()
 	if err != nil {
-		log.Println("Msgpack encode fail:", err)
+		log.Printf("Msgpack encode fail: %v\n", err)
 		return
 	}
 	err = c.pushSocket.Send(serializedMessage)
