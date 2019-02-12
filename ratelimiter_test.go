@@ -68,13 +68,27 @@ func TestParseRampUpRate(t *testing.T) {
 	if rampUpPeroid != 10*time.Second {
 		t.Error("Wrong rampUpPeroid, expected: 10s, was:", rampUpPeroid)
 	}
+}
 
-	rampUpStep, rampUpPeroid, err := rateLimiter.parseRampUpRate("200/1s/")
+func TestParseInvalidRampUpRate(t *testing.T) {
+	rateLimiter := &rampUpRateLimiter{}
+
+	_, _, err := rateLimiter.parseRampUpRate("A/1m")
 	if err == nil || err != ErrParsingRampUpRate {
 		t.Error("Expected ErrParsingRampUpRate")
 	}
 
-	rampUpStep, rampUpPeroid, err = rateLimiter.parseRampUpRate("200/1")
+	_, _, err = rateLimiter.parseRampUpRate("A")
+	if err == nil || err != ErrParsingRampUpRate {
+		t.Error("Expected ErrParsingRampUpRate")
+	}
+
+	_, _, err = rateLimiter.parseRampUpRate("200/1s/")
+	if err == nil || err != ErrParsingRampUpRate {
+		t.Error("Expected ErrParsingRampUpRate")
+	}
+
+	_, _, err = rateLimiter.parseRampUpRate("200/1")
 	if err == nil || err != ErrParsingRampUpRate {
 		t.Error("Expected ErrParsingRampUpRate")
 	}
