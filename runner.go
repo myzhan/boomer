@@ -103,17 +103,17 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 		}
 
 		for i := 1; i <= amount; i++ {
+			if r.hatchType == "smooth" {
+				time.Sleep(time.Duration(1000000/r.hatchRate) * time.Microsecond)
+			} else if i%r.hatchRate == 0 {
+				time.Sleep(1 * time.Second)
+			}
+
 			select {
 			case <-quit:
 				// quit hatching goroutine
 				return
 			default:
-				if r.hatchType == "smooth" {
-					time.Sleep(time.Duration(1000000/r.hatchRate) * time.Microsecond)
-				} else if i%r.hatchRate == 0 {
-					time.Sleep(1 * time.Second)
-				}
-
 				atomic.AddInt32(&r.numClients, 1)
 				go func(fn func()) {
 					for {
