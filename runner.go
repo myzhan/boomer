@@ -19,6 +19,7 @@ const (
 
 const (
 	slaveReportInterval = 3 * time.Second
+	heartbeatInterval   = 1 * time.Second
 )
 
 // Task is like locust's task.
@@ -261,7 +262,7 @@ func (r *runner) startListener() {
 
 func (r *runner) getReady() {
 	r.state = stateInit
-	r.client = newClient(r.masterHost, r.masterPort)
+	r.client = newClient(r.masterHost, r.masterPort, r.nodeID)
 	r.client.connect()
 
 	// listen to master
@@ -294,6 +295,23 @@ func (r *runner) getReady() {
 			select {
 			case <-ticker.C:
 				r.now = time.Now().Unix()
+			case <-r.shutdownSignal:
+				return
+			}
+		}
+	}()
+
+	// heartbeat
+	// See: https://github.com/locustio/locust/commit/a8c0d7d8c588f3980303358298870f2ea394ab93
+	go func() {
+		var ticker = time.NewTicker(heartbeatInterval)
+		for {
+			select {
+			case <-ticker.C:
+				data := map[string]interface{}{
+					"state": r.state,
+				}
+				r.client.sendChannel() <- newMessage("heartbeat", data, r.nodeID)
 			case <-r.shutdownSignal:
 				return
 			}
