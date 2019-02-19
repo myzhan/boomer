@@ -152,6 +152,7 @@ func (r *runner) hatchComplete() {
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
 	r.client.sendChannel() <- newMessage("hatch_complete", data, r.nodeID)
+	r.state = stateRunning
 }
 
 func (r *runner) onQuiting() {
@@ -221,7 +222,6 @@ func (r *runner) onMessage(msg *message) {
 		if msg.Type == "hatch" {
 			r.state = stateHatching
 			r.onHatchMessage(msg)
-			r.state = stateRunning
 		}
 	case stateHatching:
 		fallthrough
@@ -243,7 +243,6 @@ func (r *runner) onMessage(msg *message) {
 		if msg.Type == "hatch" {
 			r.state = stateHatching
 			r.onHatchMessage(msg)
-			r.state = stateRunning
 		}
 	}
 }
