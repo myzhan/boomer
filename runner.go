@@ -231,7 +231,6 @@ func (r *runner) onMessage(msg *message) {
 			r.state = stateHatching
 			r.stop()
 			r.onHatchMessage(msg)
-			r.state = stateRunning
 		case "stop":
 			r.stop()
 			r.state = stateStopped
