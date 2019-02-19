@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func round(val float64, roundOn float64, places int) (newVal float64) {
@@ -36,9 +38,8 @@ func MD5(slice ...string) string {
 // generate a random nodeID like locust does, using the same algorithm.
 func getNodeID() (nodeID string) {
 	hostname, _ := os.Hostname()
-	timestamp := int32(time.Now().Unix())
-	randomNum := rand.Intn(10000)
-	nodeID = fmt.Sprintf("%s_%s", hostname, MD5(fmt.Sprintf("%d%d", timestamp, randomNum)))
+	id := strings.Replace(uuid.New().String(), "-", "", -1)
+	nodeID = fmt.Sprintf("%s_%s", hostname, id)
 	return
 }
 
