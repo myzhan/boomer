@@ -52,13 +52,8 @@ func worker() {
 		}
 		boomer.RecordFailure("http", "error", 0.0, err.Error())
 	} else {
-		if response.StatusCode == http.StatusOK {
-			boomer.RecordSuccess("http", "200",
-				elapsed, response.ContentLength)
-		} else {
-			boomer.RecordSuccess("http", strconv.Itoa(response.StatusCode),
-				elapsed, response.ContentLength)
-		}
+		boomer.RecordSuccess("http", strconv.Itoa(response.StatusCode),
+			elapsed, response.ContentLength)
 
 		if verbose {
 			body, err := ioutil.ReadAll(response.Body)
