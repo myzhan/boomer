@@ -28,7 +28,7 @@ func round(val float64, roundOn float64, places int) (newVal float64) {
 	return
 }
 
-// MD5 hash of strings
+// MD5 returns the md5 hash of strings.
 func MD5(slice ...string) string {
 	h := md5.New()
 	for _, v := range slice {
@@ -45,7 +45,7 @@ func getNodeID() (nodeID string) {
 	return
 }
 
-// Now gets current timestamp in milliseconds.
+// Now returns the current timestamp in milliseconds.
 func Now() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }

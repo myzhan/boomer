@@ -18,6 +18,7 @@ var Events = EventBus.New()
 var defaultBoomer *Boomer
 
 // A Boomer is used to run tasks.
+// This type is exposed, so users can create and control a Boomer instance programmatically.
 type Boomer struct {
 	masterHost string
 	masterPort int
@@ -65,7 +66,7 @@ func (b *Boomer) Run(tasks ...*Task) {
 	b.runner.getReady()
 }
 
-// RecordSuccess reports a success
+// RecordSuccess reports a success.
 func (b *Boomer) RecordSuccess(requestType, name string, responseTime int64, responseLength int64) {
 	b.runner.stats.requestSuccessChannel <- &requestSuccess{
 		requestType:    requestType,
