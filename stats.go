@@ -197,9 +197,7 @@ func (s *statsEntry) log(responseTime int64, contentLength int64) {
 }
 
 func (s *statsEntry) logTimeOfRequest() {
-	// 'now' is updated by another goroutine
-	// make a copy to avoid race condition
-	key := defaultRunner.now
+	key := time.Now().Unix()
 	_, ok := s.numReqsPerSec[key]
 	if !ok {
 		s.numReqsPerSec[key] = 1

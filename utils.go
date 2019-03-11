@@ -4,8 +4,10 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -46,4 +48,45 @@ func getNodeID() (nodeID string) {
 // Now gets current timestamp in milliseconds.
 func Now() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
+}
+
+// StartMemoryProfile starts memory profiling and save the results in file.
+func StartMemoryProfile(file string, duration time.Duration) {
+	f, err := os.Create(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Start memory profiling for", duration)
+	time.AfterFunc(duration, func() {
+		err = pprof.WriteHeapProfile(f)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		f.Close()
+		log.Println("Stop memory profiling after", duration)
+	})
+}
+
+// StartCPUProfile starts cpu profiling and save the results in file.
+func StartCPUProfile(file string, duration time.Duration) {
+	f, err := os.Create(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Start cpu profiling for", duration)
+	err = pprof.StartCPUProfile(f)
+	if err != nil {
+		log.Println(err)
+		f.Close()
+		return
+	}
+
+	time.AfterFunc(duration, func() {
+		pprof.StopCPUProfile()
+		f.Close()
+		log.Println("Stop CPU profiling after", duration)
+	})
 }

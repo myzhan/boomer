@@ -24,13 +24,16 @@ func TestConvertResponseTime(t *testing.T) {
 
 func TestInitEvents(t *testing.T) {
 	initLegacyEventHandlers()
+	defer Events.Unsubscribe("request_success", legacySuccessHandler)
+	defer Events.Unsubscribe("request_failure", legacyFailureHandler)
 
-	defaultRunner = newRunner(nil, nil, "asap")
+	defaultBoomer = NewBoomer("127.0.0.1", 5557)
+	defaultBoomer.runner = newRunner(nil, nil, "asap")
 
 	Events.Publish("request_success", "http", "foo", int64(1), int64(10))
 	Events.Publish("request_failure", "udp", "bar", int64(2), "udp error")
 
-	requestSuccessMsg := <-defaultRunner.stats.requestSuccessChannel
+	requestSuccessMsg := <-defaultBoomer.runner.stats.requestSuccessChannel
 	if requestSuccessMsg.requestType != "http" {
 		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
 	}
@@ -38,7 +41,7 @@ func TestInitEvents(t *testing.T) {
 		t.Error("Expected: 1, got:", requestSuccessMsg.responseTime)
 	}
 
-	requestFailureMsg := <-defaultRunner.stats.requestFailureChannel
+	requestFailureMsg := <-defaultBoomer.runner.stats.requestFailureChannel
 	if requestFailureMsg.requestType != "udp" {
 		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
 	}
@@ -48,9 +51,4 @@ func TestInitEvents(t *testing.T) {
 	if requestFailureMsg.error != "udp error" {
 		t.Error("Expected: udp error, got:", requestFailureMsg.error)
 	}
-
-	Events.Unsubscribe("request_success", legacySuccessHandler)
-	Events.Unsubscribe("request_failure", legacyFailureHandler)
-
-	defaultRunner = nil
 }

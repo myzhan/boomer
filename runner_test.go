@@ -7,11 +7,10 @@ import (
 )
 
 func TestSafeRun(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
-	defaultRunner.safeRun(func() {
+	runner := newRunner(nil, nil, "asap")
+	runner.safeRun(func() {
 		panic("Runner will catch this panic")
 	})
-	defaultRunner = nil
 }
 
 func TestSpawnGoRoutines(t *testing.T) {
@@ -30,7 +29,7 @@ func TestSpawnGoRoutines(t *testing.T) {
 		Name: "TaskB",
 	}
 	tasks := []*Task{taskA, taskB}
-	rateLimiter := newStableRateLimiter(100, time.Second)
+	rateLimiter := NewStableRateLimiter(100, time.Second)
 	runner := newRunner(tasks, rateLimiter, "asap")
 	defer runner.close()
 
@@ -327,7 +326,7 @@ func TestGetReady(t *testing.T) {
 	defer server.close()
 	server.start()
 
-	rateLimiter := newStableRateLimiter(100, time.Second)
+	rateLimiter := NewStableRateLimiter(100, time.Second)
 	r := newRunner(nil, rateLimiter, "asap")
 	r.masterHost = masterHost
 	r.masterPort = masterPort

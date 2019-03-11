@@ -41,14 +41,12 @@ type runner struct {
 	client           client
 	nodeID           string
 	hatchType        string
-	rateLimiter      rateLimiter
+	rateLimiter      RateLimiter
 	rateLimitEnabled bool
 	stats            *requestStats
-	// cache of current time in second
-	now int64
 }
 
-func newRunner(tasks []*Task, rateLimiter rateLimiter, hatchType string) (r *runner) {
+func newRunner(tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *runner) {
 	r = &runner{
 		tasks:     tasks,
 		hatchType: hatchType,
@@ -59,10 +57,6 @@ func newRunner(tasks []*Task, rateLimiter rateLimiter, hatchType string) (r *run
 	if rateLimiter != nil {
 		r.rateLimitEnabled = true
 		r.rateLimiter = rateLimiter
-	}
-
-	if hatchType != "asap" && hatchType != "smooth" {
-		log.Fatalf("Wrong hatch-type, expected asap or smooth, was %s\n", hatchType)
 	}
 
 	r.stats = newRequestStats()
@@ -122,7 +116,7 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 							return
 						default:
 							if r.rateLimitEnabled {
-								blocked := r.rateLimiter.acquire()
+								blocked := r.rateLimiter.Acquire()
 								if !blocked {
 									r.safeRun(fn)
 								}
@@ -170,7 +164,7 @@ func (r *runner) stop() {
 	// those goroutines will exit when r.safeRun returns
 	close(r.stopChannel)
 	if r.rateLimitEnabled {
-		r.rateLimiter.stop()
+		r.rateLimiter.Stop()
 	}
 }
 
@@ -202,7 +196,7 @@ func (r *runner) onHatchMessage(msg *message) {
 		Events.Publish("boomer:hatch", workers, hatchRate)
 
 		if r.rateLimitEnabled {
-			r.rateLimiter.start()
+			r.rateLimiter.Start()
 		}
 		r.startHatching(workers, hatchRate)
 	}
@@ -210,18 +204,14 @@ func (r *runner) onHatchMessage(msg *message) {
 
 // Runner acts as a state machine, and runs in one goroutine without any lock.
 func (r *runner) onMessage(msg *message) {
-	if msg.Type == "quit" {
-		log.Println("Got quit message from master, shutting down...")
-		r.state = stateQuitting
-		Events.Publish("boomer:quit")
-		os.Exit(0)
-	}
-
 	switch r.state {
 	case stateInit:
-		if msg.Type == "hatch" {
+		switch msg.Type {
+		case "hatch":
 			r.state = stateHatching
 			r.onHatchMessage(msg)
+		case "quit":
+			Events.Publish("boomer:quit")
 		}
 	case stateHatching:
 		fallthrough
@@ -237,11 +227,20 @@ func (r *runner) onMessage(msg *message) {
 			log.Println("Recv stop message from master, all the goroutines are stopped")
 			r.client.sendChannel() <- newMessage("client_stopped", nil, r.nodeID)
 			r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
+		case "quit":
+			r.stop()
+			log.Println("Recv quit message from master, all the goroutines are stopped")
+			Events.Publish("boomer:quit")
+			r.state = stateInit
 		}
 	case stateStopped:
-		if msg.Type == "hatch" {
+		switch msg.Type {
+		case "hatch":
 			r.state = stateHatching
 			r.onHatchMessage(msg)
+		case "quit":
+			Events.Publish("boomer:quit")
+			r.state = stateInit
 		}
 	}
 }
@@ -282,18 +281,6 @@ func (r *runner) getReady() {
 				}
 				data["user_count"] = r.numClients
 				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
-			case <-r.shutdownSignal:
-				return
-			}
-		}
-	}()
-
-	go func() {
-		var ticker = time.NewTicker(time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				r.now = time.Now().Unix()
 			case <-r.shutdownSignal:
 				return
 			}

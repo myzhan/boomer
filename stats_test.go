@@ -6,7 +6,6 @@ import (
 )
 
 func TestLogRequest(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.logRequest("http", "success", 2, 30)
 	newStats.logRequest("http", "success", 3, 40)
@@ -46,21 +45,16 @@ func TestLogRequest(t *testing.T) {
 	if newStats.total.totalContentLength != 130 {
 		t.Error("newStats.total.totalContentLength is wrong, expected: 130, got:", newStats.total.totalContentLength)
 	}
-
-	defaultRunner = nil
 }
 
 func BenchmarkLogRequest(b *testing.B) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	for i := 0; i < b.N; i++ {
 		newStats.logRequest("http", "success", 2, 30)
 	}
-	defaultRunner = nil
 }
 
 func TestRoundedResponseTime(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.logRequest("http", "success", 147, 1)
 	newStats.logRequest("http", "success", 3432, 1)
@@ -83,12 +77,9 @@ func TestRoundedResponseTime(t *testing.T) {
 	if val, ok := responseTimes[59000]; !ok || val != 1 {
 		t.Error("Rounded response time should be", 59000)
 	}
-
-	defaultRunner = nil
 }
 
 func TestLogError(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.logError("http", "failure", "500 error")
 	newStats.logError("http", "failure", "400 error")
@@ -121,22 +112,18 @@ func TestLogError(t *testing.T) {
 		t.Error("Error occurences is wrong, expected: 2, got:", err400.occurences)
 	}
 
-	defaultRunner = nil
 }
 
 func BenchmarkLogError(b *testing.B) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	for i := 0; i < b.N; i++ {
 		// LogError use md5 to calculate hash keys, it may slow down the only goroutine,
 		// which consumes both requestSuccessChannel and requestFailureChannel.
 		newStats.logError("http", "failure", "500 error")
 	}
-	defaultRunner = nil
 }
 
 func TestClearAll(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.logRequest("http", "success", 1, 20)
 	newStats.clearAll()
@@ -144,11 +131,9 @@ func TestClearAll(t *testing.T) {
 	if newStats.total.numRequests != 0 {
 		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.numRequests)
 	}
-	defaultRunner = nil
 }
 
 func TestClearAllByChannel(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.start()
 	defer newStats.close()
@@ -158,11 +143,9 @@ func TestClearAllByChannel(t *testing.T) {
 	if newStats.total.numRequests != 0 {
 		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.numRequests)
 	}
-	defaultRunner = nil
 }
 
 func TestSerializeStats(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.logRequest("http", "success", 1, 20)
 
@@ -185,12 +168,9 @@ func TestSerializeStats(t *testing.T) {
 	if first["num_failures"].(int64) != int64(0) {
 		t.Error("The num_failures is wrong, expected:", 0, "got:", first["num_failures"].(int64))
 	}
-
-	defaultRunner = nil
 }
 
 func TestSerializeErrors(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.logError("http", "failure", "500 error")
 	newStats.logError("http", "failure", "400 error")
@@ -214,11 +194,9 @@ func TestSerializeErrors(t *testing.T) {
 			}
 		}
 	}
-	defaultRunner = nil
 }
 
 func TestCollectReportData(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.logRequest("http", "success", 2, 30)
 	newStats.logError("http", "failure", "500 error")
@@ -233,11 +211,9 @@ func TestCollectReportData(t *testing.T) {
 	if _, ok := result["errors"]; !ok {
 		t.Error("Key stats not found")
 	}
-	defaultRunner = nil
 }
 
 func TestStatsStart(t *testing.T) {
-	defaultRunner = newRunner(nil, nil, "asap")
 	newStats := newRequestStats()
 	newStats.start()
 	defer newStats.close()
@@ -266,6 +242,4 @@ func TestStatsStart(t *testing.T) {
 		}
 	}
 end:
-
-	defaultRunner = nil
 }

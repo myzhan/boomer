@@ -6,31 +6,31 @@ import (
 )
 
 func TestStableRateLimiter(t *testing.T) {
-	rateLimiter := newStableRateLimiter(1, 10*time.Millisecond)
-	rateLimiter.start()
-	blocked := rateLimiter.acquire()
+	rateLimiter := NewStableRateLimiter(1, 10*time.Millisecond)
+	rateLimiter.Start()
+	blocked := rateLimiter.Acquire()
 	if blocked {
 		t.Error("Unexpected blocked by rate limiter")
 	}
-	blocked = rateLimiter.acquire()
+	blocked = rateLimiter.Acquire()
 	if !blocked {
 		t.Error("Should be blocked")
 	}
-	rateLimiter.stop()
+	rateLimiter.Stop()
 }
 
 func TestRampUpRateLimiter(t *testing.T) {
-	rateLimiter, _ := newRampUpRateLimiter(100, "10/200ms", 100*time.Millisecond)
-	rateLimiter.start()
+	rateLimiter, _ := NewRampUpRateLimiter(100, "10/200ms", 100*time.Millisecond)
+	rateLimiter.Start()
 	time.Sleep(110 * time.Millisecond)
 
 	for i := 0; i < 10; i++ {
-		blocked := rateLimiter.acquire()
+		blocked := rateLimiter.Acquire()
 		if blocked {
 			t.Error("Unexpected blocked by rate limiter")
 		}
 	}
-	blocked := rateLimiter.acquire()
+	blocked := rateLimiter.Acquire()
 	if !blocked {
 		t.Error("Should be blocked")
 	}
@@ -39,39 +39,39 @@ func TestRampUpRateLimiter(t *testing.T) {
 
 	// now, the threshold is 20
 	for i := 0; i < 20; i++ {
-		blocked := rateLimiter.acquire()
+		blocked := rateLimiter.Acquire()
 		if blocked {
 			t.Error("Unexpected blocked by rate limiter")
 		}
 	}
-	blocked = rateLimiter.acquire()
+	blocked = rateLimiter.Acquire()
 	if !blocked {
 		t.Error("Should be blocked")
 	}
 
-	rateLimiter.stop()
+	rateLimiter.Stop()
 }
 
 func TestParseRampUpRate(t *testing.T) {
-	rateLimiter := &rampUpRateLimiter{}
-	rampUpStep, rampUpPeroid, _ := rateLimiter.parseRampUpRate("100")
+	rateLimiter := &RampUpRateLimiter{}
+	rampUpStep, rampUpPeriod, _ := rateLimiter.parseRampUpRate("100")
 	if rampUpStep != 100 {
 		t.Error("Wrong rampUpStep, expected: 100, was:", rampUpStep)
 	}
-	if rampUpPeroid != time.Second {
-		t.Error("Wrong rampUpPeroid, expected: 1s, was:", rampUpPeroid)
+	if rampUpPeriod != time.Second {
+		t.Error("Wrong rampUpPeriod, expected: 1s, was:", rampUpPeriod)
 	}
-	rampUpStep, rampUpPeroid, _ = rateLimiter.parseRampUpRate("200/10s")
+	rampUpStep, rampUpPeriod, _ = rateLimiter.parseRampUpRate("200/10s")
 	if rampUpStep != 200 {
 		t.Error("Wrong rampUpStep, expected: 200, was:", rampUpStep)
 	}
-	if rampUpPeroid != 10*time.Second {
-		t.Error("Wrong rampUpPeroid, expected: 10s, was:", rampUpPeroid)
+	if rampUpPeriod != 10*time.Second {
+		t.Error("Wrong rampUpPeriod, expected: 10s, was:", rampUpPeriod)
 	}
 }
 
 func TestParseInvalidRampUpRate(t *testing.T) {
-	rateLimiter := &rampUpRateLimiter{}
+	rateLimiter := &RampUpRateLimiter{}
 
 	_, _, err := rateLimiter.parseRampUpRate("A/1m")
 	if err == nil || err != ErrParsingRampUpRate {

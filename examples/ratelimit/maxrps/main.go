@@ -21,16 +21,6 @@ func foo() {
 	globalBoomer.RecordSuccess("http", "foo", elapsed, int64(10))
 }
 
-func bar() {
-	start := boomer.Now()
-	time.Sleep(100 * time.Millisecond)
-	elapsed := boomer.Now() - start
-
-	// Report your test result as a failure, if you write it in python, it will looks like this
-	// events.request_failure.fire(request_type="udp", name="bar", response_time=100, exception=Exception("udp error"))
-	globalBoomer.RecordFailure("udp", "bar", elapsed, "udp error")
-}
-
 func waitForQuit() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -57,13 +47,11 @@ func main() {
 		Fn:     foo,
 	}
 
-	task2 := &boomer.Task{
-		Name:   "bar",
-		Weight: 30,
-		Fn:     bar,
-	}
+	ratelimiter := boomer.NewStableRateLimiter(100, time.Second)
+	log.Println("the max rps is limited to 100/s.")
+	globalBoomer.SetRateLimiter(ratelimiter)
 
-	globalBoomer.Run(task1, task2)
+	globalBoomer.Run(task1)
 
 	waitForQuit()
 	log.Println("shut down")

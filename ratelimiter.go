@@ -9,34 +9,53 @@ import (
 	"time"
 )
 
-// runner uses a rate limiter to put limits on task executions.
-type rateLimiter interface {
-	start()
-	acquire() bool
-	stop()
+// RateLimiter is used to put limits on task executions.
+type RateLimiter interface {
+	// Start is used to enable the rate limiter.
+	// It can be implemented as a noop if not needed.
+	Start()
+
+	// Acquire() is called before executing a task.Fn function.
+	// If Acquire() returns true, the task.Fn function will be executed.
+	// If Acquire() returns false, the task.Fn function won't be executed this time, but Acquire() will be called very soon.
+	// It works like:
+	// for {
+	//      blocked := rateLimiter.Acquire()
+	//      if !blocked {
+	//	        task.Fn()
+	//      }
+	// }
+	// Acquire() should block the caller until execution is allowed.
+	Acquire() bool
+
+	// Stop is used to disable the rate limiter.
+	// It can be implemented as a noop if not needed.
+	Stop()
 }
 
-// stableRateLimiter uses the token bucket algorithm.
+// A StableRateLimiter uses the token bucket algorithm.
 // the bucket is refilled according to the refill period, no burst is allowed.
-type stableRateLimiter struct {
+type StableRateLimiter struct {
 	threshold        int64
 	currentThreshold int64
-	refillPeroid     time.Duration
+	refillPeriod     time.Duration
 	broadcastChannel chan bool
 	quitChannel      chan bool
 }
 
-func newStableRateLimiter(threshold int64, refillPeroid time.Duration) (rateLimiter *stableRateLimiter) {
-	rateLimiter = &stableRateLimiter{
+// NewStableRateLimiter returns a StableRateLimiter.
+func NewStableRateLimiter(threshold int64, refillPeriod time.Duration) (rateLimiter *StableRateLimiter) {
+	rateLimiter = &StableRateLimiter{
 		threshold:        threshold,
 		currentThreshold: threshold,
-		refillPeroid:     refillPeroid,
+		refillPeriod:     refillPeriod,
 		broadcastChannel: make(chan bool),
 	}
 	return rateLimiter
 }
 
-func (limiter *stableRateLimiter) start() {
+// Start to refill the bucket periodically.
+func (limiter *StableRateLimiter) Start() {
 	limiter.quitChannel = make(chan bool)
 	quitChannel := limiter.quitChannel
 	go func() {
@@ -46,7 +65,7 @@ func (limiter *stableRateLimiter) start() {
 				return
 			default:
 				atomic.StoreInt64(&limiter.currentThreshold, limiter.threshold)
-				time.Sleep(limiter.refillPeroid)
+				time.Sleep(limiter.refillPeriod)
 				close(limiter.broadcastChannel)
 				limiter.broadcastChannel = make(chan bool)
 			}
@@ -54,7 +73,8 @@ func (limiter *stableRateLimiter) start() {
 	}()
 }
 
-func (limiter *stableRateLimiter) acquire() (blocked bool) {
+// Acquire a token from the bucket, returns true if the bucket is exhausted.
+func (limiter *StableRateLimiter) Acquire() (blocked bool) {
 	permit := atomic.AddInt64(&limiter.currentThreshold, -1)
 	if permit < 0 {
 		blocked = true
@@ -66,21 +86,22 @@ func (limiter *stableRateLimiter) acquire() (blocked bool) {
 	return blocked
 }
 
-func (limiter *stableRateLimiter) stop() {
+// Stop the rate limiter.
+func (limiter *StableRateLimiter) Stop() {
 	close(limiter.quitChannel)
 }
 
 // ErrParsingRampUpRate is the error returned if the format of rampUpRate is invalid.
 var ErrParsingRampUpRate = errors.New("ratelimiter: invalid format of rampUpRate, try \"1\" or \"1/1s\"")
 
-// rampUpRateLimiter uses the token bucket algorithm.
+// A RampUpRateLimiter uses the token bucket algorithm.
 // the threshold is updated according to the warm up rate.
 // the bucket is refilled according to the refill period, no burst is allowed.
-type rampUpRateLimiter struct {
+type RampUpRateLimiter struct {
 	maxThreshold     int64
 	nextThreshold    int64
 	currentThreshold int64
-	refillPeroid     time.Duration
+	refillPeriod     time.Duration
 	rampUpRate       string
 	rampUpStep       int64
 	rampUpPeroid     time.Duration
@@ -89,13 +110,15 @@ type rampUpRateLimiter struct {
 	quitChannel      chan bool
 }
 
-func newRampUpRateLimiter(maxThreshold int64, rampUpRate string, refillPeroid time.Duration) (rateLimiter *rampUpRateLimiter, err error) {
-	rateLimiter = &rampUpRateLimiter{
+// NewRampUpRateLimiter returns a RampUpRateLimiter.
+// Valid formats of rampUpRate are "1", "1/1s".
+func NewRampUpRateLimiter(maxThreshold int64, rampUpRate string, refillPeriod time.Duration) (rateLimiter *RampUpRateLimiter, err error) {
+	rateLimiter = &RampUpRateLimiter{
 		maxThreshold:     maxThreshold,
 		nextThreshold:    0,
 		currentThreshold: 0,
 		rampUpRate:       rampUpRate,
-		refillPeroid:     refillPeroid,
+		refillPeriod:     refillPeriod,
 		broadcastChannel: make(chan bool),
 	}
 	rateLimiter.rampUpStep, rateLimiter.rampUpPeroid, err = rateLimiter.parseRampUpRate(rateLimiter.rampUpRate)
@@ -105,7 +128,7 @@ func newRampUpRateLimiter(maxThreshold int64, rampUpRate string, refillPeroid ti
 	return rateLimiter, nil
 }
 
-func (limiter *rampUpRateLimiter) parseRampUpRate(rampUpRate string) (rampUpStep int64, rampUpPeroid time.Duration, err error) {
+func (limiter *RampUpRateLimiter) parseRampUpRate(rampUpRate string) (rampUpStep int64, rampUpPeroid time.Duration, err error) {
 	if strings.Contains(rampUpRate, "/") {
 		tmp := strings.Split(rampUpRate, "/")
 		if len(tmp) != 2 {
@@ -130,7 +153,8 @@ func (limiter *rampUpRateLimiter) parseRampUpRate(rampUpRate string) (rampUpStep
 	return rampUpStep, rampUpPeroid, nil
 }
 
-func (limiter *rampUpRateLimiter) start() {
+// Start to refill the bucket periodically.
+func (limiter *RampUpRateLimiter) Start() {
 	limiter.quitChannel = make(chan bool)
 	quitChannel := limiter.quitChannel
 	// bucket updater
@@ -141,7 +165,7 @@ func (limiter *rampUpRateLimiter) start() {
 				return
 			default:
 				atomic.StoreInt64(&limiter.currentThreshold, limiter.nextThreshold)
-				time.Sleep(limiter.refillPeroid)
+				time.Sleep(limiter.refillPeriod)
 				close(limiter.broadcastChannel)
 				limiter.broadcastChannel = make(chan bool)
 			}
@@ -169,7 +193,8 @@ func (limiter *rampUpRateLimiter) start() {
 	}()
 }
 
-func (limiter *rampUpRateLimiter) acquire() (blocked bool) {
+// Acquire a token from the bucket, returns true if the bucket is exhausted.
+func (limiter *RampUpRateLimiter) Acquire() (blocked bool) {
 	permit := atomic.AddInt64(&limiter.currentThreshold, -1)
 	if permit < 0 {
 		blocked = true
@@ -181,7 +206,8 @@ func (limiter *rampUpRateLimiter) acquire() (blocked bool) {
 	return blocked
 }
 
-func (limiter *rampUpRateLimiter) stop() {
+// Stop the rate limiter.
+func (limiter *RampUpRateLimiter) Stop() {
 	limiter.nextThreshold = 0
 	close(limiter.quitChannel)
 }

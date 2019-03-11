@@ -2,24 +2,9 @@ package boomer
 
 import (
 	"math"
-	"os"
 	"testing"
 	"time"
 )
-
-func TestInitBoomer(t *testing.T) {
-	initBoomer()
-	defer Events.Unsubscribe("request_success", legacySuccessHandler)
-	defer Events.Unsubscribe("request_failure", legacyFailureHandler)
-
-	defer func() {
-		err := recover()
-		if err == nil {
-			t.Error("It should panic if initBoomer is called more than once.")
-		}
-	}()
-	initBoomer()
-}
 
 func TestRunTasksForTest(t *testing.T) {
 	count := 0
@@ -36,6 +21,7 @@ func TestRunTasksForTest(t *testing.T) {
 		},
 	}
 	runTasks = "increaseCount,foobar"
+
 	runTasksForTest(taskA, taskWithoutName)
 
 	if count != 1 {
@@ -45,7 +31,7 @@ func TestRunTasksForTest(t *testing.T) {
 
 func TestCreateRatelimiter(t *testing.T) {
 	rateLimiter, _ := createRateLimiter(100, "-1")
-	if stableRateLimiter, ok := rateLimiter.(*stableRateLimiter); !ok {
+	if stableRateLimiter, ok := rateLimiter.(*StableRateLimiter); !ok {
 		t.Error("Expected stableRateLimiter")
 	} else {
 		if stableRateLimiter.threshold != 100 {
@@ -54,7 +40,7 @@ func TestCreateRatelimiter(t *testing.T) {
 	}
 
 	rateLimiter, _ = createRateLimiter(0, "1")
-	if rampUpRateLimiter, ok := rateLimiter.(*rampUpRateLimiter); !ok {
+	if rampUpRateLimiter, ok := rateLimiter.(*RampUpRateLimiter); !ok {
 		t.Error("Expected rampUpRateLimiter")
 	} else {
 		if rampUpRateLimiter.maxThreshold != math.MaxInt64 {
@@ -66,7 +52,7 @@ func TestCreateRatelimiter(t *testing.T) {
 	}
 
 	rateLimiter, _ = createRateLimiter(10, "2/2s")
-	if rampUpRateLimiter, ok := rateLimiter.(*rampUpRateLimiter); !ok {
+	if rampUpRateLimiter, ok := rateLimiter.(*RampUpRateLimiter); !ok {
 		t.Error("Expected rampUpRateLimiter")
 	} else {
 		if rampUpRateLimiter.maxThreshold != 10 {
@@ -84,28 +70,35 @@ func TestCreateRatelimiter(t *testing.T) {
 	}
 }
 
-func TestStartMemoryProfile(t *testing.T) {
-	if _, err := os.Stat("mem.pprof"); os.IsExist(err) {
-		os.Remove("mem.pprof")
+func TestRecordSuccess(t *testing.T) {
+	defaultBoomer = NewBoomer("127.0.0.1", 5557)
+	defaultBoomer.runner = newRunner(nil, nil, "asap")
+	RecordSuccess("http", "foo", int64(1), int64(10))
+
+	requestSuccessMsg := <-defaultBoomer.runner.stats.requestSuccessChannel
+	if requestSuccessMsg.requestType != "http" {
+		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
 	}
-	startMemoryProfile("mem.pprof", 2*time.Second)
-	time.Sleep(2100 * time.Millisecond)
-	if _, err := os.Stat("mem.pprof"); os.IsNotExist(err) {
-		t.Error("File mem.pprof is not generated")
-	} else {
-		os.Remove("mem.pprof")
+	if requestSuccessMsg.responseTime != int64(1) {
+		t.Error("Expected: 1, got:", requestSuccessMsg.responseTime)
 	}
+	defaultBoomer = nil
 }
 
-func TestStartCPUProfile(t *testing.T) {
-	if _, err := os.Stat("cpu.pprof"); os.IsExist(err) {
-		os.Remove("cpu.pprof")
+func TestRecordFailure(t *testing.T) {
+	defaultBoomer = NewBoomer("127.0.0.1", 5557)
+	defaultBoomer.runner = newRunner(nil, nil, "asap")
+	RecordFailure("udp", "bar", int64(2), "udp error")
+
+	requestFailureMsg := <-defaultBoomer.runner.stats.requestFailureChannel
+	if requestFailureMsg.requestType != "udp" {
+		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
 	}
-	startCPUProfile("cpu.pprof", 2*time.Second)
-	time.Sleep(2100 * time.Millisecond)
-	if _, err := os.Stat("cpu.pprof"); os.IsNotExist(err) {
-		t.Error("File cpu.pprof is not generated")
-	} else {
-		os.Remove("cpu.pprof")
+	if requestFailureMsg.responseTime != int64(2) {
+		t.Error("Expected: 2, got:", requestFailureMsg.responseTime)
 	}
+	if requestFailureMsg.error != "udp error" {
+		t.Error("Expected: udp error, got:", requestFailureMsg.error)
+	}
+	defaultBoomer = nil
 }

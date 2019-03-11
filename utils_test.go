@@ -4,6 +4,7 @@ import (
 	"os"
 	"regexp"
 	"testing"
+	"time"
 )
 
 func TestRound(t *testing.T) {
@@ -57,5 +58,31 @@ func TestNow(t *testing.T) {
 	now := Now()
 	if now < 1000000000000 || now > 2000000000000 {
 		t.Error("Invalid format of timestamp in milliseconds")
+	}
+}
+
+func TestStartMemoryProfile(t *testing.T) {
+	if _, err := os.Stat("mem.pprof"); os.IsExist(err) {
+		os.Remove("mem.pprof")
+	}
+	StartMemoryProfile("mem.pprof", 2*time.Second)
+	time.Sleep(2100 * time.Millisecond)
+	if _, err := os.Stat("mem.pprof"); os.IsNotExist(err) {
+		t.Error("File mem.pprof is not generated")
+	} else {
+		os.Remove("mem.pprof")
+	}
+}
+
+func TestStartCPUProfile(t *testing.T) {
+	if _, err := os.Stat("cpu.pprof"); os.IsExist(err) {
+		os.Remove("cpu.pprof")
+	}
+	StartCPUProfile("cpu.pprof", 2*time.Second)
+	time.Sleep(2100 * time.Millisecond)
+	if _, err := os.Stat("cpu.pprof"); os.IsNotExist(err) {
+		t.Error("File cpu.pprof is not generated")
+	} else {
+		os.Remove("cpu.pprof")
 	}
 }
