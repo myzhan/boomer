@@ -151,10 +151,19 @@ func Run(tasks ...*Task) {
 
 	defaultBoomer.Run(tasks...)
 
+	quitByMe := false
+	Events.Subscribe("boomer:quit", func() {
+		if !quitByMe {
+			log.Println("shut down")
+			os.Exit(0)
+		}
+	})
+
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
 	<-c
+	quitByMe = true
 	defaultBoomer.Quit()
 
 	log.Println("shut down")
