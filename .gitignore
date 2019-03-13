@@ -1,6 +1,9 @@
 # Intellij IDEA
 .idea
 
+# VS Code
+.vscode
+
 # dummy.py
 *.pyc
 
