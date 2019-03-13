@@ -6,6 +6,26 @@ import (
 	"time"
 )
 
+func TestSetHatchType(t *testing.T) {
+	b := NewBoomer("127.0.0.1", 5557)
+
+	if b.hatchType != "asap" {
+		t.Error("The default value of hatchType should be \"asap\"")
+	}
+
+	b.SetHatchType("unexpected")
+
+	if b.hatchType != "asap" {
+		t.Error("\"unexpected is not an valid hatchType\"")
+	}
+
+	b.SetHatchType("smooth")
+
+	if b.hatchType != "smooth" {
+		t.Error("hatchType should be changed to \"smooth\"")
+	}
+}
+
 func TestRunTasksForTest(t *testing.T) {
 	count := 0
 	taskA := &Task{

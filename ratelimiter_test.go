@@ -8,6 +8,8 @@ import (
 func TestStableRateLimiter(t *testing.T) {
 	rateLimiter := NewStableRateLimiter(1, 10*time.Millisecond)
 	rateLimiter.Start()
+	defer rateLimiter.Stop()
+
 	blocked := rateLimiter.Acquire()
 	if blocked {
 		t.Error("Unexpected blocked by rate limiter")
@@ -16,12 +18,13 @@ func TestStableRateLimiter(t *testing.T) {
 	if !blocked {
 		t.Error("Should be blocked")
 	}
-	rateLimiter.Stop()
 }
 
 func TestRampUpRateLimiter(t *testing.T) {
 	rateLimiter, _ := NewRampUpRateLimiter(100, "10/200ms", 100*time.Millisecond)
 	rateLimiter.Start()
+	defer rateLimiter.Stop()
+
 	time.Sleep(110 * time.Millisecond)
 
 	for i := 0; i < 10; i++ {
@@ -48,8 +51,6 @@ func TestRampUpRateLimiter(t *testing.T) {
 	if !blocked {
 		t.Error("Should be blocked")
 	}
-
-	rateLimiter.Stop()
 }
 
 func TestParseRampUpRate(t *testing.T) {
@@ -89,6 +90,11 @@ func TestParseInvalidRampUpRate(t *testing.T) {
 	}
 
 	_, _, err = rateLimiter.parseRampUpRate("200/1")
+	if err == nil || err != ErrParsingRampUpRate {
+		t.Error("Expected ErrParsingRampUpRate")
+	}
+
+	rateLimiter, err = NewRampUpRateLimiter(1, "200/1", time.Second)
 	if err == nil || err != ErrParsingRampUpRate {
 		t.Error("Expected ErrParsingRampUpRate")
 	}

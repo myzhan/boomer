@@ -185,6 +185,57 @@ func TestOnHatchMessage(t *testing.T) {
 	runner.onMessage(newMessage("stop", nil, runner.nodeID))
 }
 
+func TestOnQuitMessage(t *testing.T) {
+	runner := newRunner(nil, nil, "asap")
+	defer runner.close()
+	runner.client = newClient("localhost", 5557)
+	runner.state = stateInit
+
+	quitMessages := make(chan bool, 10)
+	receiver := func() {
+		quitMessages <- true
+	}
+	Events.Subscribe("boomer:quit", receiver)
+	defer Events.Unsubscribe("boomer:quit", receiver)
+	var ticker = time.NewTicker(20 * time.Millisecond)
+
+	runner.onMessage(newMessage("quit", nil, runner.nodeID))
+	select {
+	case <-quitMessages:
+		break
+	case <-ticker.C:
+		t.Error("Runner should fire boomer:quit message when it receives a quit message from the master.")
+		break
+	}
+
+	runner.state = stateRunning
+	runner.stopChannel = make(chan bool)
+	runner.onMessage(newMessage("quit", nil, runner.nodeID))
+	select {
+	case <-quitMessages:
+		break
+	case <-ticker.C:
+		t.Error("Runner should fire boomer:quit message when it receives a quit message from the master.")
+		break
+	}
+	if runner.state != stateInit {
+		t.Error("Runner's state should be stateInit")
+	}
+
+	runner.state = stateStopped
+	runner.onMessage(newMessage("quit", nil, runner.nodeID))
+	select {
+	case <-quitMessages:
+		break
+	case <-ticker.C:
+		t.Error("Runner should fire boomer:quit message when it receives a quit message from the master.")
+		break
+	}
+	if runner.state != stateInit {
+		t.Error("Runner's state should be stateInit")
+	}
+}
+
 func TestOnMessage(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {
