@@ -32,34 +32,34 @@ func worker() {
 			return
 		default:
 			// timeout after 1 second
-			start := boomer.Now()
+			start := time.Now()
 			conn.SetWriteDeadline(time.Now().Add(time.Second))
 			n, err := conn.Write([]byte("hello"))
-			elapsed := boomer.Now() - start
+			elapsed := time.Since(start)
 			if err != nil {
-				boomer.RecordFailure("tcp", "write failure", elapsed, err.Error())
+				boomer.RecordFailure("tcp", "write failure", elapsed.Nanoseconds()/int64(time.Millisecond), err.Error())
 				continue
 			}
 			// len("hello") == 5
 			if n != 5 {
-				boomer.RecordFailure("tcp", "write mismatch", elapsed, "write mismatch")
+				boomer.RecordFailure("tcp", "write mismatch", elapsed.Nanoseconds()/int64(time.Millisecond), "write mismatch")
 				continue
 			}
 
 			conn.SetReadDeadline(time.Now().Add(time.Second))
 			n, err = conn.Read(readBuff)
-			elapsed = boomer.Now() - start
+			elapsed = time.Since(start)
 			if err != nil {
-				boomer.RecordFailure("tcp", "read failure", elapsed, err.Error())
+				boomer.RecordFailure("tcp", "read failure", elapsed.Nanoseconds()/int64(time.Millisecond), err.Error())
 				continue
 			}
 
 			if n != 5 {
-				boomer.RecordFailure("tcp", "read mismatch", elapsed, "read mismatch")
+				boomer.RecordFailure("tcp", "read mismatch", elapsed.Nanoseconds()/int64(time.Millisecond), "read mismatch")
 				continue
 			}
 
-			boomer.RecordSuccess("tcp", "success", elapsed, 5)
+			boomer.RecordSuccess("tcp", "success", elapsed.Nanoseconds()/int64(time.Millisecond), 5)
 		}
 	}
 }

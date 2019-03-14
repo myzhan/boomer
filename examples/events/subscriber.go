@@ -10,11 +10,11 @@ import (
 // This is an example about how to subscribe to boomer's internal events.
 
 func foo() {
-	start := boomer.Now()
+	start := time.Now()
 	time.Sleep(100 * time.Millisecond)
-	elapsed := boomer.Now() - start
+	elapsed := time.Since(start)
 
-	boomer.RecordSuccess("http", "foo", elapsed, int64(10))
+	boomer.RecordSuccess("http", "foo", elapsed.Nanoseconds()/int64(time.Millisecond), int64(10))
 }
 
 func main() {

@@ -14,13 +14,13 @@ var globalClient *clientv3.Client
 func worker() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	start := boomer.Now()
+	start := time.Now()
 	resp, err := globalClient.Put(ctx, "hello", "boomer")
-	elapsed := boomer.Now() - start
+	elapsed := time.Since(start)
 	if err != nil {
-		boomer.RecordFailure("etcd", "put", elapsed, err.Error())
+		boomer.RecordFailure("etcd", "put", elapsed.Nanoseconds()/int64(time.Millisecond), err.Error())
 	} else {
-		boomer.RecordSuccess("etcd", "put", elapsed, int64(resp.Header.Size()))
+		boomer.RecordSuccess("etcd", "put", elapsed.Nanoseconds()/int64(time.Millisecond), int64(resp.Header.Size()))
 	}
 
 	cancel()

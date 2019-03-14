@@ -66,7 +66,7 @@ func newWorker(remoteAddr string) *worker {
 	go func() {
 		for req := range requests {
 			for n := 0; n < *number; n++ {
-				startTime := boomer.Now()
+				startTime := time.Now()
 				wn, err := conn.Write(req)
 				if err != nil {
 					boomer.RecordFailure(name, "udp-write", 0.0, err.Error())
@@ -74,8 +74,8 @@ func newWorker(remoteAddr string) *worker {
 				}
 
 				if *dontRead {
-					elapsed := boomer.Now() - startTime
-					boomer.RecordSuccess(name, "udp-write", elapsed, int64(wn))
+					elapsed := time.Since(startTime)
+					boomer.RecordSuccess(name, "udp-write", elapsed.Nanoseconds()/int64(time.Millisecond), int64(wn))
 				} else {
 					conn.SetReadDeadline(time.Now().Add(backendTimeout))
 					respLength, err := conn.Read(recvBuff)
@@ -83,8 +83,8 @@ func newWorker(remoteAddr string) *worker {
 						boomer.RecordFailure(name, "udp-read", 0.0, err.Error())
 						continue
 					}
-					elapsed := boomer.Now() - startTime
-					boomer.RecordSuccess(name, "udp-resp", elapsed, int64(respLength))
+					elapsed := time.Since(startTime)
+					boomer.RecordSuccess(name, "udp-resp", elapsed.Nanoseconds()/int64(time.Millisecond), int64(respLength))
 				}
 			}
 		}

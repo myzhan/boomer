@@ -34,27 +34,27 @@ func worker() {
 	}
 	resp := fasthttp.AcquireResponse()
 
-	startTime := boomer.Now()
+	startTime := time.Now()
 	err := client.DoTimeout(req, resp, timeout)
-	elapsed := boomer.Now() - startTime
+	elapsed := time.Since(startTime)
 
 	if err != nil {
 		switch err {
 		case fasthttp.ErrTimeout:
-			boomer.RecordFailure("http", "timeout", elapsed, err.Error())
+			boomer.RecordFailure("http", "timeout", elapsed.Nanoseconds()/int64(time.Millisecond), err.Error())
 		case fasthttp.ErrNoFreeConns:
 			// all Client.MaxConnsPerHost connections to the requested host are busy
 			// try to increase MaxConnsPerHost
-			boomer.RecordFailure("http", "connections all busy", elapsed, err.Error())
+			boomer.RecordFailure("http", "connections all busy", elapsed.Nanoseconds()/int64(time.Millisecond), err.Error())
 		default:
-			boomer.RecordFailure("http", "unknown", elapsed, err.Error())
+			boomer.RecordFailure("http", "unknown", elapsed.Nanoseconds()/int64(time.Millisecond), err.Error())
 		}
 		fasthttp.ReleaseRequest(req)
 		fasthttp.ReleaseResponse(resp)
 		return
 	}
 
-	boomer.RecordSuccess("http", strconv.Itoa(resp.StatusCode()), elapsed, int64(len(resp.Body())))
+	boomer.RecordSuccess("http", strconv.Itoa(resp.StatusCode()), elapsed.Nanoseconds()/int64(time.Millisecond), int64(len(resp.Body())))
 
 	if verbose {
 		log.Println(string(resp.Body()))

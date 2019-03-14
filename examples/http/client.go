@@ -32,7 +32,6 @@ var disableCompression bool
 var disableKeepalive bool
 
 func worker() {
-
 	request, err := http.NewRequest(method, url, bytes.NewBuffer(postBody))
 	if err != nil {
 		log.Fatalf("%v\n", err)
@@ -40,11 +39,9 @@ func worker() {
 
 	request.Header.Set("Content-Type", contentType)
 
-	startTime := boomer.Now()
-
+	startTime := time.Now()
 	response, err := client.Do(request)
-
-	elapsed := boomer.Now() - startTime
+	elapsed := time.Since(startTime)
 
 	if err != nil {
 		if verbose {
@@ -53,7 +50,7 @@ func worker() {
 		boomer.RecordFailure("http", "error", 0.0, err.Error())
 	} else {
 		boomer.RecordSuccess("http", strconv.Itoa(response.StatusCode),
-			elapsed, response.ContentLength)
+			elapsed.Nanoseconds()/int64(time.Millisecond), response.ContentLength)
 
 		if verbose {
 			body, err := ioutil.ReadAll(response.Body)
@@ -70,11 +67,9 @@ func worker() {
 
 		response.Body.Close()
 	}
-
 }
 
 func main() {
-
 	flag.StringVar(&method, "method", "GET", "HTTP method, one of GET, POST")
 	flag.StringVar(&url, "url", "", "URL")
 	flag.IntVar(&timeout, "timeout", 10, "Seconds to max. wait for each response")
