@@ -15,7 +15,7 @@ import (
 // Events is the global event bus instance.
 var Events = EventBus.New()
 
-var defaultBoomer *Boomer
+var defaultBoomer *Boomer = &Boomer{}
 
 // A Boomer is used to run tasks.
 // This type is exposed, so users can create and control a Boomer instance programmatically.
@@ -68,6 +68,9 @@ func (b *Boomer) Run(tasks ...*Task) {
 
 // RecordSuccess reports a success.
 func (b *Boomer) RecordSuccess(requestType, name string, responseTime int64, responseLength int64) {
+	if b.runner == nil {
+		return
+	}
 	b.runner.stats.requestSuccessChannel <- &requestSuccess{
 		requestType:    requestType,
 		name:           name,
@@ -78,6 +81,9 @@ func (b *Boomer) RecordSuccess(requestType, name string, responseTime int64, res
 
 // RecordFailure reports a failure.
 func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exception string) {
+	if b.runner == nil {
+		return
+	}
 	b.runner.stats.requestFailureChannel <- &requestFailure{
 		requestType:  requestType,
 		name:         name,
@@ -132,7 +138,6 @@ func Run(tasks ...*Task) {
 		return
 	}
 
-	defaultBoomer = NewBoomer(masterHost, masterPort)
 	initLegacyEventHandlers()
 
 	if memoryProfile != "" {
@@ -148,6 +153,8 @@ func Run(tasks ...*Task) {
 		log.Fatalf("%v\n", err)
 	}
 	defaultBoomer.SetRateLimiter(rateLimiter)
+	defaultBoomer.masterHost = masterHost
+	defaultBoomer.masterPort = masterPort
 	defaultBoomer.hatchType = hatchType
 
 	defaultBoomer.Run(tasks...)
