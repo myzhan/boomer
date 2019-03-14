@@ -100,14 +100,6 @@ func (b *Boomer) Quit() {
 		break
 	}
 
-	if b.runner.client != nil {
-		b.runner.client.close()
-	}
-
-	if b.runner.stats != nil {
-		b.runner.stats.close()
-	}
-
 	b.runner.close()
 }
 

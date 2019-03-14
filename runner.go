@@ -169,11 +169,11 @@ func (r *runner) stop() {
 }
 
 func (r *runner) close() {
-	if r.client != nil {
-		r.client.close()
-	}
 	if r.stats != nil {
 		r.stats.close()
+	}
+	if r.client != nil {
+		r.client.close()
 	}
 	close(r.shutdownSignal)
 }
