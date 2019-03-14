@@ -35,13 +35,21 @@ func waitForQuit() {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
+	quitByMe := false
 	go func() {
 		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		<-c
+		quitByMe = true
 		globalBoomer.Quit()
 		wg.Done()
 	}()
+
+	boomer.Events.Subscribe("boomer:quit", func() {
+		if !quitByMe {
+			wg.Done()
+		}
+	})
 
 	wg.Wait()
 }

@@ -90,16 +90,25 @@ func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exc
 func (b *Boomer) Quit() {
 	Events.Publish("boomer:quit")
 	var ticker = time.NewTicker(3 * time.Second)
-	for {
-		// wait for quit message is sent to master
-		select {
-		case <-b.runner.client.disconnectedChannel():
-			return
-		case <-ticker.C:
-			log.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
-			return
-		}
+
+	// wait for quit message is sent to master
+	select {
+	case <-b.runner.client.disconnectedChannel():
+		break
+	case <-ticker.C:
+		log.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
+		break
 	}
+
+	if b.runner.client != nil {
+		b.runner.client.close()
+	}
+
+	if b.runner.stats != nil {
+		b.runner.stats.close()
+	}
+
+	b.runner.close()
 }
 
 // Run tasks without connecting to the master.
