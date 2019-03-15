@@ -49,6 +49,20 @@ func TestRunTasksForTest(t *testing.T) {
 	}
 }
 
+func TestRunTasksWithBoomerReport(t *testing.T) {
+	taskA := &Task{
+		Name: "report",
+		Fn: func() {
+			// it should not panic.
+			RecordSuccess("http", "foo", int64(1), int64(10))
+			RecordFailure("udp", "bar", int64(1), "udp error")
+		},
+	}
+	runTasks = "report"
+
+	runTasksForTest(taskA)
+}
+
 func TestCreateRatelimiter(t *testing.T) {
 	rateLimiter, _ := createRateLimiter(100, "-1")
 	if stableRateLimiter, ok := rateLimiter.(*StableRateLimiter); !ok {

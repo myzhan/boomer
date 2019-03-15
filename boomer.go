@@ -15,7 +15,7 @@ import (
 // Events is the global event bus instance.
 var Events = EventBus.New()
 
-var defaultBoomer *Boomer = &Boomer{}
+var defaultBoomer = &Boomer{}
 
 // A Boomer is used to run tasks.
 // This type is exposed, so users can create and control a Boomer instance programmatically.
