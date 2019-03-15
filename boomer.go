@@ -63,7 +63,7 @@ func (b *Boomer) Run(tasks ...*Task) {
 	b.runner = newRunner(tasks, b.rateLimiter, b.hatchType)
 	b.runner.masterHost = b.masterHost
 	b.runner.masterPort = b.masterPort
-	b.runner.getReady()
+	b.runner.run()
 }
 
 // RecordSuccess reports a success.

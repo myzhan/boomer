@@ -21,29 +21,40 @@ const (
 	slaveReportInterval = 3 * time.Second
 )
 
-// Task is like locust's task.
-// when boomer receive start message, it will spawn several goroutines to run Task.Fn.
+// Task is like the "Locust object" in locust, the python version.
+// When boomer receives a start message from master, it will spawn several goroutines to run Task.Fn.
+// But users can keep some information in the python version, they can't do the same things in boomer.
+// Because Task.Fn is a pure function.
 type Task struct {
 	Weight int
 	Fn     func()
 	Name   string
 }
 
+// Runner is the most important component of boomer.
+// It connects to the master, spawns goroutines and collects stats.
 type runner struct {
-	tasks            []*Task
-	numClients       int32
-	hatchRate        int
-	stopChannel      chan bool
-	shutdownSignal   chan bool
-	state            string
-	masterHost       string
-	masterPort       int
+	nodeID     string
+	masterHost string
+	masterPort int
+	hatchType  string
+	state      string
+	tasks      []*Task
+
 	client           client
-	nodeID           string
-	hatchType        string
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
 	stats            *requestStats
+
+	numClients int32
+	hatchRate  int
+
+	// all running workers(goroutines) will select on this channel.
+	// close this channel will stop all running workers.
+	stopChan chan bool
+
+	// close this channel will stop all goroutines used in runner.
+	closeChan chan bool
 }
 
 func newRunner(tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *runner) {
@@ -52,7 +63,7 @@ func newRunner(tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *run
 		hatchType: hatchType,
 	}
 	r.nodeID = getNodeID()
-	r.shutdownSignal = make(chan bool)
+	r.closeChan = make(chan bool)
 
 	if rateLimiter != nil {
 		r.rateLimitEnabled = true
@@ -64,6 +75,8 @@ func newRunner(tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *run
 	return r
 }
 
+// safeRun runs fn and recovers from unexpected panics.
+// it prevents panics from Task.Fn crashing boomer.
 func (r *runner) safeRun(fn func()) {
 	defer func() {
 		// don't panic
@@ -80,7 +93,7 @@ func (r *runner) safeRun(fn func()) {
 	fn()
 }
 
-func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
+func (r *runner) spawnWorkers(spawnCount int, quit chan bool) {
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
 	weightSum := 0
@@ -135,11 +148,11 @@ func (r *runner) spawnGoRoutines(spawnCount int, quit chan bool) {
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
 	r.stats.clearStatsChannel <- true
-	r.stopChannel = make(chan bool)
+	r.stopChan = make(chan bool)
 
 	r.hatchRate = hatchRate
 	r.numClients = 0
-	go r.spawnGoRoutines(spawnCount, r.stopChannel)
+	go r.spawnWorkers(spawnCount, r.stopChan)
 }
 
 func (r *runner) hatchComplete() {
@@ -162,7 +175,7 @@ func (r *runner) stop() {
 
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
-	close(r.stopChannel)
+	close(r.stopChan)
 	if r.rateLimitEnabled {
 		r.rateLimiter.Stop()
 	}
@@ -175,7 +188,7 @@ func (r *runner) close() {
 	if r.client != nil {
 		r.client.close()
 	}
-	close(r.shutdownSignal)
+	close(r.closeChan)
 }
 
 func (r *runner) onHatchMessage(msg *message) {
@@ -202,7 +215,7 @@ func (r *runner) onHatchMessage(msg *message) {
 	}
 }
 
-// Runner acts as a state machine, and runs in one goroutine without any lock.
+// Runner acts as a state machine.
 func (r *runner) onMessage(msg *message) {
 	switch r.state {
 	case stateInit:
@@ -251,14 +264,14 @@ func (r *runner) startListener() {
 			select {
 			case msg := <-r.client.recvChannel():
 				r.onMessage(msg)
-			case <-r.shutdownSignal:
+			case <-r.closeChan:
 				return
 			}
 		}
 	}()
 }
 
-func (r *runner) getReady() {
+func (r *runner) run() {
 	r.state = stateInit
 	r.client = newClient(r.masterHost, r.masterPort)
 	r.client.connect()
@@ -281,7 +294,7 @@ func (r *runner) getReady() {
 				}
 				data["user_count"] = r.numClients
 				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
-			case <-r.shutdownSignal:
+			case <-r.closeChan:
 				return
 			}
 		}

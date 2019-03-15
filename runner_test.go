@@ -36,13 +36,13 @@ func TestSpawnGoRoutines(t *testing.T) {
 	runner.client = newClient("localhost", 5557)
 	runner.hatchRate = 10
 
-	runner.spawnGoRoutines(10, runner.stopChannel)
+	runner.spawnWorkers(10, runner.stopChan)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
 }
 
-func TestSpawnGoRoutinesSmoothly(t *testing.T) {
+func TestSpawnWorkersSmoothly(t *testing.T) {
 	taskA := &Task{
 		Weight: 10,
 		Fn: func() {
@@ -58,7 +58,7 @@ func TestSpawnGoRoutinesSmoothly(t *testing.T) {
 	runner.client = newClient("localhost", 5557)
 	runner.hatchRate = 10
 
-	go runner.spawnGoRoutines(10, runner.stopChannel)
+	go runner.spawnWorkers(10, runner.stopChan)
 	time.Sleep(2 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
@@ -125,7 +125,7 @@ func TestStop(t *testing.T) {
 	}
 	tasks := []*Task{taskA}
 	runner := newRunner(tasks, nil, "asap")
-	runner.stopChannel = make(chan bool)
+	runner.stopChan = make(chan bool)
 
 	stopped := false
 	handler := func() {
@@ -209,7 +209,7 @@ func TestOnQuitMessage(t *testing.T) {
 	}
 
 	runner.state = stateRunning
-	runner.stopChannel = make(chan bool)
+	runner.stopChan = make(chan bool)
 	runner.onMessage(newMessage("quit", nil, runner.nodeID))
 	select {
 	case <-quitMessages:
@@ -384,7 +384,7 @@ func TestGetReady(t *testing.T) {
 	defer r.close()
 	defer Events.Unsubscribe("boomer:quit", r.onQuiting)
 
-	r.getReady()
+	r.run()
 
 	msg := <-server.fromClient
 	if msg.Type != "client_ready" {
