@@ -13,7 +13,7 @@ func TestSafeRun(t *testing.T) {
 	})
 }
 
-func TestSpawnGoRoutines(t *testing.T) {
+func TestSpawnWorkers(t *testing.T) {
 	taskA := &Task{
 		Weight: 10,
 		Fn: func() {
@@ -188,7 +188,7 @@ func TestOnHatchMessage(t *testing.T) {
 func TestOnQuitMessage(t *testing.T) {
 	runner := newRunner(nil, nil, "asap")
 	defer runner.close()
-	runner.client = newClient("localhost", 5557)
+	runner.client = newClient("localhost", 5557, "test")
 	runner.state = stateInit
 
 	quitMessages := make(chan bool, 10)

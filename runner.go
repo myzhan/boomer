@@ -312,7 +312,7 @@ func (r *runner) run() {
 					"state": r.state,
 				}
 				r.client.sendChannel() <- newMessage("heartbeat", data, r.nodeID)
-			case <-r.shutdownSignal:
+			case <-r.closeChan:
 				return
 			}
 		}
