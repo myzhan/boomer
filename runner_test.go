@@ -33,7 +33,7 @@ func TestSpawnGoRoutines(t *testing.T) {
 	runner := newRunner(tasks, rateLimiter, "asap")
 	defer runner.close()
 
-	runner.client = newClient("localhost", 5557)
+	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.hatchRate = 10
 
 	runner.spawnWorkers(10, runner.stopChan)
@@ -55,7 +55,7 @@ func TestSpawnWorkersSmoothly(t *testing.T) {
 	runner := newRunner(tasks, nil, "smooth")
 	defer runner.close()
 
-	runner.client = newClient("localhost", 5557)
+	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.hatchRate = 10
 
 	go runner.spawnWorkers(10, runner.stopChan)
@@ -81,7 +81,7 @@ func TestHatchAndStop(t *testing.T) {
 	tasks := []*Task{taskA, taskB}
 	runner := newRunner(tasks, nil, "asap")
 	defer runner.close()
-	runner.client = newClient("localhost", 5557)
+	runner.client = newClient("localhost", 5557, runner.nodeID)
 
 	go func() {
 		var ticker = time.NewTicker(time.Second)
@@ -149,7 +149,7 @@ func TestOnHatchMessage(t *testing.T) {
 	}
 	runner := newRunner([]*Task{taskA}, nil, "asap")
 	defer runner.close()
-	runner.client = newClient("localhost", 5557)
+	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
 
 	workers, hatchRate := 0, 0
@@ -251,7 +251,7 @@ func TestOnMessage(t *testing.T) {
 
 	runner := newRunner(tasks, nil, "asap")
 	defer runner.close()
-	runner.client = newClient("localhost", 5557)
+	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
 
 	go func() {
@@ -373,7 +373,7 @@ func TestGetReady(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 6557
 
-	server := newTestServer(masterHost, masterPort+1, masterPort)
+	server := newTestServer(masterHost, masterPort)
 	defer server.close()
 	server.start()
 
