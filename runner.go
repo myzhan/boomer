@@ -241,6 +241,7 @@ func (r *runner) onMessage(msg *message) {
 			log.Println("Recv stop message from master, all the goroutines are stopped")
 			r.client.sendChannel() <- newMessage("client_stopped", nil, r.nodeID)
 			r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
+			r.state = stateInit
 		case "quit":
 			r.stop()
 			log.Println("Recv quit message from master, all the goroutines are stopped")
