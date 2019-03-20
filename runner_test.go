@@ -318,8 +318,8 @@ func TestOnMessage(t *testing.T) {
 
 	// stop all the workers
 	runner.onMessage(newMessage("stop", nil, runner.nodeID))
-	if runner.state != stateStopped {
-		t.Error("State of runner is not stopped, got", runner.state)
+	if runner.state != stateInit {
+		t.Error("State of runner is not init, got", runner.state)
 	}
 	msg = <-runner.client.sendChannel()
 	if msg.Type != "client_stopped" {
@@ -356,8 +356,8 @@ func TestOnMessage(t *testing.T) {
 
 	// stop all the workers
 	runner.onMessage(newMessage("stop", nil, runner.nodeID))
-	if runner.state != stateStopped {
-		t.Error("State of runner is not stopped, got", runner.state)
+	if runner.state != stateInit {
+		t.Error("State of runner is not init, got", runner.state)
 	}
 	msg = <-runner.client.sendChannel()
 	if msg.Type != "client_stopped" {
