@@ -74,6 +74,7 @@ func bar(){
 func main(){
     task1 := &boomer.Task{
         Name: "foo",
+        // The weight is used to distribute goroutines over multiple tasks.
         Weight: 10,
         Fn: foo,
     }

@@ -63,6 +63,7 @@ func bar(){
 
 func main(){
     task1 := &boomer.Task{
+        // 同时跑多个 tasks 的时候，Weight 字段用于分配 goroutines
         Weight: 10,
         Fn: foo,
     }
