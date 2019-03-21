@@ -109,7 +109,7 @@ func TestRecordSuccess(t *testing.T) {
 	defaultBoomer.runner = newRunner(nil, nil, "asap")
 	RecordSuccess("http", "foo", int64(1), int64(10))
 
-	requestSuccessMsg := <-defaultBoomer.runner.stats.requestSuccessChannel
+	requestSuccessMsg := <-defaultBoomer.runner.stats.requestSuccessChan
 	if requestSuccessMsg.requestType != "http" {
 		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
 	}
@@ -124,7 +124,7 @@ func TestRecordFailure(t *testing.T) {
 	defaultBoomer.runner = newRunner(nil, nil, "asap")
 	RecordFailure("udp", "bar", int64(2), "udp error")
 
-	requestFailureMsg := <-defaultBoomer.runner.stats.requestFailureChannel
+	requestFailureMsg := <-defaultBoomer.runner.stats.requestFailureChan
 	if requestFailureMsg.requestType != "udp" {
 		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
 	}

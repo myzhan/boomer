@@ -24,11 +24,11 @@ type requestStats struct {
 	total     *statsEntry
 	startTime int64
 
-	requestSuccessChannel chan *requestSuccess
-	requestFailureChannel chan *requestFailure
-	clearStatsChannel     chan bool
-	messageToRunner       chan map[string]interface{}
-	shutdownSignal        chan bool
+	requestSuccessChan chan *requestSuccess
+	requestFailureChan chan *requestFailure
+	clearStatsChan     chan bool
+	messageToRunnerChan    chan map[string]interface{}
+	shutdownChan       chan bool
 }
 
 func newRequestStats() (stats *requestStats) {
@@ -39,11 +39,11 @@ func newRequestStats() (stats *requestStats) {
 		entries: entries,
 		errors:  errors,
 	}
-	stats.requestSuccessChannel = make(chan *requestSuccess, 100)
-	stats.requestFailureChannel = make(chan *requestFailure, 100)
-	stats.clearStatsChannel = make(chan bool)
-	stats.messageToRunner = make(chan map[string]interface{}, 10)
-	stats.shutdownSignal = make(chan bool)
+	stats.requestSuccessChan = make(chan *requestSuccess, 100)
+	stats.requestFailureChan = make(chan *requestFailure, 100)
+	stats.clearStatsChan = make(chan bool)
+	stats.messageToRunnerChan = make(chan map[string]interface{}, 10)
+	stats.shutdownChan = make(chan bool)
 
 	stats.total = &statsEntry{
 		name:   "Total",
@@ -137,17 +137,17 @@ func (s *requestStats) start() {
 		var ticker = time.NewTicker(slaveReportInterval)
 		for {
 			select {
-			case m := <-s.requestSuccessChannel:
+			case m := <-s.requestSuccessChan:
 				s.logRequest(m.requestType, m.name, m.responseTime, m.responseLength)
-			case n := <-s.requestFailureChannel:
+			case n := <-s.requestFailureChan:
 				s.logError(n.requestType, n.name, n.error)
-			case <-s.clearStatsChannel:
+			case <-s.clearStatsChan:
 				s.clearAll()
 			case <-ticker.C:
 				data := s.collectReportData()
 				// send data to channel, no network IO in this goroutine
-				s.messageToRunner <- data
-			case <-s.shutdownSignal:
+				s.messageToRunnerChan <- data
+			case <-s.shutdownChan:
 				return
 			}
 		}
@@ -156,7 +156,7 @@ func (s *requestStats) start() {
 
 // close is used by unit tests to avoid leakage of goroutines
 func (s *requestStats) close() {
-	close(s.shutdownSignal)
+	close(s.shutdownChan)
 }
 
 type statsEntry struct {

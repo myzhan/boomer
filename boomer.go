@@ -71,7 +71,7 @@ func (b *Boomer) RecordSuccess(requestType, name string, responseTime int64, res
 	if b.runner == nil {
 		return
 	}
-	b.runner.stats.requestSuccessChannel <- &requestSuccess{
+	b.runner.stats.requestSuccessChan <- &requestSuccess{
 		requestType:    requestType,
 		name:           name,
 		responseTime:   responseTime,
@@ -84,7 +84,7 @@ func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exc
 	if b.runner == nil {
 		return
 	}
-	b.runner.stats.requestFailureChannel <- &requestFailure{
+	b.runner.stats.requestFailureChan <- &requestFailure{
 		requestType:  requestType,
 		name:         name,
 		responseTime: responseTime,

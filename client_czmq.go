@@ -19,7 +19,7 @@ type czmqSocketClient struct {
 	fromMaster             chan *message
 	toMaster               chan *message
 	disconnectedFromMaster chan bool
-	shutdownSignal         chan bool
+	shutdownChan           chan bool
 }
 
 func newClient(masterHost string, masterPort int, identity string) (client *czmqSocketClient) {
@@ -31,7 +31,7 @@ func newClient(masterHost string, masterPort int, identity string) (client *czmq
 		fromMaster:             make(chan *message, 100),
 		toMaster:               make(chan *message, 100),
 		disconnectedFromMaster: make(chan bool),
-		shutdownSignal:         make(chan bool),
+		shutdownChan:           make(chan bool),
 	}
 
 	return client
@@ -54,7 +54,7 @@ func (c *czmqSocketClient) connect() {
 }
 
 func (c *czmqSocketClient) close() {
-	close(c.shutdownSignal)
+	close(c.shutdownChan)
 	c.dealerSocket.Destroy()
 }
 
@@ -65,7 +65,7 @@ func (c *czmqSocketClient) recvChannel() chan *message {
 func (c *czmqSocketClient) recv() {
 	for {
 		select {
-		case <-c.shutdownSignal:
+		case <-c.shutdownChan:
 			return
 		default:
 			msg, _, err := c.dealerSocket.RecvFrame()
@@ -94,7 +94,7 @@ func (c *czmqSocketClient) sendChannel() chan *message {
 func (c *czmqSocketClient) send() {
 	for {
 		select {
-		case <-c.shutdownSignal:
+		case <-c.shutdownChan:
 			return
 		case msg := <-c.toMaster:
 			c.sendMessage(msg)

@@ -138,7 +138,7 @@ func TestClearAllByChannel(t *testing.T) {
 	newStats.start()
 	defer newStats.close()
 	newStats.logRequest("http", "success", 1, 20)
-	newStats.clearStatsChannel <- true
+	newStats.clearStatsChan <- true
 
 	if newStats.total.numRequests != 0 {
 		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.numRequests)
@@ -218,14 +218,14 @@ func TestStatsStart(t *testing.T) {
 	newStats.start()
 	defer newStats.close()
 
-	newStats.requestSuccessChannel <- &requestSuccess{
+	newStats.requestSuccessChan <- &requestSuccess{
 		requestType:    "http",
 		name:           "success",
 		responseTime:   2,
 		responseLength: 30,
 	}
 
-	newStats.requestFailureChannel <- &requestFailure{
+	newStats.requestFailureChan <- &requestFailure{
 		requestType:  "http",
 		name:         "failure",
 		responseTime: 1,
@@ -237,7 +237,7 @@ func TestStatsStart(t *testing.T) {
 		select {
 		case <-ticker.C:
 			t.Error("Timeout waiting for stats reports to runner")
-		case <-newStats.messageToRunner:
+		case <-newStats.messageToRunnerChan:
 			goto end
 		}
 	}

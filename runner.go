@@ -30,8 +30,8 @@ type Task struct {
 	// The weight is used to distribute goroutines over multiple tasks.
 	Weight int
 	// Fn is called by the goroutines allocated to this task, in a loop.
-	Fn     func()
-	Name   string
+	Fn   func()
+	Name string
 }
 
 // Runner is the most important component of boomer.
@@ -150,7 +150,7 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool) {
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate int) {
-	r.stats.clearStatsChannel <- true
+	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
 	r.hatchRate = hatchRate
@@ -292,7 +292,7 @@ func (r *runner) run() {
 	go func() {
 		for {
 			select {
-			case data := <-r.stats.messageToRunner:
+			case data := <-r.stats.messageToRunnerChan:
 				if r.state == stateInit || r.state == stateStopped {
 					continue
 				}

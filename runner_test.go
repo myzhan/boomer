@@ -90,7 +90,7 @@ func TestHatchAndStop(t *testing.T) {
 			case <-ticker.C:
 				t.Error("Timeout waiting for message sent by startHatching()")
 				return
-			case <-runner.stats.clearStatsChannel:
+			case <-runner.stats.clearStatsChan:
 				// just quit
 				return
 			}
@@ -164,7 +164,7 @@ func TestOnHatchMessage(t *testing.T) {
 		// consumes clearStatsChannel
 		for {
 			select {
-			case <-runner.stats.clearStatsChannel:
+			case <-runner.stats.clearStatsChan:
 				return
 			}
 		}
@@ -259,7 +259,7 @@ func TestOnMessage(t *testing.T) {
 		count := 0
 		for {
 			select {
-			case <-runner.stats.clearStatsChannel:
+			case <-runner.stats.clearStatsChan:
 				// receive two hatch message from master
 				if count >= 2 {
 					return
@@ -395,7 +395,7 @@ func TestGetReady(t *testing.T) {
 	// it's not really running
 	r.state = stateRunning
 	data := make(map[string]interface{})
-	r.stats.messageToRunner <- data
+	r.stats.messageToRunnerChan <- data
 
 	msg = <-server.fromClient
 	if msg.Type != "stats" {

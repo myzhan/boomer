@@ -24,7 +24,7 @@ type gomqSocketClient struct {
 	fromMaster             chan *message
 	toMaster               chan *message
 	disconnectedFromMaster chan bool
-	shutdownSignal         chan bool
+	shutdownChan           chan bool
 }
 
 func newClient(masterHost string, masterPort int, identity string) (client *gomqSocketClient) {
@@ -36,7 +36,7 @@ func newClient(masterHost string, masterPort int, identity string) (client *gomq
 		fromMaster:             make(chan *message, 100),
 		toMaster:               make(chan *message, 100),
 		disconnectedFromMaster: make(chan bool),
-		shutdownSignal:         make(chan bool),
+		shutdownChan:           make(chan bool),
 	}
 	return client
 }
@@ -60,7 +60,7 @@ func (c *gomqSocketClient) connect() {
 }
 
 func (c *gomqSocketClient) close() {
-	close(c.shutdownSignal)
+	close(c.shutdownChan)
 }
 
 func (c *gomqSocketClient) recvChannel() chan *message {
@@ -104,7 +104,7 @@ func (c *gomqSocketClient) sendChannel() chan *message {
 func (c *gomqSocketClient) send() {
 	for {
 		select {
-		case <-c.shutdownSignal:
+		case <-c.shutdownChan:
 			return
 		case msg := <-c.toMaster:
 			c.sendMessage(msg)
