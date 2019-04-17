@@ -98,6 +98,12 @@ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
+Otherwise, start the master using the included `dummy.py`.
+
+```bash
+locust --master -f dummy.py
+```
+
 --max-rps means the max count that all the Task.Fn can be called in one second.
 
 The result may be misleading if you call boomer.RecordSuccess() more than once in Task.Fn.
