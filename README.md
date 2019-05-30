@@ -1,9 +1,10 @@
-# boomer [![Build Status](https://travis-ci.org/myzhan/boomer.svg?branch=master)](https://travis-ci.org/myzhan/boomer) [![Go Report Card](https://goreportcard.com/badge/github.com/myzhan/boomer)](https://goreportcard.com/report/github.com/myzhan/boomer) [![Coverage Status](https://codecov.io/gh/myzhan/boomer/branch/master/graph/badge.svg)](https://codecov.io/gh/myzhan/boomer)
+# boomer [![Build Status](https://travis-ci.org/myzhan/boomer.svg?branch=master)](https://travis-ci.org/myzhan/boomer) [![Go Report Card](https://goreportcard.com/badge/github.com/myzhan/boomer)](https://goreportcard.com/report/github.com/myzhan/boomer) [![Coverage Status](https://codecov.io/gh/myzhan/boomer/branch/master/graph/badge.svg)](https://codecov.io/gh/myzhan/boomer) [![Documentation Status](https://readthedocs.org/projects/boomer/badge/?version=latest)](https://boomer.readthedocs.io/en/latest/?badge=latest)
 
 ## Links
 
 * Locust Website: <a href="http://locust.io">locust.io</a>
 * Locust Documentation: <a href="http://docs.locust.io">docs.locust.io</a>
+* Boomer Documentation: <a href="https://boomer.readthedocs.io">boomer.readthedocs.io</a>
 
 ## Description
 
