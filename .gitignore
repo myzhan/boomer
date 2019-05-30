@@ -13,3 +13,6 @@ coverage.txt
 # profiling file
 mem.pprof
 cpu.pprof
+
+# sphinx build
+docs/build
