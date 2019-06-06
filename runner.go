@@ -235,7 +235,6 @@ func (r *localRunner) run() {
 			case <-r.closeChan:
 				Events.Publish("boomer:quit")
 				r.stop()
-				r.close()
 				wg.Done()
 				return
 			}
