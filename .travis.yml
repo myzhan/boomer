@@ -12,6 +12,7 @@ install:
   - go get github.com/ugorji/go/codec
   - go get github.com/zeromq/gomq
   - go get github.com/google/uuid
+  - go get github.com/olekukonko/tablewriter
 
 script:
   - go test -timeout 1m -coverprofile=coverage.txt -covermode=atomic
