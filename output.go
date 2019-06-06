@@ -46,7 +46,7 @@ func getMedianResponseTime(numRequests int64, responseTimes map[int64]int64) int
 		for k := range responseTimes {
 			sortedKeys = append(sortedKeys, k)
 		}
-		sort.SliceStable(sortedKeys, func(i, j int) bool {
+		sort.Slice(sortedKeys, func(i, j int) bool {
 			return sortedKeys[i] < sortedKeys[j]
 		})
 		for _, k := range sortedKeys {
