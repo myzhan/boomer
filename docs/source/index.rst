@@ -13,6 +13,8 @@ Boomer Documentation
     what-is-boomer
     installation
     quickstart
+    running-mode
+    custom-output
 
 
 .. toctree::

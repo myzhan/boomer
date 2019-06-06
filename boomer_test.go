@@ -105,11 +105,13 @@ func TestCreateRatelimiter(t *testing.T) {
 }
 
 func TestRecordSuccess(t *testing.T) {
-	defaultBoomer = NewBoomer("127.0.0.1", 5557)
-	defaultBoomer.runner = newRunner(nil, nil, "asap")
+	masterHost := "127.0.0.1"
+	masterPort := 5557
+	defaultBoomer = NewBoomer(masterHost, masterPort)
+	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil, "asap")
 	RecordSuccess("http", "foo", int64(1), int64(10))
 
-	requestSuccessMsg := <-defaultBoomer.runner.stats.requestSuccessChan
+	requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
 	if requestSuccessMsg.requestType != "http" {
 		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
 	}
@@ -120,11 +122,13 @@ func TestRecordSuccess(t *testing.T) {
 }
 
 func TestRecordFailure(t *testing.T) {
-	defaultBoomer = NewBoomer("127.0.0.1", 5557)
-	defaultBoomer.runner = newRunner(nil, nil, "asap")
+	masterHost := "127.0.0.1"
+	masterPort := 5557
+	defaultBoomer = NewBoomer(masterHost, masterPort)
+	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil, "asap")
 	RecordFailure("udp", "bar", int64(2), "udp error")
 
-	requestFailureMsg := <-defaultBoomer.runner.stats.requestFailureChan
+	requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan
 	if requestFailureMsg.requestType != "udp" {
 		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
 	}

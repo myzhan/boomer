@@ -17,6 +17,16 @@ var Events = EventBus.New()
 
 var defaultBoomer = &Boomer{}
 
+// Mode is the running mode of boomer, both standalone and distributed are supported.
+type Mode int
+
+const (
+	// DistributedMode requires connecting to a master.
+	DistributedMode Mode = iota
+	// StandaloneMode will run without a master.
+	StandaloneMode
+)
+
 // A Boomer is used to run tasks.
 // This type is exposed, so users can create and control a Boomer instance programmatically.
 type Boomer struct {
@@ -24,8 +34,13 @@ type Boomer struct {
 	masterPort int
 
 	hatchType   string
+	mode        Mode
 	rateLimiter RateLimiter
-	runner      *runner
+	slaveRunner *slaveRunner
+
+	localRunner *localRunner
+	hatchCount  int
+	hatchRate   int
 }
 
 // NewBoomer returns a new Boomer.
@@ -34,6 +49,17 @@ func NewBoomer(masterHost string, masterPort int) *Boomer {
 		masterHost: masterHost,
 		masterPort: masterPort,
 		hatchType:  "asap",
+		mode:       DistributedMode,
+	}
+}
+
+// NewStandaloneBoomer returns a new Boomer, which can run without master.
+func NewStandaloneBoomer(hatchCount int, hatchRate int) *Boomer {
+	return &Boomer{
+		hatchType:  "asap",
+		hatchCount: hatchCount,
+		hatchRate:  hatchRate,
+		mode:       StandaloneMode,
 	}
 }
 
@@ -54,41 +80,87 @@ func (b *Boomer) SetHatchType(hatchType string) {
 	b.hatchType = hatchType
 }
 
-func (b *Boomer) setRunner(runner *runner) {
-	b.runner = runner
+// SetMode only accepts boomer.DistributedMode and boomer.StandaloneMode.
+func (b *Boomer) SetMode(mode Mode) {
+	switch mode {
+	case DistributedMode:
+		b.mode = DistributedMode
+	case StandaloneMode:
+		b.mode = StandaloneMode
+	default:
+		log.Println("Invalid mode, ignored!")
+	}
+}
+
+// AddOutput accepts outputs which implements the boomer.Output interface.
+func (b *Boomer) AddOutput(o Output) {
+	switch b.mode {
+	case DistributedMode:
+		b.slaveRunner.addOutput(o)
+	case StandaloneMode:
+		b.localRunner.addOutput(o)
+	default:
+		log.Println("Invalid mode, AddOutput ignored!")
+	}
 }
 
 // Run accepts a slice of Task and connects to the locust master.
 func (b *Boomer) Run(tasks ...*Task) {
-	b.runner = newRunner(tasks, b.rateLimiter, b.hatchType)
-	b.runner.masterHost = b.masterHost
-	b.runner.masterPort = b.masterPort
-	b.runner.run()
+	switch b.mode {
+	case DistributedMode:
+		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter, b.hatchType)
+		b.slaveRunner.run()
+	case StandaloneMode:
+		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.hatchCount, b.hatchType, b.hatchRate)
+		b.localRunner.run()
+	default:
+		log.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")
+	}
 }
 
 // RecordSuccess reports a success.
 func (b *Boomer) RecordSuccess(requestType, name string, responseTime int64, responseLength int64) {
-	if b.runner == nil {
+	if b.localRunner == nil && b.slaveRunner == nil {
 		return
 	}
-	b.runner.stats.requestSuccessChan <- &requestSuccess{
-		requestType:    requestType,
-		name:           name,
-		responseTime:   responseTime,
-		responseLength: responseLength,
+	switch b.mode {
+	case DistributedMode:
+		b.slaveRunner.stats.requestSuccessChan <- &requestSuccess{
+			requestType:    requestType,
+			name:           name,
+			responseTime:   responseTime,
+			responseLength: responseLength,
+		}
+	case StandaloneMode:
+		b.localRunner.stats.requestSuccessChan <- &requestSuccess{
+			requestType:    requestType,
+			name:           name,
+			responseTime:   responseTime,
+			responseLength: responseLength,
+		}
 	}
 }
 
 // RecordFailure reports a failure.
 func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exception string) {
-	if b.runner == nil {
+	if b.localRunner == nil && b.slaveRunner == nil {
 		return
 	}
-	b.runner.stats.requestFailureChan <- &requestFailure{
-		requestType:  requestType,
-		name:         name,
-		responseTime: responseTime,
-		error:        exception,
+	switch b.mode {
+	case DistributedMode:
+		b.slaveRunner.stats.requestFailureChan <- &requestFailure{
+			requestType:  requestType,
+			name:         name,
+			responseTime: responseTime,
+			error:        exception,
+		}
+	case StandaloneMode:
+		b.localRunner.stats.requestFailureChan <- &requestFailure{
+			requestType:  requestType,
+			name:         name,
+			responseTime: responseTime,
+			error:        exception,
+		}
 	}
 }
 
@@ -97,16 +169,20 @@ func (b *Boomer) Quit() {
 	Events.Publish("boomer:quit")
 	var ticker = time.NewTicker(3 * time.Second)
 
-	// wait for quit message is sent to master
-	select {
-	case <-b.runner.client.disconnectedChannel():
-		break
-	case <-ticker.C:
-		log.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
-		break
+	switch b.mode {
+	case DistributedMode:
+		// wait for quit message is sent to master
+		select {
+		case <-b.slaveRunner.client.disconnectedChannel():
+			break
+		case <-ticker.C:
+			log.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
+			break
+		}
+		b.slaveRunner.close()
+	case StandaloneMode:
+		b.localRunner.close()
 	}
-
-	b.runner.close()
 }
 
 // Run tasks without connecting to the master.

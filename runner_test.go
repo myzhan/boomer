@@ -7,7 +7,7 @@ import (
 )
 
 func TestSafeRun(t *testing.T) {
-	runner := newRunner(nil, nil, "asap")
+	runner := &runner{}
 	runner.safeRun(func() {
 		panic("Runner will catch this panic")
 	})
@@ -30,13 +30,13 @@ func TestSpawnWorkers(t *testing.T) {
 	}
 	tasks := []*Task{taskA, taskB}
 	rateLimiter := NewStableRateLimiter(100, time.Second)
-	runner := newRunner(tasks, rateLimiter, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, rateLimiter, "asap")
 	defer runner.close()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.hatchRate = 10
 
-	runner.spawnWorkers(10, runner.stopChan)
+	runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
@@ -52,13 +52,13 @@ func TestSpawnWorkersSmoothly(t *testing.T) {
 	}
 	tasks := []*Task{taskA}
 
-	runner := newRunner(tasks, nil, "smooth")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil, "smooth")
 	defer runner.close()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.hatchRate = 10
 
-	go runner.spawnWorkers(10, runner.stopChan)
+	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
 	time.Sleep(2 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
@@ -79,7 +79,7 @@ func TestHatchAndStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newRunner(tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
@@ -97,7 +97,7 @@ func TestHatchAndStop(t *testing.T) {
 		}
 	}()
 
-	runner.startHatching(10, 10)
+	runner.startHatching(10, 10, runner.hatchComplete)
 	// wait for spawning goroutines
 	time.Sleep(100 * time.Millisecond)
 	if runner.numClients != 10 {
@@ -124,7 +124,7 @@ func TestStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA}
-	runner := newRunner(tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
 	runner.stopChan = make(chan bool)
 
 	stopped := false
@@ -147,7 +147,7 @@ func TestOnHatchMessage(t *testing.T) {
 			time.Sleep(time.Second)
 		},
 	}
-	runner := newRunner([]*Task{taskA}, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil, "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
@@ -186,7 +186,7 @@ func TestOnHatchMessage(t *testing.T) {
 }
 
 func TestOnQuitMessage(t *testing.T) {
-	runner := newRunner(nil, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, nil, nil, "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, "test")
 	runner.state = stateInit
@@ -249,7 +249,7 @@ func TestOnMessage(t *testing.T) {
 	}
 	tasks := []*Task{taskA, taskB}
 
-	runner := newRunner(tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
@@ -378,9 +378,7 @@ func TestGetReady(t *testing.T) {
 	server.start()
 
 	rateLimiter := NewStableRateLimiter(100, time.Second)
-	r := newRunner(nil, rateLimiter, "asap")
-	r.masterHost = masterHost
-	r.masterPort = masterPort
+	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter, "asap")
 	defer r.close()
 	defer Events.Unsubscribe("boomer:quit", r.onQuiting)
 

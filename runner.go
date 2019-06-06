@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -22,29 +23,11 @@ const (
 	heartbeatInterval   = 1 * time.Second
 )
 
-// Task is like the "Locust object" in locust, the python version.
-// When boomer receives a start message from master, it will spawn several goroutines to run Task.Fn.
-// But users can keep some information in the python version, they can't do the same things in boomer.
-// Because Task.Fn is a pure function.
-type Task struct {
-	// The weight is used to distribute goroutines over multiple tasks.
-	Weight int
-	// Fn is called by the goroutines allocated to this task, in a loop.
-	Fn   func()
-	Name string
-}
-
-// Runner is the most important component of boomer.
-// It connects to the master, spawns goroutines and collects stats.
 type runner struct {
-	nodeID     string
-	masterHost string
-	masterPort int
-	hatchType  string
-	state      string
-	tasks      []*Task
+	hatchType string
+	state     string
+	tasks     []*Task
 
-	client           client
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
 	stats            *requestStats
@@ -58,24 +41,8 @@ type runner struct {
 
 	// close this channel will stop all goroutines used in runner.
 	closeChan chan bool
-}
 
-func newRunner(tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *runner) {
-	r = &runner{
-		tasks:     tasks,
-		hatchType: hatchType,
-	}
-	r.nodeID = getNodeID()
-	r.closeChan = make(chan bool)
-
-	if rateLimiter != nil {
-		r.rateLimitEnabled = true
-		r.rateLimiter = rateLimiter
-	}
-
-	r.stats = newRequestStats()
-
-	return r
+	outputs []Output
 }
 
 // safeRun runs fn and recovers from unexpected panics.
@@ -96,14 +63,69 @@ func (r *runner) safeRun(fn func()) {
 	fn()
 }
 
-func (r *runner) spawnWorkers(spawnCount int, quit chan bool) {
-	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
+func (r *runner) addOutput(o Output) {
+	r.outputs = append(r.outputs, o)
+}
 
-	weightSum := 0
+func (r *runner) outputOnStart() {
+	size := len(r.outputs)
+	if size == 0 {
+		return
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(size)
+	for _, output := range r.outputs {
+		go func(o Output) {
+			o.OnStart()
+			wg.Done()
+		}(output)
+	}
+	wg.Wait()
+}
+
+func (r *runner) outputOnEevent(data map[string]interface{}) {
+	size := len(r.outputs)
+	if size == 0 {
+		return
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(size)
+	for _, output := range r.outputs {
+		go func(o Output) {
+			o.OnEvent(data)
+			wg.Done()
+		}(output)
+	}
+	wg.Wait()
+}
+
+func (r *runner) outputOnStop() {
+	size := len(r.outputs)
+	if size == 0 {
+		return
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(size)
+	for _, output := range r.outputs {
+		go func(o Output) {
+			o.OnStop()
+			wg.Done()
+		}(output)
+	}
+	wg.Wait()
+}
+
+func (r *runner) getWeightSum() (weightSum int) {
 	for _, task := range r.tasks {
 		weightSum += task.Weight
 	}
+	return weightSum
+}
 
+func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
+	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
+
+	weightSum := r.getWeightSum()
 	for _, task := range r.tasks {
 		percent := float64(task.Weight) / float64(weightSum)
 		amount := int(round(float64(spawnCount)*percent, .5, 0))
@@ -146,29 +168,19 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool) {
 		}
 	}
 
-	r.hatchComplete()
+	if hatchCompleteFunc != nil {
+		hatchCompleteFunc()
+	}
 }
 
-func (r *runner) startHatching(spawnCount int, hatchRate int) {
+func (r *runner) startHatching(spawnCount int, hatchRate int, hatchCompleteFunc func()) {
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
 	r.hatchRate = hatchRate
 	r.numClients = 0
-	go r.spawnWorkers(spawnCount, r.stopChan)
-}
 
-func (r *runner) hatchComplete() {
-	data := make(map[string]interface{})
-	data["count"] = r.numClients
-	r.client.sendChannel() <- newMessage("hatch_complete", data, r.nodeID)
-	r.state = stateRunning
-}
-
-func (r *runner) onQuiting() {
-	if r.state != stateQuitting {
-		r.client.sendChannel() <- newMessage("quit", nil, r.nodeID)
-	}
+	go r.spawnWorkers(spawnCount, r.stopChan, hatchCompleteFunc)
 }
 
 func (r *runner) stop() {
@@ -184,7 +196,109 @@ func (r *runner) stop() {
 	}
 }
 
-func (r *runner) close() {
+type localRunner struct {
+	runner
+
+	hatchCount int
+}
+
+func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchType string, hatchRate int) (r *localRunner) {
+	r = &localRunner{}
+	r.tasks = tasks
+	r.hatchType = hatchType
+	r.hatchRate = hatchRate
+	r.hatchCount = hatchCount
+	r.closeChan = make(chan bool)
+	r.addOutput(NewConsoleOutput())
+
+	if rateLimiter != nil {
+		r.rateLimitEnabled = true
+		r.rateLimiter = rateLimiter
+	}
+
+	r.stats = newRequestStats()
+	return r
+}
+
+func (r *localRunner) run() {
+	r.state = stateInit
+	r.stats.start()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		for {
+			select {
+			case data := <-r.stats.messageToRunnerChan:
+				data["user_count"] = r.numClients
+				r.outputOnEevent(data)
+			case <-r.closeChan:
+				Events.Publish("boomer:quit")
+				r.stop()
+				r.close()
+				wg.Done()
+				return
+			}
+		}
+	}()
+
+	if r.rateLimitEnabled {
+		r.rateLimiter.Start()
+	}
+	r.startHatching(r.hatchCount, r.hatchRate, nil)
+
+	wg.Wait()
+}
+
+func (r *localRunner) close() {
+	if r.stats != nil {
+		r.stats.close()
+	}
+	close(r.closeChan)
+}
+
+// SlaveRunner connects to the master, spawns goroutines and collects stats.
+type slaveRunner struct {
+	runner
+
+	nodeID     string
+	masterHost string
+	masterPort int
+	client     client
+}
+
+func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *slaveRunner) {
+	r = &slaveRunner{}
+	r.masterHost = masterHost
+	r.masterPort = masterPort
+	r.tasks = tasks
+	r.hatchType = hatchType
+	r.nodeID = getNodeID()
+	r.closeChan = make(chan bool)
+
+	if rateLimiter != nil {
+		r.rateLimitEnabled = true
+		r.rateLimiter = rateLimiter
+	}
+
+	r.stats = newRequestStats()
+	return r
+}
+
+func (r *slaveRunner) hatchComplete() {
+	data := make(map[string]interface{})
+	data["count"] = r.numClients
+	r.client.sendChannel() <- newMessage("hatch_complete", data, r.nodeID)
+	r.state = stateRunning
+}
+
+func (r *slaveRunner) onQuiting() {
+	if r.state != stateQuitting {
+		r.client.sendChannel() <- newMessage("quit", nil, r.nodeID)
+	}
+}
+
+func (r *slaveRunner) close() {
 	if r.stats != nil {
 		r.stats.close()
 	}
@@ -194,7 +308,7 @@ func (r *runner) close() {
 	close(r.closeChan)
 }
 
-func (r *runner) onHatchMessage(msg *message) {
+func (r *slaveRunner) onHatchMessage(msg *message) {
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
@@ -214,12 +328,12 @@ func (r *runner) onHatchMessage(msg *message) {
 		if r.rateLimitEnabled {
 			r.rateLimiter.Start()
 		}
-		r.startHatching(workers, hatchRate)
+		r.startHatching(workers, hatchRate, r.hatchComplete)
 	}
 }
 
 // Runner acts as a state machine.
-func (r *runner) onMessage(msg *message) {
+func (r *slaveRunner) onMessage(msg *message) {
 	switch r.state {
 	case stateInit:
 		switch msg.Type {
@@ -262,7 +376,7 @@ func (r *runner) onMessage(msg *message) {
 	}
 }
 
-func (r *runner) startListener() {
+func (r *slaveRunner) startListener() {
 	go func() {
 		for {
 			select {
@@ -275,7 +389,7 @@ func (r *runner) startListener() {
 	}()
 }
 
-func (r *runner) run() {
+func (r *slaveRunner) run() {
 	r.state = stateInit
 	r.client = newClient(r.masterHost, r.masterPort, r.nodeID)
 	r.client.connect()
@@ -298,6 +412,7 @@ func (r *runner) run() {
 				}
 				data["user_count"] = r.numClients
 				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
+				r.outputOnEevent(data)
 			case <-r.closeChan:
 				return
 			}

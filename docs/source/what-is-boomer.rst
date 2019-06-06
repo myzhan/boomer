@@ -7,8 +7,6 @@ Boomer is a golang library and works with `Locust <http://locust.io>`_.
 Using goroutines to run you code concurrently will outperform the gevent implementation in Locust.
 That's why I created this project.
 
-It connects to the locust master, receives commands and reports the test results periodically.
-
 Remember, use it as a library, not a general-purpose benchmarking tool.
 
 Features
@@ -23,3 +21,7 @@ Features
 
  You can put rate limit on each boomer instance, which is useful when you just want to evaluate if
  the target is able to handle specific requests per second, instead of exhausting the target.
+
+* **Different output destination**
+
+ You can write you own output implementation to collect the test result.
