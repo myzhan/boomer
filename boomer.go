@@ -41,6 +41,12 @@ type Boomer struct {
 	localRunner *localRunner
 	hatchCount  int
 	hatchRate   int
+
+	cpuProfile         string
+	cpuProfileDuration time.Duration
+
+	memoryProfile         string
+	memoryProfileDuration time.Duration
 }
 
 // NewBoomer returns a new Boomer.
@@ -104,8 +110,26 @@ func (b *Boomer) AddOutput(o Output) {
 	}
 }
 
+// EnableCPUProfile will start cpu profiling after run.
+func (b *Boomer) EnableCPUProfile(cpuProfile string, duration time.Duration) {
+	b.cpuProfile = cpuProfile
+	b.cpuProfileDuration = duration
+}
+
+// EnableMemoryProfile will start memory profiling after run.
+func (b *Boomer) EnableMemoryProfile(memoryProfile string, duration time.Duration) {
+	b.memoryProfile = memoryProfile
+	b.memoryProfileDuration = duration
+}
+
 // Run accepts a slice of Task and connects to the locust master.
 func (b *Boomer) Run(tasks ...*Task) {
+	if b.cpuProfile != "" {
+		StartCPUProfile(b.cpuProfile, b.cpuProfileDuration)
+	}
+	if b.memoryProfile != "" {
+		StartMemoryProfile(b.memoryProfile, b.memoryProfileDuration)
+	}
 	switch b.mode {
 	case DistributedMode:
 		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter, b.hatchType)
@@ -216,14 +240,6 @@ func Run(tasks ...*Task) {
 
 	initLegacyEventHandlers()
 
-	if memoryProfile != "" {
-		StartMemoryProfile(memoryProfile, memoryProfileDuration)
-	}
-
-	if cpuProfile != "" {
-		StartCPUProfile(cpuProfile, cpuProfileDuration)
-	}
-
 	rateLimiter, err := createRateLimiter(maxRPS, requestIncreaseRate)
 	if err != nil {
 		log.Fatalf("%v\n", err)
@@ -232,6 +248,8 @@ func Run(tasks ...*Task) {
 	defaultBoomer.masterHost = masterHost
 	defaultBoomer.masterPort = masterPort
 	defaultBoomer.hatchType = hatchType
+	defaultBoomer.EnableMemoryProfile(memoryProfile, memoryProfileDuration)
+	defaultBoomer.EnableCPUProfile(cpuProfile, cpuProfileDuration)
 
 	defaultBoomer.Run(tasks...)
 
