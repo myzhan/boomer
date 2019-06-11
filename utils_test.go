@@ -65,7 +65,9 @@ func TestStartMemoryProfile(t *testing.T) {
 	if _, err := os.Stat("mem.pprof"); os.IsExist(err) {
 		os.Remove("mem.pprof")
 	}
-	StartMemoryProfile("mem.pprof", 2*time.Second)
+	if err := StartMemoryProfile("mem.pprof", 2*time.Second); err != nil {
+		t.Error("Error starting memory profiling")
+	}
 	time.Sleep(2100 * time.Millisecond)
 	if _, err := os.Stat("mem.pprof"); os.IsNotExist(err) {
 		t.Error("File mem.pprof is not generated")
@@ -78,7 +80,9 @@ func TestStartCPUProfile(t *testing.T) {
 	if _, err := os.Stat("cpu.pprof"); os.IsExist(err) {
 		os.Remove("cpu.pprof")
 	}
-	StartCPUProfile("cpu.pprof", 2*time.Second)
+	if err := StartCPUProfile("cpu.pprof", 2*time.Second); err != nil {
+		t.Error("Error starting cpu profiling")
+	}
 	time.Sleep(2100 * time.Millisecond)
 	if _, err := os.Stat("cpu.pprof"); os.IsNotExist(err) {
 		t.Error("File cpu.pprof is not generated")

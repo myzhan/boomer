@@ -125,10 +125,16 @@ func (b *Boomer) EnableMemoryProfile(memoryProfile string, duration time.Duratio
 // Run accepts a slice of Task and connects to the locust master.
 func (b *Boomer) Run(tasks ...*Task) {
 	if b.cpuProfile != "" {
-		StartCPUProfile(b.cpuProfile, b.cpuProfileDuration)
+		err := StartCPUProfile(b.cpuProfile, b.cpuProfileDuration)
+		if err != nil {
+			log.Printf("Error starting cpu profiling, %v", err)
+		}
 	}
 	if b.memoryProfile != "" {
-		StartMemoryProfile(b.memoryProfile, b.memoryProfileDuration)
+		err := StartMemoryProfile(b.memoryProfile, b.memoryProfileDuration)
+		if err != nil {
+			log.Printf("Error starting memory profiling, %v", err)
+		}
 	}
 	switch b.mode {
 	case DistributedMode:

@@ -51,10 +51,10 @@ func Now() int64 {
 }
 
 // StartMemoryProfile starts memory profiling and save the results in file.
-func StartMemoryProfile(file string, duration time.Duration) {
+func StartMemoryProfile(file string, duration time.Duration) (err error) {
 	f, err := os.Create(file)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	log.Println("Start memory profiling for", duration)
@@ -67,21 +67,21 @@ func StartMemoryProfile(file string, duration time.Duration) {
 		f.Close()
 		log.Println("Stop memory profiling after", duration)
 	})
+	return nil
 }
 
 // StartCPUProfile starts cpu profiling and save the results in file.
-func StartCPUProfile(file string, duration time.Duration) {
+func StartCPUProfile(file string, duration time.Duration) (err error) {
 	f, err := os.Create(file)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	log.Println("Start cpu profiling for", duration)
 	err = pprof.StartCPUProfile(f)
 	if err != nil {
-		log.Println(err)
 		f.Close()
-		return
+		return err
 	}
 
 	time.AfterFunc(duration, func() {
@@ -89,4 +89,5 @@ func StartCPUProfile(file string, duration time.Duration) {
 		f.Close()
 		log.Println("Stop CPU profiling after", duration)
 	})
+	return nil
 }
