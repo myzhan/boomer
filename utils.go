@@ -62,7 +62,6 @@ func StartMemoryProfile(file string, duration time.Duration) (err error) {
 		err = pprof.WriteHeapProfile(f)
 		if err != nil {
 			log.Println(err)
-			return
 		}
 		f.Close()
 		log.Println("Stop memory profiling after", duration)
