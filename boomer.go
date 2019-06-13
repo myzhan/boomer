@@ -47,6 +47,8 @@ type Boomer struct {
 
 	memoryProfile         string
 	memoryProfileDuration time.Duration
+
+	outputs []Output
 }
 
 // NewBoomer returns a new Boomer.
@@ -100,14 +102,7 @@ func (b *Boomer) SetMode(mode Mode) {
 
 // AddOutput accepts outputs which implements the boomer.Output interface.
 func (b *Boomer) AddOutput(o Output) {
-	switch b.mode {
-	case DistributedMode:
-		b.slaveRunner.addOutput(o)
-	case StandaloneMode:
-		b.localRunner.addOutput(o)
-	default:
-		log.Println("Invalid mode, AddOutput ignored!")
-	}
+	b.outputs = append(b.outputs, o)
 }
 
 // EnableCPUProfile will start cpu profiling after run.
@@ -136,12 +131,19 @@ func (b *Boomer) Run(tasks ...*Task) {
 			log.Printf("Error starting memory profiling, %v", err)
 		}
 	}
+
 	switch b.mode {
 	case DistributedMode:
 		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter, b.hatchType)
+		for _, o := range b.outputs {
+			b.slaveRunner.addOutput(o)
+		}
 		b.slaveRunner.run()
 	case StandaloneMode:
 		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.hatchCount, b.hatchType, b.hatchRate)
+		for _, o := range b.outputs {
+			b.localRunner.addOutput(o)
+		}
 		b.localRunner.run()
 	default:
 		log.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")

@@ -6,6 +6,56 @@ import (
 	"time"
 )
 
+func TestNewBoomer(t *testing.T) {
+	b := NewBoomer("0.0.0.0", 1234)
+
+	if b.hatchType != "asap" {
+		t.Error("hatchType should be asap")
+	}
+
+	if b.masterHost != "0.0.0.0" {
+		t.Error("masterHost should be 0.0.0.0")
+	}
+
+	if b.masterPort != 1234 {
+		t.Error("masterPort should be 1234")
+	}
+
+	if b.mode != DistributedMode {
+		t.Error("mode should be DistributedMode")
+	}
+}
+
+func TestNewStandaloneBoomer(t *testing.T) {
+	b := NewStandaloneBoomer(100, 10)
+
+	if b.hatchType != "asap" {
+		t.Error("hatchType should be asap")
+	}
+
+	if b.hatchCount != 100 {
+		t.Error("hatchCount should be 100")
+	}
+
+	if b.hatchRate != 10 {
+		t.Error("hatchRate should be 10")
+	}
+
+	if b.mode != StandaloneMode {
+		t.Error("mode should be StandaloneMode")
+	}
+}
+
+func TestSetRateLimiter(t *testing.T) {
+	b := NewStandaloneBoomer(100, 10)
+	limiter, _ := NewRampUpRateLimiter(10, "10/1s", time.Second)
+	b.SetRateLimiter(limiter)
+
+	if b.rateLimiter == nil {
+		t.Error("b.rateLimiter should not be nil")
+	}
+}
+
 func TestSetHatchType(t *testing.T) {
 	b := NewBoomer("127.0.0.1", 5557)
 
@@ -23,6 +73,61 @@ func TestSetHatchType(t *testing.T) {
 
 	if b.hatchType != "smooth" {
 		t.Error("hatchType should be changed to \"smooth\"")
+	}
+}
+
+func TestSetMode(t *testing.T) {
+	b := NewStandaloneBoomer(100, 10)
+
+	b.SetMode(DistributedMode)
+	if b.mode != DistributedMode {
+		t.Error("mode should be DistributedMode")
+	}
+
+	b.SetMode(StandaloneMode)
+	if b.mode != StandaloneMode {
+		t.Error("mode should be StandaloneMode")
+	}
+
+	b.SetMode(3)
+	if b.mode != StandaloneMode {
+		t.Error("mode should be StandaloneMode")
+	}
+}
+
+func TestAddOutput(t *testing.T) {
+	b := NewStandaloneBoomer(100, 10)
+	b.AddOutput(NewConsoleOutput())
+	b.AddOutput(NewConsoleOutput())
+
+	if len(b.outputs) != 2 {
+		t.Error("length of outputs should be 2")
+	}
+}
+
+func TestEnableCPUProfile(t *testing.T) {
+	b := NewStandaloneBoomer(100, 10)
+	b.EnableCPUProfile("cpu.prof", time.Second)
+
+	if b.cpuProfile != "cpu.prof" {
+		t.Error("cpuProfile should be cpu.prof")
+	}
+
+	if b.cpuProfileDuration != time.Second {
+		t.Error("cpuProfileDuration should 1 second")
+	}
+}
+
+func TestEnableMemoryProfile(t *testing.T) {
+	b := NewStandaloneBoomer(100, 10)
+	b.EnableMemoryProfile("mem.prof", time.Second)
+
+	if b.memoryProfile != "mem.prof" {
+		t.Error("memoryProfile should be mem.prof")
+	}
+
+	if b.memoryProfileDuration != time.Second {
+		t.Error("memoryProfileDuration should 1 second")
 	}
 }
 
