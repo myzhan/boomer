@@ -99,8 +99,8 @@ func TestLogError(t *testing.T) {
 	if err500.error != "500 error" {
 		t.Error("Error message is wrong, expected: 500 error, got:", err500.error)
 	}
-	if err500.occurences != 1 {
-		t.Error("Error occurences is wrong, expected: 1, got:", err500.occurences)
+	if err500.occurrences != 1 {
+		t.Error("Error occurrences is wrong, expected: 1, got:", err500.occurrences)
 	}
 
 	// md5("httpfailure400 error") = f391c310401ad8e10e929f2ee1a614e4
@@ -108,8 +108,8 @@ func TestLogError(t *testing.T) {
 	if err400.error != "400 error" {
 		t.Error("Error message is wrong, expected: 400 error, got:", err400.error)
 	}
-	if err400.occurences != 2 {
-		t.Error("Error occurences is wrong, expected: 2, got:", err400.occurences)
+	if err400.occurrences != 2 {
+		t.Error("Error occurrences is wrong, expected: 2, got:", err400.occurrences)
 	}
 
 }
@@ -188,9 +188,9 @@ func TestSerializeErrors(t *testing.T) {
 			if err != "400 error" {
 				t.Error("expected: 400 error, got:", err)
 			}
-			occurences := value["occurences"].(int64)
-			if occurences != int64(2) {
-				t.Error("expected: 2, got:", occurences)
+			occurrences := value["occurrences"].(int64)
+			if occurrences != int64(2) {
+				t.Error("expected: 2, got:", occurrences)
 			}
 		}
 	}

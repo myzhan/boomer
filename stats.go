@@ -24,11 +24,11 @@ type requestStats struct {
 	total     *statsEntry
 	startTime int64
 
-	requestSuccessChan chan *requestSuccess
-	requestFailureChan chan *requestFailure
-	clearStatsChan     chan bool
-	messageToRunnerChan    chan map[string]interface{}
-	shutdownChan       chan bool
+	requestSuccessChan  chan *requestSuccess
+	requestFailureChan  chan *requestFailure
+	clearStatsChan      chan bool
+	messageToRunnerChan chan map[string]interface{}
+	shutdownChan        chan bool
 }
 
 func newRequestStats() (stats *requestStats) {
@@ -275,14 +275,14 @@ func (s *statsEntry) getStrippedReport() map[string]interface{} {
 }
 
 type statsError struct {
-	name       string
-	method     string
-	error      string
-	occurences int64
+	name        string
+	method      string
+	error       string
+	occurrences int64
 }
 
 func (err *statsError) occured() {
-	err.occurences++
+	err.occurrences++
 }
 
 func (err *statsError) toMap() map[string]interface{} {
@@ -291,7 +291,10 @@ func (err *statsError) toMap() map[string]interface{} {
 	m["method"] = err.method
 	m["name"] = err.name
 	m["error"] = err.error
-	m["occurences"] = err.occurences
+	m["occurrences"] = err.occurrences
 
+	// keep compatible with locust
+	// https://github.com/locustio/locust/commit/f0a5f893734faeddb83860b2985010facc910d7d#diff-5d5f310549d6d596beaa43a1282ec49e
+	m["occurences"] = err.occurrences
 	return m
 }
