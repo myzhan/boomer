@@ -63,7 +63,7 @@ func getMedianResponseTime(numRequests int64, responseTimes map[int64]int64) int
 func getAvgResponseTime(numRequests int64, totalResponseTime int64) (avgResponseTime float64) {
 	avgResponseTime = float64(0)
 	if numRequests != 0 {
-		avgResponseTime = float64(totalResponseTime / numRequests)
+		avgResponseTime = float64(totalResponseTime) / float64(numRequests)
 	}
 	return avgResponseTime
 }
@@ -97,11 +97,16 @@ func (o *ConsoleOutput) OnStop() {
 
 // OnEvent will print to the console.
 func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
+	stats, ok := data["stats"].([]interface{})
+	if !ok {
+		return
+	}
+
 	currentTime := time.Now()
 	println(fmt.Sprintf("Current time: %s", currentTime.Format("2006/01/02 15:04:05")))
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Type", "Name", "# requests", "# fails", "Median", "Average", "Min", "Max", "Content Size", "# reqs/sec"})
-	stats := data["stats"].([]interface{})
+
 	for _, stat := range stats {
 		s := stat.(map[string]interface{})
 		row := make([]string, 10)
