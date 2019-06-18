@@ -1,7 +1,7 @@
 package boomer
 
 type client interface {
-	connect()
+	connect() (err error)
 	close()
 	recvChannel() chan *message
 	sendChannel() chan *message

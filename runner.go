@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -390,7 +391,16 @@ func (r *slaveRunner) startListener() {
 func (r *slaveRunner) run() {
 	r.state = stateInit
 	r.client = newClient(r.masterHost, r.masterPort, r.nodeID)
-	r.client.connect()
+
+	err := r.client.connect()
+	if err != nil {
+		if strings.Contains(err.Error(), "Socket type DEALER is not compatible with PULL") {
+			log.Println("Newer version of locust changes ZMQ socket to DEALER and ROUTER, you should update your locust version.")
+		} else {
+			log.Printf("Failed to connect to master(%s:%d) with error %v\n", r.masterHost, r.masterPort, err)
+		}
+		return
+	}
 
 	// listen to master
 	r.startListener()

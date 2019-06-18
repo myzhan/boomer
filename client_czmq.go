@@ -37,20 +37,23 @@ func newClient(masterHost string, masterPort int, identity string) (client *czmq
 	return client
 }
 
-func (c *czmqSocketClient) connect() {
+func (c *czmqSocketClient) connect() (err error) {
 	addr := fmt.Sprintf("tcp://%s:%d", c.masterHost, c.masterPort)
 	dealer := goczmq.NewSock(goczmq.Dealer)
 	dealer.SetIdentity(c.identity)
 	err := dealer.Connect(addr)
 	if err != nil {
-		log.Fatalf("Failed to create zeromq dealer, %v\n", err)
+		return err
 	}
+
 	c.dealerSocket = dealer
 
 	log.Printf("Boomer is connected to master(%s) press Ctrl+c to quit.\n", addr)
 
 	go c.recv()
 	go c.send()
+
+	return nil
 }
 
 func (c *czmqSocketClient) close() {

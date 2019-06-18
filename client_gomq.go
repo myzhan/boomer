@@ -5,8 +5,6 @@ package boomer
 import (
 	"fmt"
 	"log"
-	"os"
-	"strings"
 
 	"github.com/zeromq/gomq"
 	"github.com/zeromq/gomq/zmtp"
@@ -39,22 +37,19 @@ func newClient(masterHost string, masterPort int, identity string) (client *gomq
 	return client
 }
 
-func (c *gomqSocketClient) connect() {
+func (c *gomqSocketClient) connect() (err error) {
 	addr := fmt.Sprintf("tcp://%s:%d", c.masterHost, c.masterPort)
 	c.dealerSocket = gomq.NewDealer(zmtp.NewSecurityNull(), c.identity)
 
-	if err := c.dealerSocket.Connect(addr); err != nil {
-		log.Printf("Failed to connect to master(%s) with error %v\n", addr, err)
-		if strings.Contains(err.Error(), "Socket type DEALER is not compatible with PULL") {
-			log.Println("Newer version of locust changes ZMQ socket to DEALER and ROUTER, you should update your locust version.")
-		}
-		os.Exit(1)
-		return
+	if err = c.dealerSocket.Connect(addr); err != nil {
+		return err
 	}
 
 	log.Printf("Boomer is connected to master(%s) press Ctrl+c to quit.\n", addr)
 	go c.recv()
 	go c.send()
+
+	return nil
 }
 
 func (c *gomqSocketClient) close() {
