@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -203,7 +204,7 @@ func TestDistributedRun(t *testing.T) {
 		"num_clients": int64(10),
 	}, b.slaveRunner.nodeID)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(4 * time.Second)
 
 	b.Quit()
 
@@ -233,6 +234,8 @@ func TestRunTasksForTest(t *testing.T) {
 	if count != 1 {
 		t.Error("count is", count, "expected: 1")
 	}
+
+	runTasks = ""
 }
 
 func TestRunTasksWithBoomerReport(t *testing.T) {
@@ -247,6 +250,8 @@ func TestRunTasksWithBoomerReport(t *testing.T) {
 	runTasks = "report"
 
 	runTasksForTest(taskA)
+
+	runTasks = ""
 }
 
 func TestCreateRatelimiter(t *testing.T) {
@@ -287,6 +292,47 @@ func TestCreateRatelimiter(t *testing.T) {
 		if rampUpRateLimiter.rampUpPeroid != 2*time.Second {
 			t.Error("rampUpPeroid should be equals to 2 seconds, was", rampUpRateLimiter.rampUpPeroid)
 		}
+	}
+}
+
+func TestRun(t *testing.T) {
+	flag.Parse()
+
+	masterHost = "0.0.0.0"
+	rand.Seed(Now())
+	masterPort = rand.Intn(1000) + 10240
+
+	server := newTestServer(masterHost, masterPort)
+	defer server.close()
+
+	log.Println(fmt.Sprintf("Starting to serve on %s:%d", masterHost, masterPort))
+	server.start()
+
+	time.Sleep(20 * time.Millisecond)
+
+	count := int64(0)
+	taskA := &Task{
+		Name: "increaseCount",
+		Fn: func() {
+			atomic.AddInt64(&count, 1)
+			runtime.Goexit()
+		},
+	}
+
+	go Run(taskA)
+	time.Sleep(20 * time.Millisecond)
+
+	server.toClient <- newMessage("hatch", map[string]interface{}{
+		"hatch_rate":  float64(10),
+		"num_clients": int64(10),
+	}, defaultBoomer.slaveRunner.nodeID)
+
+	time.Sleep(4 * time.Second)
+
+	defaultBoomer.Quit()
+
+	if count != 10 {
+		t.Error("count is", count, "expected: 10")
 	}
 }
 
