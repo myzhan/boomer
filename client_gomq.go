@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"runtime"
-	"runtime/debug"
 	"strings"
 
 	"github.com/zeromq/gomq"
@@ -68,32 +66,33 @@ func (c *gomqSocketClient) recvChannel() chan *message {
 }
 
 func (c *gomqSocketClient) recv() {
-	defer func() {
-		// Temporary work around for https://github.com/zeromq/gomq/issues/75
-		err := recover()
-		if err != nil {
-			log.Printf("%v\n", err)
-			debug.PrintStack()
-			log.Printf("The underlying socket connected to master(%s:%d) may be broken, please restart both locust and boomer\n", c.masterHost, c.masterPort)
-			runtime.Goexit()
-		}
-	}()
 	for {
-		msg, err := c.dealerSocket.Recv()
-		if err != nil {
-			log.Printf("Error reading: %v\n", err)
-			continue
+		select {
+		case <-c.shutdownChan:
+			return
+		case msg := <-c.dealerSocket.RecvChannel():
+			if msg.MessageType == zmtp.CommandMessage {
+				continue
+			}
+			if len(msg.Body) == 0 {
+				continue
+			}
+			body, err := msg.Body[0], msg.Err
+			if err != nil {
+				log.Printf("Error reading: %v\n", err)
+				continue
+			}
+			decodedMsg, err := newMessageFromBytes(body)
+			if err != nil {
+				log.Printf("Msgpack decode fail: %v\n", err)
+				continue
+			}
+			if decodedMsg.NodeID != c.identity {
+				log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedMsg.Type, decodedMsg.NodeID, c.identity)
+				continue
+			}
+			c.fromMaster <- decodedMsg
 		}
-		decodedMsg, err := newMessageFromBytes(msg)
-		if err != nil {
-			log.Printf("Msgpack decode fail: %v\n", err)
-			continue
-		}
-		if decodedMsg.NodeID != c.identity {
-			log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedMsg.Type, decodedMsg.NodeID, c.identity)
-			continue
-		}
-		c.fromMaster <- decodedMsg
 	}
 }
 

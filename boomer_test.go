@@ -1,7 +1,13 @@
 package boomer
 
 import (
+	"fmt"
+	"log"
 	"math"
+	"math/rand"
+	"os"
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -128,6 +134,81 @@ func TestEnableMemoryProfile(t *testing.T) {
 
 	if b.memoryProfileDuration != time.Second {
 		t.Error("memoryProfileDuration should 1 second")
+	}
+}
+
+func TestStandaloneRun(t *testing.T) {
+	b := NewStandaloneBoomer(10, 10)
+	b.EnableCPUProfile("cpu.pprof", 2*time.Second)
+	b.EnableMemoryProfile("mem.pprof", 2*time.Second)
+
+	count := int64(0)
+	taskA := &Task{
+		Name: "increaseCount",
+		Fn: func() {
+			atomic.AddInt64(&count, 1)
+			runtime.Goexit()
+		},
+	}
+	go b.Run(taskA)
+
+	time.Sleep(5 * time.Second)
+
+	b.Quit()
+
+	if count != 10 {
+		t.Error("count is", count, "expected: 10")
+	}
+
+	if _, err := os.Stat("cpu.pprof"); os.IsNotExist(err) {
+		t.Error("File cpu.pprof is not generated")
+	} else {
+		os.Remove("cpu.pprof")
+	}
+
+	if _, err := os.Stat("mem.pprof"); os.IsNotExist(err) {
+		t.Error("File mem.pprof is not generated")
+	} else {
+		os.Remove("mem.pprof")
+	}
+}
+
+func TestDistributedRun(t *testing.T) {
+	masterHost := "0.0.0.0"
+	rand.Seed(Now())
+	masterPort := rand.Intn(1000) + 10240
+
+	server := newTestServer(masterHost, masterPort)
+	defer server.close()
+
+	log.Println(fmt.Sprintf("Starting to serve on %s:%d", masterHost, masterPort))
+	server.start()
+
+	time.Sleep(20 * time.Millisecond)
+
+	b := NewBoomer(masterHost, masterPort)
+
+	count := int64(0)
+	taskA := &Task{
+		Name: "increaseCount",
+		Fn: func() {
+			atomic.AddInt64(&count, 1)
+			runtime.Goexit()
+		},
+	}
+	b.Run(taskA)
+
+	server.toClient <- newMessage("hatch", map[string]interface{}{
+		"hatch_rate":  float64(10),
+		"num_clients": int64(10),
+	}, b.slaveRunner.nodeID)
+
+	time.Sleep(5 * time.Second)
+
+	b.Quit()
+
+	if count != 10 {
+		t.Error("count is", count, "expected: 10")
 	}
 }
 
