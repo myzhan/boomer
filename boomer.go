@@ -262,19 +262,23 @@ func Run(tasks ...*Task) {
 	defaultBoomer.Run(tasks...)
 
 	quitByMe := false
-	Events.Subscribe("boomer:quit", func() {
+	quitChan := make(chan bool)
+
+	Events.SubscribeOnce("boomer:quit", func() {
 		if !quitByMe {
-			log.Println("shut down")
-			os.Exit(0)
+			close(quitChan)
 		}
 	})
 
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
-	<-c
-	quitByMe = true
-	defaultBoomer.Quit()
+	select {
+	case <-c:
+		quitByMe = true
+		defaultBoomer.Quit()
+	case <-quitChan:
+	}
 
 	log.Println("shut down")
 }
