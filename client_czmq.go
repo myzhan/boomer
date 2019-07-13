@@ -40,8 +40,8 @@ func newClient(masterHost string, masterPort int, identity string) (client *czmq
 func (c *czmqSocketClient) connect() (err error) {
 	addr := fmt.Sprintf("tcp://%s:%d", c.masterHost, c.masterPort)
 	dealer := goczmq.NewSock(goczmq.Dealer)
-	dealer.SetIdentity(c.identity)
-	err := dealer.Connect(addr)
+	dealer.SetOption(goczmq.SockSetIdentity(c.identity))
+	err = dealer.Connect(addr)
 	if err != nil {
 		return err
 	}
