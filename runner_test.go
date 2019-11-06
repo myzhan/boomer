@@ -85,7 +85,7 @@ func TestLocalRunner(t *testing.T) {
 		Name: "TaskA",
 	}
 	tasks := []*Task{taskA}
-	runner := newLocalRunner(tasks, nil, 2, "asap", 2)
+	runner := newLocalRunner(tasks, nil, 2, 2)
 	go runner.run()
 	time.Sleep(4 * time.Second)
 	runner.close()
@@ -99,38 +99,9 @@ func TestSpawnWorkers(t *testing.T) {
 		},
 		Name: "TaskA",
 	}
-	taskB := &Task{
-		Weight: 20,
-		Fn: func() {
-			time.Sleep(2 * time.Second)
-		},
-		Name: "TaskB",
-	}
-	tasks := []*Task{taskA, taskB}
-	rateLimiter := NewStableRateLimiter(100, time.Second)
-	runner := newSlaveRunner("localhost", 5557, tasks, rateLimiter, "asap")
-	defer runner.close()
-
-	runner.client = newClient("localhost", 5557, runner.nodeID)
-	runner.hatchRate = 10
-
-	runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
-	if runner.numClients != 10 {
-		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
-	}
-}
-
-func TestSpawnWorkersSmoothly(t *testing.T) {
-	taskA := &Task{
-		Weight: 10,
-		Fn: func() {
-			time.Sleep(time.Second)
-		},
-		Name: "TaskA",
-	}
 	tasks := []*Task{taskA}
 
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "smooth")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	defer runner.close()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
@@ -157,7 +128,7 @@ func TestHatchAndStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
@@ -175,9 +146,9 @@ func TestHatchAndStop(t *testing.T) {
 		}
 	}()
 
-	runner.startHatching(10, 10, runner.hatchComplete)
+	runner.startHatching(10, float64(10), runner.hatchComplete)
 	// wait for spawning goroutines
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
@@ -202,7 +173,7 @@ func TestStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA}
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	runner.stopChan = make(chan bool)
 
 	stopped := false
@@ -225,13 +196,13 @@ func TestOnHatchMessage(t *testing.T) {
 			time.Sleep(time.Second)
 		},
 	}
-	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
 
-	workers, hatchRate := 0, 0
-	callback := func(param1, param2 int) {
+	workers, hatchRate := 0, float64(0)
+	callback := func(param1 int, param2 float64) {
 		workers = param1
 		hatchRate = param2
 	}
@@ -264,7 +235,7 @@ func TestOnHatchMessage(t *testing.T) {
 }
 
 func TestOnQuitMessage(t *testing.T) {
-	runner := newSlaveRunner("localhost", 5557, nil, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, nil, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, "test")
 	runner.state = stateInit
@@ -327,7 +298,7 @@ func TestOnMessage(t *testing.T) {
 	}
 	tasks := []*Task{taskA, taskB}
 
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
@@ -359,7 +330,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -382,7 +353,7 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -420,7 +391,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -456,7 +427,7 @@ func TestGetReady(t *testing.T) {
 	server.start()
 
 	rateLimiter := NewStableRateLimiter(100, time.Second)
-	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter, "asap")
+	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter)
 	defer r.close()
 	defer Events.Unsubscribe("boomer:quit", r.onQuiting)
 

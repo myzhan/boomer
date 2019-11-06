@@ -30,17 +30,15 @@ const (
 // A Boomer is used to run tasks.
 // This type is exposed, so users can create and control a Boomer instance programmatically.
 type Boomer struct {
-	masterHost string
-	masterPort int
-
-	hatchType   string
+	masterHost  string
+	masterPort  int
 	mode        Mode
 	rateLimiter RateLimiter
 	slaveRunner *slaveRunner
 
 	localRunner *localRunner
 	hatchCount  int
-	hatchRate   int
+	hatchRate   float64
 
 	cpuProfile         string
 	cpuProfileDuration time.Duration
@@ -56,15 +54,13 @@ func NewBoomer(masterHost string, masterPort int) *Boomer {
 	return &Boomer{
 		masterHost: masterHost,
 		masterPort: masterPort,
-		hatchType:  "asap",
 		mode:       DistributedMode,
 	}
 }
 
 // NewStandaloneBoomer returns a new Boomer, which can run without master.
-func NewStandaloneBoomer(hatchCount int, hatchRate int) *Boomer {
+func NewStandaloneBoomer(hatchCount int, hatchRate float64) *Boomer {
 	return &Boomer{
-		hatchType:  "asap",
 		hatchCount: hatchCount,
 		hatchRate:  hatchRate,
 		mode:       StandaloneMode,
@@ -75,17 +71,6 @@ func NewStandaloneBoomer(hatchCount int, hatchRate int) *Boomer {
 // It must be called before the test is started.
 func (b *Boomer) SetRateLimiter(rateLimiter RateLimiter) {
 	b.rateLimiter = rateLimiter
-}
-
-// SetHatchType only accepts "asap" or "smooth".
-// "asap" means spawning goroutines as soon as possible when the test is started.
-// "smooth" means a constant pace.
-func (b *Boomer) SetHatchType(hatchType string) {
-	if hatchType != "asap" && hatchType != "smooth" {
-		log.Printf("Wrong hatch-type, expected asap or smooth, was %s\n", hatchType)
-		return
-	}
-	b.hatchType = hatchType
 }
 
 // SetMode only accepts boomer.DistributedMode and boomer.StandaloneMode.
@@ -134,13 +119,13 @@ func (b *Boomer) Run(tasks ...*Task) {
 
 	switch b.mode {
 	case DistributedMode:
-		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter, b.hatchType)
+		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter)
 		for _, o := range b.outputs {
 			b.slaveRunner.addOutput(o)
 		}
 		b.slaveRunner.run()
 	case StandaloneMode:
-		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.hatchCount, b.hatchType, b.hatchRate)
+		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.hatchCount, b.hatchRate)
 		for _, o := range b.outputs {
 			b.localRunner.addOutput(o)
 		}
@@ -255,7 +240,6 @@ func Run(tasks ...*Task) {
 	defaultBoomer.SetRateLimiter(rateLimiter)
 	defaultBoomer.masterHost = masterHost
 	defaultBoomer.masterPort = masterPort
-	defaultBoomer.hatchType = hatchType
 	defaultBoomer.EnableMemoryProfile(memoryProfile, memoryProfileDuration)
 	defaultBoomer.EnableCPUProfile(cpuProfile, cpuProfileDuration)
 

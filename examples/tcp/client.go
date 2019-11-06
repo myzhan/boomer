@@ -75,7 +75,7 @@ func main() {
 		Fn:     worker,
 	}
 
-	boomer.Events.Subscribe("boomer:hatch", func(workers, hatchRate int) {
+	boomer.Events.Subscribe("boomer:hatch", func(workers int, hatchRate float64) {
 		stopChannel = make(chan bool)
 	})
 

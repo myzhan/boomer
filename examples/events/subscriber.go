@@ -20,7 +20,7 @@ func foo() {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	boomer.Events.Subscribe("boomer:hatch", func(workers, hatchRate int) {
+	boomer.Events.Subscribe("boomer:hatch", func(workers int, hatchRate float64) {
 		log.Println("The master asks me to spawn", workers, "goroutines with a hatch rate of", hatchRate, "per second.")
 	})
 

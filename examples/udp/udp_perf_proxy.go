@@ -141,7 +141,7 @@ func proxy() {
 	}
 }
 
-func startTest(workers, hatchRate int) {
+func startTest(workers int, hatchRate float64) {
 	testStarted = true
 }
 

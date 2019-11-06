@@ -25,16 +25,15 @@ const (
 )
 
 type runner struct {
-	hatchType string
-	state     string
-	tasks     []*Task
+	state string
+	tasks []*Task
 
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
 	stats            *requestStats
 
 	numClients int32
-	hatchRate  int
+	hatchRate  float64
 
 	// all running workers(goroutines) will select on this channel.
 	// close this channel will stop all running workers.
@@ -135,11 +134,8 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 		}
 
 		for i := 1; i <= amount; i++ {
-			if r.hatchType == "smooth" {
-				time.Sleep(time.Duration(1000000/r.hatchRate) * time.Microsecond)
-			} else if i%r.hatchRate == 0 {
-				time.Sleep(1 * time.Second)
-			}
+			sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
+			time.Sleep(sleepTime)
 
 			select {
 			case <-quit:
@@ -173,7 +169,7 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 	}
 }
 
-func (r *runner) startHatching(spawnCount int, hatchRate int, hatchCompleteFunc func()) {
+func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
@@ -202,10 +198,9 @@ type localRunner struct {
 	hatchCount int
 }
 
-func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchType string, hatchRate int) (r *localRunner) {
+func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchRate float64) (r *localRunner) {
 	r = &localRunner{}
 	r.tasks = tasks
-	r.hatchType = hatchType
 	r.hatchRate = hatchRate
 	r.hatchCount = hatchCount
 	r.closeChan = make(chan bool)
@@ -266,12 +261,11 @@ type slaveRunner struct {
 	client     client
 }
 
-func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *slaveRunner) {
+func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter) (r *slaveRunner) {
 	r = &slaveRunner{}
 	r.masterHost = masterHost
 	r.masterPort = masterPort
 	r.tasks = tasks
-	r.hatchType = hatchType
 	r.nodeID = getNodeID()
 	r.closeChan = make(chan bool)
 
@@ -311,7 +305,7 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
-	hatchRate := int(rate.(float64))
+	hatchRate := rate.(float64)
 	workers := 0
 	if _, ok := clients.(uint64); ok {
 		workers = int(clients.(uint64))
@@ -319,7 +313,7 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 		workers = int(clients.(int64))
 	}
 	if workers == 0 || hatchRate == 0 {
-		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
+		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %.2f\n",
 			workers, hatchRate)
 	} else {
 		Events.Publish("boomer:hatch", workers, hatchRate)
