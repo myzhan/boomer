@@ -165,6 +165,13 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 
 func (r *runner) getRandomTask() *Task {
 	totalWeight := r.getWeightSum()
+	if totalWeight == 0 {
+		if len(r.tasks) > 0 {
+			return r.tasks[0]
+		}
+		return nil
+	}
+
 	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
 	randNum := randSrc.Intn(totalWeight)
 
