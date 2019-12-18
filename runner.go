@@ -3,6 +3,7 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -124,49 +125,58 @@ func (r *runner) getWeightSum() (weightSum int) {
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
-	weightSum := r.getWeightSum()
-	for _, task := range r.tasks {
-		percent := float64(task.Weight) / float64(weightSum)
-		amount := int(round(float64(spawnCount)*percent, .5, 0))
-
-		if weightSum == 0 {
-			amount = int(float64(spawnCount) / float64(len(r.tasks)))
+	defer func() {
+		if hatchCompleteFunc != nil {
+			hatchCompleteFunc()
 		}
+	}()
 
-		for i := 1; i <= amount; i++ {
-			sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
-			time.Sleep(sleepTime)
+	for i := 1; i <= spawnCount; i++ {
+		sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
+		time.Sleep(sleepTime)
 
-			select {
-			case <-quit:
-				// quit hatching goroutine
-				return
-			default:
-				atomic.AddInt32(&r.numClients, 1)
-				go func(fn func()) {
-					for {
-						select {
-						case <-quit:
-							return
-						default:
-							if r.rateLimitEnabled {
-								blocked := r.rateLimiter.Acquire()
-								if !blocked {
-									r.safeRun(fn)
-								}
-							} else {
-								r.safeRun(fn)
+		select {
+		case <-quit:
+			// quit hatching goroutine
+			return
+		default:
+			atomic.AddInt32(&r.numClients, 1)
+			go func() {
+				for {
+					task := r.getRandomTask()
+					select {
+					case <-quit:
+						return
+					default:
+						if r.rateLimitEnabled {
+							blocked := r.rateLimiter.Acquire()
+							if !blocked {
+								r.safeRun(task.Fn)
 							}
+						} else {
+							r.safeRun(task.Fn)
 						}
 					}
-				}(task.Fn)
-			}
+				}
+			}()
+		}
+	}
+}
+
+func (r *runner) getRandomTask() *Task {
+	totalWeight := r.getWeightSum()
+	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randNum := randSrc.Intn(totalWeight)
+
+	runningSum := 0
+	for _, task := range r.tasks {
+		runningSum += task.Weight
+		if runningSum > randNum {
+			return task
 		}
 	}
 
-	if hatchCompleteFunc != nil {
-		hatchCompleteFunc()
-	}
+	return nil
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
