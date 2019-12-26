@@ -188,6 +188,90 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	}
 }
 
+func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
+	var lock sync.Mutex
+	taskCalls := map[string]int{}
+
+	createTask := func(name string, weight int) *Task {
+		return &Task{
+			Name:   name,
+			Weight: weight,
+			Fn: func() {
+				lock.Lock()
+				defer lock.Unlock()
+				taskCalls[name] += 1
+			},
+		}
+	}
+
+	wts := NewWeighingTaskSet()
+
+	wts.AddTask(createTask(`one thousand`, 1000))
+	wts.AddTask(createTask(`one hundred`, 100))
+	wts.AddTask(createTask(`ten`, 10))
+	wts.AddTask(createTask(`one`, 1))
+
+	task := &Task{
+		Name: "TaskSetWrapperTask",
+		Fn:   wts.Run,
+	}
+
+	runner := newSlaveRunner("localhost", 5557, []*Task{task}, nil)
+	defer runner.close()
+
+	runner.client = newClient("localhost", 5557, runner.nodeID)
+
+	const numToSpawn int = 30
+	const hatchRate float64 = 10
+	runner.hatchRate = hatchRate
+
+	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	time.Sleep(4 * time.Second)
+
+	currentClients := atomic.LoadInt32(&runner.numClients)
+
+	assert.Equal(t, numToSpawn, int(currentClients))
+	lock.Lock()
+	thousands := taskCalls[`one thousand`]
+	hundreds := taskCalls[`one hundred`]
+	tens := taskCalls[`ten`]
+	ones := taskCalls[`one`]
+	lock.Unlock()
+
+	total := hundreds + tens + ones + thousands
+	t.Logf("total tasks run: %d\n", total)
+
+	assert.True(t, total > 1111)
+
+	assert.True(t, ones > 1)
+	actPercentage := float64(ones) / float64(total)
+	expectedPercentage := 1.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of ones task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, tens > 10)
+	actPercentage = float64(tens) / float64(total)
+	expectedPercentage = 10.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of tens task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, hundreds > 100)
+	actPercentage = float64(hundreds) / float64(total)
+	expectedPercentage = 100.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of hundreds task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, thousands > 1000)
+	actPercentage = float64(thousands) / float64(total)
+	expectedPercentage = 1000.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of thousands task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+}
+
 func TestHatchAndStop(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {
