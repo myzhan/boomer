@@ -27,7 +27,9 @@ const (
 
 type runner struct {
 	state string
-	tasks []*Task
+
+	tasks           []*Task
+	totalTaskWeight int
 
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
@@ -44,6 +46,8 @@ type runner struct {
 	closeChan chan bool
 
 	outputs []Output
+
+	randSrc *rand.Rand
 }
 
 // safeRun runs fn and recovers from unexpected panics.
@@ -115,13 +119,6 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) getWeightSum() (weightSum int) {
-	for _, task := range r.tasks {
-		weightSum += task.Weight
-	}
-	return weightSum
-}
-
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
@@ -163,17 +160,28 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 	}
 }
 
+// setTasks will set the runner's task list AND the total task weight
+// which is used to get a random task later
+func (r *runner) setTasks(t []*Task) {
+	r.tasks = t
+
+	weightSum := 0
+	for _, task := range r.tasks {
+		weightSum += task.Weight
+	}
+	r.totalTaskWeight = weightSum
+}
+
 func (r *runner) getRandomTask() *Task {
-	totalWeight := r.getWeightSum()
-	if totalWeight == 0 {
+	totalWeight := r.totalTaskWeight
+	if totalWeight <= 0 {
 		if len(r.tasks) > 0 {
 			return r.tasks[0]
 		}
 		return nil
 	}
 
-	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randNum := randSrc.Intn(totalWeight)
+	randNum := r.randSrc.Intn(totalWeight)
 
 	runningSum := 0
 	for _, task := range r.tasks {
@@ -217,7 +225,7 @@ type localRunner struct {
 
 func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchRate float64) (r *localRunner) {
 	r = &localRunner{}
-	r.tasks = tasks
+	r.setTasks(tasks)
 	r.hatchRate = hatchRate
 	r.hatchCount = hatchCount
 	r.closeChan = make(chan bool)
@@ -282,7 +290,7 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 	r = &slaveRunner{}
 	r.masterHost = masterHost
 	r.masterPort = masterPort
-	r.tasks = tasks
+	r.setTasks(tasks)
 	r.nodeID = getNodeID()
 	r.closeChan = make(chan bool)
 
