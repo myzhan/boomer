@@ -3,6 +3,7 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -26,7 +27,9 @@ const (
 
 type runner struct {
 	state string
-	tasks []*Task
+
+	tasks           []*Task
+	totalTaskWeight int
 
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
@@ -43,6 +46,8 @@ type runner struct {
 	closeChan chan bool
 
 	outputs []Output
+
+	randSrc *rand.Rand
 }
 
 // safeRun runs fn and recovers from unexpected panics.
@@ -114,59 +119,79 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) getWeightSum() (weightSum int) {
-	for _, task := range r.tasks {
-		weightSum += task.Weight
-	}
-	return weightSum
-}
-
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
-	weightSum := r.getWeightSum()
-	for _, task := range r.tasks {
-		percent := float64(task.Weight) / float64(weightSum)
-		amount := int(round(float64(spawnCount)*percent, .5, 0))
-
-		if weightSum == 0 {
-			amount = int(float64(spawnCount) / float64(len(r.tasks)))
+	defer func() {
+		if hatchCompleteFunc != nil {
+			hatchCompleteFunc()
 		}
+	}()
 
-		for i := 1; i <= amount; i++ {
-			sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
-			time.Sleep(sleepTime)
+	for i := 1; i <= spawnCount; i++ {
+		sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
+		time.Sleep(sleepTime)
 
-			select {
-			case <-quit:
-				// quit hatching goroutine
-				return
-			default:
-				atomic.AddInt32(&r.numClients, 1)
-				go func(fn func()) {
-					for {
-						select {
-						case <-quit:
-							return
-						default:
-							if r.rateLimitEnabled {
-								blocked := r.rateLimiter.Acquire()
-								if !blocked {
-									r.safeRun(fn)
-								}
-							} else {
-								r.safeRun(fn)
+		select {
+		case <-quit:
+			// quit hatching goroutine
+			return
+		default:
+			atomic.AddInt32(&r.numClients, 1)
+			go func() {
+				for {
+					task := r.getRandomTask()
+					select {
+					case <-quit:
+						return
+					default:
+						if r.rateLimitEnabled {
+							blocked := r.rateLimiter.Acquire()
+							if !blocked {
+								r.safeRun(task.Fn)
 							}
+						} else {
+							r.safeRun(task.Fn)
 						}
 					}
-				}(task.Fn)
-			}
+				}
+			}()
+		}
+	}
+}
+
+// setTasks will set the runner's task list AND the total task weight
+// which is used to get a random task later
+func (r *runner) setTasks(t []*Task) {
+	r.tasks = t
+
+	weightSum := 0
+	for _, task := range r.tasks {
+		weightSum += task.Weight
+	}
+	r.totalTaskWeight = weightSum
+}
+
+func (r *runner) getRandomTask() *Task {
+	totalWeight := r.totalTaskWeight
+	if totalWeight <= 0 {
+		if len(r.tasks) > 0 {
+			return r.tasks[0]
+		}
+		return nil
+	}
+
+	randNum := r.randSrc.Intn(totalWeight)
+
+	runningSum := 0
+	for _, task := range r.tasks {
+		runningSum += task.Weight
+		if runningSum > randNum {
+			return task
 		}
 	}
 
-	if hatchCompleteFunc != nil {
-		hatchCompleteFunc()
-	}
+	return nil
 }
 
 func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
@@ -200,7 +225,7 @@ type localRunner struct {
 
 func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchRate float64) (r *localRunner) {
 	r = &localRunner{}
-	r.tasks = tasks
+	r.setTasks(tasks)
 	r.hatchRate = hatchRate
 	r.hatchCount = hatchCount
 	r.closeChan = make(chan bool)
@@ -265,7 +290,7 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 	r = &slaveRunner{}
 	r.masterHost = masterHost
 	r.masterPort = masterPort
-	r.tasks = tasks
+	r.setTasks(tasks)
 	r.nodeID = getNodeID()
 	r.closeChan = make(chan bool)
 
