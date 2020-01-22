@@ -46,8 +46,6 @@ type runner struct {
 	closeChan chan bool
 
 	outputs []Output
-
-	randSrc *rand.Rand
 }
 
 // safeRun runs fn and recovers from unexpected panics.
@@ -181,7 +179,8 @@ func (r *runner) getRandomTask() *Task {
 		return nil
 	}
 
-	randNum := r.randSrc.Intn(totalWeight)
+	rs := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randNum := rs.Intn(totalWeight)
 
 	runningSum := 0
 	for _, task := range r.tasks {
