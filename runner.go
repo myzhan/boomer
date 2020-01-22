@@ -138,7 +138,7 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 			atomic.AddInt32(&r.numClients, 1)
 			go func() {
 				for {
-					task := r.getRandomTask()
+					task := r.getTask()
 					select {
 					case <-quit:
 						return
@@ -170,18 +170,23 @@ func (r *runner) setTasks(t []*Task) {
 	r.totalTaskWeight = weightSum
 }
 
-func (r *runner) getRandomTask() *Task {
-	totalWeight := r.totalTaskWeight
-	if totalWeight <= 0 {
-		if len(r.tasks) > 0 {
-			return r.tasks[0]
-		}
-		return nil
+func (r *runner) getTask() *Task {
+	tasksCount := len(r.tasks)
+	if tasksCount == 1 {
+		// Fast path
+		return r.tasks[0]
 	}
 
 	rs := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randNum := rs.Intn(totalWeight)
 
+	totalWeight := r.totalTaskWeight
+	if totalWeight <= 0 {
+		// If all the tasks have not weights defined, they have the same chance to run
+		randNum := rs.Intn(tasksCount)
+		return r.tasks[randNum]
+	}
+
+	randNum := rs.Intn(totalWeight)
 	runningSum := 0
 	for _, task := range r.tasks {
 		runningSum += task.Weight
