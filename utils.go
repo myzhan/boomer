@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shirou/gopsutil/process"
 )
 
 func round(val float64, roundOn float64, places int) (newVal float64) {
@@ -89,4 +90,18 @@ func StartCPUProfile(file string, duration time.Duration) (err error) {
 		log.Println("Stop CPU profiling after", duration)
 	})
 	return nil
+}
+
+// GetCurrentCPUUsage get current CPU usage
+func GetCurrentCPUUsage() (float64, error) {
+	currentPid := os.Getpid()
+	p, err := process.NewProcess(int32(currentPid))
+	if err != nil {
+		return 0.0, err
+	}
+	percent, err := p.CPUPercent()
+	if err != nil {
+		return 0.0, err
+	}
+	return percent, nil
 }
