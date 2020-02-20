@@ -107,12 +107,12 @@ func (c *gomqSocketClient) send() {
 		case <-c.shutdownChan:
 			return
 		case msg := <-c.statsToMaster:
-			c.sendMessage(msg)
+			go c.sendMessage(msg)
 			if msg.Type == "quit" {
 				c.disconnectedFromMaster <- true
 			}
 		case msg := <-c.toMaster:
-			c.sendMessage(msg)
+			go c.sendMessage(msg)
 			if msg.Type == "quit" {
 				c.disconnectedFromMaster <- true
 			}
