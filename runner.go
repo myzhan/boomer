@@ -442,7 +442,7 @@ func (r *slaveRunner) run() {
 					continue
 				}
 				data["user_count"] = r.numClients
-				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
+				r.client.sendStatsChannel() <- newMessage("stats", data, r.nodeID)
 				r.outputOnEevent(data)
 			case <-r.closeChan:
 				return
