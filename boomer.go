@@ -15,7 +15,7 @@ import (
 // Events is the global event bus instance.
 var Events = EventBus.New()
 
-var defaultBoomer = &Boomer{}
+var DefaultBoomer = &Boomer{}
 
 // Mode is the running mode of boomer, both standalone and distributed are supported.
 type Mode int
@@ -202,6 +202,25 @@ func (b *Boomer) Quit() {
 	}
 }
 
+// Respawn will replace workers
+func (b *Boomer) Respawn() {
+	log.Println("Respawning workers")
+	switch b.mode {
+	case DistributedMode:
+		close(b.slaveRunner.stopChan)
+		b.slaveRunner.wg.Wait()
+		b.slaveRunner.numClients = 0
+		b.slaveRunner.stopChan = make(chan bool)
+		go b.slaveRunner.spawnWorkers(b.slaveRunner.stopChan)
+	case StandaloneMode:
+		close(b.localRunner.stopChan)
+		b.localRunner.wg.Wait()
+		b.localRunner.numClients = 0
+		b.localRunner.stopChan = make(chan bool)
+		go b.localRunner.spawnWorkers(b.localRunner.stopChan)
+	}
+}
+
 // Run tasks without connecting to the master.
 func runTasksForTest(tasks ...*Task) {
 	taskNames := strings.Split(runTasks, ",")
@@ -220,7 +239,7 @@ func runTasksForTest(tasks ...*Task) {
 }
 
 // Run accepts a slice of Task and connects to a locust master.
-// It's a convenience function to use the defaultBoomer.
+// It's a convenience function to use the DefaultBoomer.
 func Run(tasks ...*Task) {
 	if !flag.Parsed() {
 		flag.Parse()
@@ -237,13 +256,13 @@ func Run(tasks ...*Task) {
 	if err != nil {
 		log.Fatalf("%v\n", err)
 	}
-	defaultBoomer.SetRateLimiter(rateLimiter)
-	defaultBoomer.masterHost = masterHost
-	defaultBoomer.masterPort = masterPort
-	defaultBoomer.EnableMemoryProfile(memoryProfile, memoryProfileDuration)
-	defaultBoomer.EnableCPUProfile(cpuProfile, cpuProfileDuration)
+	DefaultBoomer.SetRateLimiter(rateLimiter)
+	DefaultBoomer.masterHost = masterHost
+	DefaultBoomer.masterPort = masterPort
+	DefaultBoomer.EnableMemoryProfile(memoryProfile, memoryProfileDuration)
+	DefaultBoomer.EnableCPUProfile(cpuProfile, cpuProfileDuration)
 
-	defaultBoomer.Run(tasks...)
+	DefaultBoomer.Run(tasks...)
 
 	quitByMe := false
 	quitChan := make(chan bool)
@@ -260,7 +279,7 @@ func Run(tasks ...*Task) {
 	select {
 	case <-c:
 		quitByMe = true
-		defaultBoomer.Quit()
+		DefaultBoomer.Quit()
 	case <-quitChan:
 	}
 
@@ -268,13 +287,13 @@ func Run(tasks ...*Task) {
 }
 
 // RecordSuccess reports a success.
-// It's a convenience function to use the defaultBoomer.
+// It's a convenience function to use the DefaultBoomer.
 func RecordSuccess(requestType, name string, responseTime int64, responseLength int64) {
-	defaultBoomer.RecordSuccess(requestType, name, responseTime, responseLength)
+	DefaultBoomer.RecordSuccess(requestType, name, responseTime, responseLength)
 }
 
 // RecordFailure reports a failure.
-// It's a convenience function to use the defaultBoomer.
+// It's a convenience function to use the DefaultBoomer.
 func RecordFailure(requestType, name string, responseTime int64, exception string) {
-	defaultBoomer.RecordFailure(requestType, name, responseTime, exception)
+	DefaultBoomer.RecordFailure(requestType, name, responseTime, exception)
 }
