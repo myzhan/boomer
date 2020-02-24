@@ -109,8 +109,10 @@ func TestSpawnWorkers(t *testing.T) {
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.hatchRate = 10
+	runner.spawnCount = 10
+	runner.hatchCompleteFunc = runner.hatchComplete
 
-	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
+	go runner.spawnWorkers(runner.stopChan)
 	time.Sleep(2 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
@@ -148,8 +150,10 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	const numToSpawn int = 30
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
+	runner.hatchCompleteFunc = runner.hatchComplete
+	runner.spawnCount = numToSpawn
 
-	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	go runner.spawnWorkers(runner.stopChan)
 	time.Sleep(4 * time.Second)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
@@ -224,8 +228,10 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	const numToSpawn int = 30
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
+	runner.spawnCount = numToSpawn
+	runner.hatchCompleteFunc = runner.hatchComplete
 
-	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	go runner.spawnWorkers(runner.stopChan)
 	time.Sleep(4 * time.Second)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)

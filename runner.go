@@ -38,6 +38,10 @@ type runner struct {
 	numClients int32
 	hatchRate  float64
 
+	spawnCount        int
+	hatchCompleteFunc func()
+	wg                sync.WaitGroup
+
 	// all running workers(goroutines) will select on this channel.
 	// close this channel will stop all running workers.
 	stopChan chan bool
@@ -117,16 +121,16 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
-	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
+func (r *runner) spawnWorkers(quit chan bool) {
+	log.Println("Hatching and swarming", r.spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
 	defer func() {
-		if hatchCompleteFunc != nil {
-			hatchCompleteFunc()
+		if r.hatchCompleteFunc != nil {
+			r.hatchCompleteFunc()
 		}
 	}()
 
-	for i := 1; i <= spawnCount; i++ {
+	for i := 1; i <= r.spawnCount; i++ {
 		sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
 		time.Sleep(sleepTime)
 
@@ -137,6 +141,9 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 		default:
 			atomic.AddInt32(&r.numClients, 1)
 			go func() {
+				r.wg.Add(1)
+				defer r.wg.Done()
+
 				for {
 					task := r.getTask()
 					select {
@@ -204,8 +211,10 @@ func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteF
 
 	r.hatchRate = hatchRate
 	r.numClients = 0
+	r.spawnCount = spawnCount
+	r.hatchCompleteFunc = hatchCompleteFunc
 
-	go r.spawnWorkers(spawnCount, r.stopChan, hatchCompleteFunc)
+	go r.spawnWorkers(r.stopChan)
 }
 
 func (r *runner) stop() {

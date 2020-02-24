@@ -61,14 +61,14 @@ func legacySuccessHandler(requestType string, name string, responseTime interfac
 	successRetiredWarning.Do(func() {
 		log.Println("boomer.Events.Publish(\"request_success\") is less performant and deprecated, use boomer.RecordSuccess() instead.")
 	})
-	defaultBoomer.RecordSuccess(requestType, name, convertResponseTime(responseTime), responseLength)
+	DefaultBoomer.RecordSuccess(requestType, name, convertResponseTime(responseTime), responseLength)
 }
 
 func legacyFailureHandler(requestType string, name string, responseTime interface{}, exception string) {
 	failureRetiredWarning.Do(func() {
 		log.Println("boomer.Events.Publish(\"request_failure\") is less performant and deprecated, use boomer.RecordFailure() instead.")
 	})
-	defaultBoomer.RecordFailure(requestType, name, convertResponseTime(responseTime), exception)
+	DefaultBoomer.RecordFailure(requestType, name, convertResponseTime(responseTime), exception)
 }
 
 func initLegacyEventHandlers() {

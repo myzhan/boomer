@@ -29,13 +29,13 @@ func TestInitEvents(t *testing.T) {
 
 	masterHost := "127.0.0.1"
 	masterPort := 5557
-	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
+	DefaultBoomer = NewBoomer(masterHost, masterPort)
+	DefaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
 
 	Events.Publish("request_success", "http", "foo", int64(1), int64(10))
 	Events.Publish("request_failure", "udp", "bar", int64(2), "udp error")
 
-	requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
+	requestSuccessMsg := <-DefaultBoomer.slaveRunner.stats.requestSuccessChan
 	if requestSuccessMsg.requestType != "http" {
 		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
 	}
@@ -43,7 +43,7 @@ func TestInitEvents(t *testing.T) {
 		t.Error("Expected: 1, got:", requestSuccessMsg.responseTime)
 	}
 
-	requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan
+	requestFailureMsg := <-DefaultBoomer.slaveRunner.stats.requestFailureChan
 	if requestFailureMsg.requestType != "udp" {
 		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
 	}

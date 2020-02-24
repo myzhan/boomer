@@ -297,11 +297,11 @@ func TestRun(t *testing.T) {
 	server.toClient <- newMessage("hatch", map[string]interface{}{
 		"hatch_rate":  float64(10),
 		"num_clients": int64(10),
-	}, defaultBoomer.slaveRunner.nodeID)
+	}, DefaultBoomer.slaveRunner.nodeID)
 
 	time.Sleep(4 * time.Second)
 
-	defaultBoomer.Quit()
+	DefaultBoomer.Quit()
 
 	if count != 10 {
 		t.Error("count is", count, "expected: 10")
@@ -311,28 +311,28 @@ func TestRun(t *testing.T) {
 func TestRecordSuccess(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 5557
-	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
+	DefaultBoomer = NewBoomer(masterHost, masterPort)
+	DefaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
 	RecordSuccess("http", "foo", int64(1), int64(10))
 
-	requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
+	requestSuccessMsg := <-DefaultBoomer.slaveRunner.stats.requestSuccessChan
 	if requestSuccessMsg.requestType != "http" {
 		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
 	}
 	if requestSuccessMsg.responseTime != int64(1) {
 		t.Error("Expected: 1, got:", requestSuccessMsg.responseTime)
 	}
-	defaultBoomer = nil
+	DefaultBoomer = nil
 }
 
 func TestRecordFailure(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 5557
-	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
+	DefaultBoomer = NewBoomer(masterHost, masterPort)
+	DefaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
 	RecordFailure("udp", "bar", int64(2), "udp error")
 
-	requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan
+	requestFailureMsg := <-DefaultBoomer.slaveRunner.stats.requestFailureChan
 	if requestFailureMsg.requestType != "udp" {
 		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
 	}
@@ -342,5 +342,5 @@ func TestRecordFailure(t *testing.T) {
 	if requestFailureMsg.error != "udp error" {
 		t.Error("Expected: udp error, got:", requestFailureMsg.error)
 	}
-	defaultBoomer = nil
+	DefaultBoomer = nil
 }
