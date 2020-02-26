@@ -1,0 +1,27 @@
+{
+  "config": {
+    "timeout": 30,
+    "disableCompression": false,
+    "disableKeepalive": false
+  },
+  "targets": [
+    {
+      "method": "GET",
+      "url": "https://www.baidu.com",
+      "postFile": null,
+      "contentType": "",
+      "verbose": false,
+      "weight": 10,
+      "name": "test1"
+    },
+    {
+      "method": "GET",
+      "url": "https://www.baidu.com",
+      "postFile": null,
+      "contentType": "",
+      "verbose": false,
+      "weight": 5,
+      "name": "test2"
+    }
+  ]
+}
