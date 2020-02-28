@@ -111,7 +111,7 @@ func TestSpawnWorkers(t *testing.T) {
 	runner.hatchRate = 10
 
 	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 	if currentClients > 3 {
@@ -130,7 +130,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 			Fn: func() {
 				lock.Lock()
 				defer lock.Unlock()
-				taskCalls[name] += 1
+				taskCalls[name]++
 			},
 		}
 	}
@@ -199,7 +199,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 			Fn: func() {
 				lock.Lock()
 				defer lock.Unlock()
-				taskCalls[name] += 1
+				taskCalls[name]++
 			},
 		}
 	}
@@ -304,7 +304,7 @@ func TestHatchAndStop(t *testing.T) {
 
 	runner.startHatching(10, float64(10), runner.hatchComplete)
 	// wait for spawning goroutines
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
@@ -486,7 +486,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -509,7 +509,7 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
 	}
 
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -547,7 +547,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
