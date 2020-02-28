@@ -457,8 +457,10 @@ func (r *slaveRunner) run() {
 		for {
 			select {
 			case <-ticker.C:
+				CPUUsage := GetCurrentCPUUsage()
 				data := map[string]interface{}{
-					"state": r.state,
+					"state":             r.state,
+					"current_cpu_usage": CPUUsage,
 				}
 				r.client.sendChannel() <- newMessage("heartbeat", data, r.nodeID)
 			case <-r.closeChan:
