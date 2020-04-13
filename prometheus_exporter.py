@@ -73,9 +73,14 @@ class LocustCollector(object):
                     mtype = 'counter'
                 metric = Metric('locust_requests_' + mtr, 'Locust requests ' + mtr, mtype)
                 for stat in stats:
-                    if 'Total' not in stat['name']:
-                        metric.add_sample('locust_requests_' + mtr, value=stat[mtr],
+                    # Aggregated stat's method label is None, so name it as Aggregated
+                    # locust has changed name Total to Aggregated since 0.12.1
+                    if 'Aggregated' != stat['name']:
+                        metric.add_sample('locust_stats_' + mtr, value=stat[mtr],
                                           labels={'path': stat['name'], 'method': stat['method']})
+                    else:
+                        metric.add_sample('locust_stats_' + mtr, value=stat[mtr],
+                                          labels={'path': stat['name'], 'method': 'Aggregated'})
                 yield metric
 
 
