@@ -78,7 +78,7 @@ class LocustCollector(object):
                 mtype = 'gauge'
                 if mtr in ['num_requests', 'num_failures']:
                     mtype = 'counter'
-                metric = Metric('locust_requests_' + mtr, 'Locust requests ' + mtr, mtype)
+                metric = Metric('locust_stats_' + mtr, 'Locust stats ' + mtr, mtype)
                 for stat in stats:
                     # Aggregated stat's method label is None, so name it as Aggregated
                     # locust has changed name Total to Aggregated since 0.12.1
