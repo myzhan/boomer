@@ -23,12 +23,6 @@ Defaults to 5557.
 -----------------
 Run tasks without connecting to the master, multiply tasks is separated by comma.
 
-``--hatch-type``
------------------
-How to create goroutines according to hatch rate, 'asap' will do it as soon as possible while 'smooth' means a constant pace.
-
-Defaults to asap.
-
 ``--max-rps``
 -----------------
 Max RPS that boomer can generate, disabled by default.

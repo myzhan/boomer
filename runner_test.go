@@ -1,9 +1,12 @@
 package boomer
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type HitOutput struct {
@@ -85,7 +88,7 @@ func TestLocalRunner(t *testing.T) {
 		Name: "TaskA",
 	}
 	tasks := []*Task{taskA}
-	runner := newLocalRunner(tasks, nil, 2, "asap", 2)
+	runner := newLocalRunner(tasks, nil, 2, 2)
 	go runner.run()
 	time.Sleep(4 * time.Second)
 	runner.close()
@@ -99,49 +102,173 @@ func TestSpawnWorkers(t *testing.T) {
 		},
 		Name: "TaskA",
 	}
-	taskB := &Task{
-		Weight: 20,
-		Fn: func() {
-			time.Sleep(2 * time.Second)
-		},
-		Name: "TaskB",
-	}
-	tasks := []*Task{taskA, taskB}
-	rateLimiter := NewStableRateLimiter(100, time.Second)
-	runner := newSlaveRunner("localhost", 5557, tasks, rateLimiter, "asap")
-	defer runner.close()
-
-	runner.client = newClient("localhost", 5557, runner.nodeID)
-	runner.hatchRate = 10
-
-	runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
-	if runner.numClients != 10 {
-		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
-	}
-}
-
-func TestSpawnWorkersSmoothly(t *testing.T) {
-	taskA := &Task{
-		Weight: 10,
-		Fn: func() {
-			time.Sleep(time.Second)
-		},
-		Name: "TaskA",
-	}
 	tasks := []*Task{taskA}
 
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "smooth")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	defer runner.close()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.hatchRate = 10
 
 	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 	if currentClients > 3 {
 		t.Error("Spawning goroutines too fast, current count", currentClients)
+	}
+}
+
+func TestSpawnWorkersWithManyTasks(t *testing.T) {
+	var lock sync.Mutex
+	taskCalls := map[string]int{}
+
+	createTask := func(name string, weight int) *Task {
+		return &Task{
+			Name:   name,
+			Weight: weight,
+			Fn: func() {
+				lock.Lock()
+				defer lock.Unlock()
+				taskCalls[name]++
+			},
+		}
+	}
+	tasks := []*Task{
+		createTask(`one hundred`, 100),
+		createTask(`ten`, 10),
+		createTask(`one`, 1),
+	}
+
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
+	defer runner.close()
+
+	runner.client = newClient("localhost", 5557, runner.nodeID)
+
+	const numToSpawn int = 30
+	const hatchRate float64 = 10
+	runner.hatchRate = hatchRate
+
+	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	time.Sleep(4 * time.Second)
+
+	currentClients := atomic.LoadInt32(&runner.numClients)
+
+	assert.Equal(t, numToSpawn, int(currentClients))
+	lock.Lock()
+	hundreds := taskCalls[`one hundred`]
+	tens := taskCalls[`ten`]
+	ones := taskCalls[`one`]
+	lock.Unlock()
+
+	total := hundreds + tens + ones
+	t.Logf("total tasks run: %d\n", total)
+
+	assert.True(t, total > 111)
+
+	assert.True(t, ones > 1)
+	actPercentage := float64(ones) / float64(total)
+	expectedPercentage := 1.0 / 111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of ones task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, tens > 10)
+	actPercentage = float64(tens) / float64(total)
+	expectedPercentage = 10.0 / 111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of tens task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, hundreds > 100)
+	actPercentage = float64(hundreds) / float64(total)
+	expectedPercentage = 100.0 / 111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of hundreds task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+}
+
+func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
+	var lock sync.Mutex
+	taskCalls := map[string]int{}
+
+	createTask := func(name string, weight int) *Task {
+		return &Task{
+			Name:   name,
+			Weight: weight,
+			Fn: func() {
+				lock.Lock()
+				defer lock.Unlock()
+				taskCalls[name]++
+			},
+		}
+	}
+
+	wts := NewWeighingTaskSet()
+
+	wts.AddTask(createTask(`one thousand`, 1000))
+	wts.AddTask(createTask(`one hundred`, 100))
+	wts.AddTask(createTask(`ten`, 10))
+	wts.AddTask(createTask(`one`, 1))
+
+	task := &Task{
+		Name: "TaskSetWrapperTask",
+		Fn:   wts.Run,
+	}
+
+	runner := newSlaveRunner("localhost", 5557, []*Task{task}, nil)
+	defer runner.close()
+
+	runner.client = newClient("localhost", 5557, runner.nodeID)
+
+	const numToSpawn int = 30
+	const hatchRate float64 = 10
+	runner.hatchRate = hatchRate
+
+	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	time.Sleep(4 * time.Second)
+
+	currentClients := atomic.LoadInt32(&runner.numClients)
+
+	assert.Equal(t, numToSpawn, int(currentClients))
+	lock.Lock()
+	thousands := taskCalls[`one thousand`]
+	hundreds := taskCalls[`one hundred`]
+	tens := taskCalls[`ten`]
+	ones := taskCalls[`one`]
+	lock.Unlock()
+
+	total := hundreds + tens + ones + thousands
+	t.Logf("total tasks run: %d\n", total)
+
+	assert.True(t, total > 1111)
+
+	assert.True(t, ones > 1)
+	actPercentage := float64(ones) / float64(total)
+	expectedPercentage := 1.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of ones task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, tens > 10)
+	actPercentage = float64(tens) / float64(total)
+	expectedPercentage = 10.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of tens task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, hundreds > 100)
+	actPercentage = float64(hundreds) / float64(total)
+	expectedPercentage = 100.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of hundreds task: exp %v, act %v", expectedPercentage, actPercentage)
+	}
+
+	assert.True(t, thousands > 1000)
+	actPercentage = float64(thousands) / float64(total)
+	expectedPercentage = 1000.0 / 1111.0
+	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
+		t.Errorf("Unexpected percentage of thousands task: exp %v, act %v", expectedPercentage, actPercentage)
 	}
 }
 
@@ -157,7 +284,7 @@ func TestHatchAndStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA, taskB}
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
@@ -175,9 +302,9 @@ func TestHatchAndStop(t *testing.T) {
 		}
 	}()
 
-	runner.startHatching(10, 10, runner.hatchComplete)
+	runner.startHatching(10, float64(10), runner.hatchComplete)
 	// wait for spawning goroutines
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
@@ -202,7 +329,7 @@ func TestStop(t *testing.T) {
 		},
 	}
 	tasks := []*Task{taskA}
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	runner.stopChan = make(chan bool)
 
 	stopped := false
@@ -225,13 +352,13 @@ func TestOnHatchMessage(t *testing.T) {
 			time.Sleep(time.Second)
 		},
 	}
-	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
 
-	workers, hatchRate := 0, 0
-	callback := func(param1, param2 int) {
+	workers, hatchRate := 0, float64(0)
+	callback := func(param1 int, param2 float64) {
 		workers = param1
 		hatchRate = param2
 	}
@@ -264,7 +391,7 @@ func TestOnHatchMessage(t *testing.T) {
 }
 
 func TestOnQuitMessage(t *testing.T) {
-	runner := newSlaveRunner("localhost", 5557, nil, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, nil, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, "test")
 	runner.state = stateInit
@@ -327,7 +454,7 @@ func TestOnMessage(t *testing.T) {
 	}
 	tasks := []*Task{taskA, taskB}
 
-	runner := newSlaveRunner("localhost", 5557, tasks, nil, "asap")
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
@@ -359,7 +486,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -382,7 +509,7 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -420,7 +547,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -456,7 +583,7 @@ func TestGetReady(t *testing.T) {
 	server.start()
 
 	rateLimiter := NewStableRateLimiter(100, time.Second)
-	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter, "asap")
+	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter)
 	defer r.close()
 	defer Events.Unsubscribe("boomer:quit", r.onQuiting)
 

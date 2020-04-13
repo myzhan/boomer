@@ -16,10 +16,6 @@ import (
 func TestNewBoomer(t *testing.T) {
 	b := NewBoomer("0.0.0.0", 1234)
 
-	if b.hatchType != "asap" {
-		t.Error("hatchType should be asap")
-	}
-
 	if b.masterHost != "0.0.0.0" {
 		t.Error("masterHost should be 0.0.0.0")
 	}
@@ -35,10 +31,6 @@ func TestNewBoomer(t *testing.T) {
 
 func TestNewStandaloneBoomer(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
-
-	if b.hatchType != "asap" {
-		t.Error("hatchType should be asap")
-	}
 
 	if b.hatchCount != 100 {
 		t.Error("hatchCount should be 100")
@@ -60,26 +52,6 @@ func TestSetRateLimiter(t *testing.T) {
 
 	if b.rateLimiter == nil {
 		t.Error("b.rateLimiter should not be nil")
-	}
-}
-
-func TestSetHatchType(t *testing.T) {
-	b := NewBoomer("127.0.0.1", 5557)
-
-	if b.hatchType != "asap" {
-		t.Error("The default value of hatchType should be \"asap\"")
-	}
-
-	b.SetHatchType("unexpected")
-
-	if b.hatchType != "asap" {
-		t.Error("\"unexpected is not an valid hatchType\"")
-	}
-
-	b.SetHatchType("smooth")
-
-	if b.hatchType != "smooth" {
-		t.Error("hatchType should be changed to \"smooth\"")
 	}
 }
 
@@ -340,7 +312,7 @@ func TestRecordSuccess(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 5557
 	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil, "asap")
+	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
 	RecordSuccess("http", "foo", int64(1), int64(10))
 
 	requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
@@ -357,7 +329,7 @@ func TestRecordFailure(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 5557
 	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil, "asap")
+	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
 	RecordFailure("udp", "bar", int64(2), "udp error")
 
 	requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan

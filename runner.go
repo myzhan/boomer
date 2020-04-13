@@ -3,6 +3,7 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -25,16 +26,17 @@ const (
 )
 
 type runner struct {
-	hatchType string
-	state     string
-	tasks     []*Task
+	state string
+
+	tasks           []*Task
+	totalTaskWeight int
 
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
 	stats            *requestStats
 
 	numClients int32
-	hatchRate  int
+	hatchRate  float64
 
 	// all running workers(goroutines) will select on this channel.
 	// close this channel will stop all running workers.
@@ -115,65 +117,88 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) getWeightSum() (weightSum int) {
-	for _, task := range r.tasks {
-		weightSum += task.Weight
-	}
-	return weightSum
-}
-
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
 	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
 
-	weightSum := r.getWeightSum()
-	for _, task := range r.tasks {
-		percent := float64(task.Weight) / float64(weightSum)
-		amount := int(round(float64(spawnCount)*percent, .5, 0))
-
-		if weightSum == 0 {
-			amount = int(float64(spawnCount) / float64(len(r.tasks)))
+	defer func() {
+		if hatchCompleteFunc != nil {
+			hatchCompleteFunc()
 		}
+	}()
 
-		for i := 1; i <= amount; i++ {
-			if r.hatchType == "smooth" {
-				time.Sleep(time.Duration(1000000/r.hatchRate) * time.Microsecond)
-			} else if i%r.hatchRate == 0 {
-				time.Sleep(1 * time.Second)
-			}
+	for i := 1; i <= spawnCount; i++ {
+		sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
+		time.Sleep(sleepTime)
 
-			select {
-			case <-quit:
-				// quit hatching goroutine
-				return
-			default:
-				atomic.AddInt32(&r.numClients, 1)
-				go func(fn func()) {
-					for {
-						select {
-						case <-quit:
-							return
-						default:
-							if r.rateLimitEnabled {
-								blocked := r.rateLimiter.Acquire()
-								if !blocked {
-									r.safeRun(fn)
-								}
-							} else {
-								r.safeRun(fn)
+		select {
+		case <-quit:
+			// quit hatching goroutine
+			return
+		default:
+			atomic.AddInt32(&r.numClients, 1)
+			go func() {
+				for {
+					task := r.getTask()
+					select {
+					case <-quit:
+						return
+					default:
+						if r.rateLimitEnabled {
+							blocked := r.rateLimiter.Acquire()
+							if !blocked {
+								r.safeRun(task.Fn)
 							}
+						} else {
+							r.safeRun(task.Fn)
 						}
 					}
-				}(task.Fn)
-			}
+				}
+			}()
 		}
-	}
-
-	if hatchCompleteFunc != nil {
-		hatchCompleteFunc()
 	}
 }
 
-func (r *runner) startHatching(spawnCount int, hatchRate int, hatchCompleteFunc func()) {
+// setTasks will set the runner's task list AND the total task weight
+// which is used to get a random task later
+func (r *runner) setTasks(t []*Task) {
+	r.tasks = t
+
+	weightSum := 0
+	for _, task := range r.tasks {
+		weightSum += task.Weight
+	}
+	r.totalTaskWeight = weightSum
+}
+
+func (r *runner) getTask() *Task {
+	tasksCount := len(r.tasks)
+	if tasksCount == 1 {
+		// Fast path
+		return r.tasks[0]
+	}
+
+	rs := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	totalWeight := r.totalTaskWeight
+	if totalWeight <= 0 {
+		// If all the tasks have not weights defined, they have the same chance to run
+		randNum := rs.Intn(tasksCount)
+		return r.tasks[randNum]
+	}
+
+	randNum := rs.Intn(totalWeight)
+	runningSum := 0
+	for _, task := range r.tasks {
+		runningSum += task.Weight
+		if runningSum > randNum {
+			return task
+		}
+	}
+
+	return nil
+}
+
+func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
@@ -202,10 +227,9 @@ type localRunner struct {
 	hatchCount int
 }
 
-func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchType string, hatchRate int) (r *localRunner) {
+func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchRate float64) (r *localRunner) {
 	r = &localRunner{}
-	r.tasks = tasks
-	r.hatchType = hatchType
+	r.setTasks(tasks)
 	r.hatchRate = hatchRate
 	r.hatchCount = hatchCount
 	r.closeChan = make(chan bool)
@@ -266,12 +290,11 @@ type slaveRunner struct {
 	client     client
 }
 
-func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter, hatchType string) (r *slaveRunner) {
+func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter) (r *slaveRunner) {
 	r = &slaveRunner{}
 	r.masterHost = masterHost
 	r.masterPort = masterPort
-	r.tasks = tasks
-	r.hatchType = hatchType
+	r.setTasks(tasks)
 	r.nodeID = getNodeID()
 	r.closeChan = make(chan bool)
 
@@ -311,7 +334,7 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
 	clients, _ := msg.Data["num_clients"]
-	hatchRate := int(rate.(float64))
+	hatchRate := rate.(float64)
 	workers := 0
 	if _, ok := clients.(uint64); ok {
 		workers = int(clients.(uint64))
@@ -319,7 +342,7 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 		workers = int(clients.(int64))
 	}
 	if workers == 0 || hatchRate == 0 {
-		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %d\n",
+		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %.2f\n",
 			workers, hatchRate)
 	} else {
 		Events.Publish("boomer:hatch", workers, hatchRate)
@@ -434,8 +457,10 @@ func (r *slaveRunner) run() {
 		for {
 			select {
 			case <-ticker.C:
+				CPUUsage := GetCurrentCPUUsage()
 				data := map[string]interface{}{
-					"state": r.state,
+					"state":             r.state,
+					"current_cpu_usage": CPUUsage,
 				}
 				r.client.sendChannel() <- newMessage("heartbeat", data, r.nodeID)
 			case <-r.closeChan:

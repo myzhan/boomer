@@ -168,6 +168,7 @@ type statsEntry struct {
 	minResponseTime      int64
 	maxResponseTime      int64
 	numReqsPerSec        map[int64]int64
+	numFailPerSec        map[int64]int64
 	responseTimes        map[int64]int64
 	totalContentLength   int64
 	startTime            int64
@@ -184,6 +185,7 @@ func (s *statsEntry) reset() {
 	s.maxResponseTime = 0
 	s.lastRequestTimestamp = time.Now().Unix()
 	s.numReqsPerSec = make(map[int64]int64)
+	s.numFailPerSec = make(map[int64]int64)
 	s.totalContentLength = 0
 }
 
@@ -249,6 +251,13 @@ func (s *statsEntry) logResponseTime(responseTime int64) {
 
 func (s *statsEntry) logError(err string) {
 	s.numFailures++
+	key := time.Now().Unix()
+	_, ok := s.numFailPerSec[key]
+	if !ok {
+		s.numFailPerSec[key] = 1
+	} else {
+		s.numFailPerSec[key]++
+	}
 }
 
 func (s *statsEntry) serialize() map[string]interface{} {
@@ -258,6 +267,9 @@ func (s *statsEntry) serialize() map[string]interface{} {
 	result["last_request_timestamp"] = s.lastRequestTimestamp
 	result["start_time"] = s.startTime
 	result["num_requests"] = s.numRequests
+	// Boomer doesn't allow None response time for requests like locust.
+	// num_none_requests is added to keep compatible with locust.
+	result["num_none_requests"] = 0
 	result["num_failures"] = s.numFailures
 	result["total_response_time"] = s.totalResponseTime
 	result["max_response_time"] = s.maxResponseTime
@@ -265,6 +277,7 @@ func (s *statsEntry) serialize() map[string]interface{} {
 	result["total_content_length"] = s.totalContentLength
 	result["response_times"] = s.responseTimes
 	result["num_reqs_per_sec"] = s.numReqsPerSec
+	result["num_fail_per_sec"] = s.numFailPerSec
 	return result
 }
 

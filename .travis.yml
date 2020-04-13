@@ -4,7 +4,7 @@ notifications:
   email: false
 
 go:
-  - 1.8
+  - 1.9
   - tip
 
 install:
@@ -13,6 +13,9 @@ install:
   - go get github.com/zeromq/gomq
   - go get github.com/google/uuid
   - go get github.com/olekukonko/tablewriter
+  - go get github.com/stretchr/testify/assert
+  - go get github.com/shirou/gopsutil
+  - go get golang.org/x/sys/unix
 
 script:
   - go test -timeout 1m -coverprofile=coverage.txt -covermode=atomic

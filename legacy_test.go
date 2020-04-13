@@ -30,7 +30,7 @@ func TestInitEvents(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 5557
 	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil, "asap")
+	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
 
 	Events.Publish("request_success", "http", "foo", int64(1), int64(10))
 	Events.Publish("request_failure", "udp", "bar", int64(2), "udp error")
