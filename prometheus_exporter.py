@@ -38,16 +38,18 @@ class LocustCollector(object):
                     "avg_content_length": s.avg_content_length,
                 })
 
+            # perhaps StatsError.parse_error in e.to_dict only works in python slave, take notices!
             errors = [e.to_dict() for e in six.itervalues(runners.locust_runner.errors)]
 
             metric = Metric('locust_user_count', 'Swarmed users', 'gauge')
             metric.add_sample('locust_user_count', value=runners.locust_runner.user_count, labels={})
             yield metric
-
+            
             metric = Metric('locust_errors', 'Locust requests errors', 'gauge')
             for err in errors:
                 metric.add_sample('locust_errors', value=err['occurrences'],
-                                  labels={'path': err['name'], 'method': err['method']})
+                                  labels={'path': err['name'], 'method': err['method'],
+                                          'error': err['error']})
             yield metric
 
             is_distributed = isinstance(runners.locust_runner, runners.MasterLocustRunner)
