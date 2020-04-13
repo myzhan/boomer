@@ -18,8 +18,8 @@ class LocustCollector(object):
     registry = REGISTRY
 
     def collect(self):
-        # locust_runner is not None, it indicates that test started.
-        if runners.locust_runner:
+        # collect metrics only when locust runner is hatching or running.
+        if runners.locust_runner and runners.locust_runner.state in (runners.STATE_HATCHING, runners.STATE_RUNNING):
 
             stats = []
 
