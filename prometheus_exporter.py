@@ -35,7 +35,11 @@ class LocustCollector(object):
                     "max_response_time": s.max_response_time,
                     "current_rps": s.current_rps,
                     "median_response_time": s.median_response_time,
+                    "ninetieth_response_time": s.get_response_time_percentile(0.9),
+                    # only total stats can use current_response_time, so sad.
+                    #"current_response_time_percentile_95": s.get_current_response_time_percentile(0.95),
                     "avg_content_length": s.avg_content_length,
+                    "current_fail_per_sec": s.current_fail_per_sec
                 })
 
             # perhaps StatsError.parse_error in e.to_dict only works in python slave, take notices!
@@ -66,8 +70,9 @@ class LocustCollector(object):
             metric.add_sample('locust_state', value=1, labels={'state': runners.locust_runner.state})
             yield metric
 
-            stats_metrics = ['avg_content_length', 'avg_response_time', 'current_rps', 'max_response_time',
-                             'median_response_time', 'min_response_time', 'num_failures', 'num_requests']
+            stats_metrics = ['avg_content_length', 'avg_response_time', 'current_rps', 'current_fail_per_sec',
+                             'max_response_time', 'ninetieth_response_time', 'median_response_time', 'min_response_time',
+                             'num_failures', 'num_requests']
 
             for mtr in stats_metrics:
                 mtype = 'gauge'
