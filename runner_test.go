@@ -149,8 +149,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
 
-	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
-	time.Sleep(4 * time.Second)
+	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
@@ -225,8 +224,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
 
-	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
-	time.Sleep(4 * time.Second)
+	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 

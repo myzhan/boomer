@@ -232,7 +232,7 @@ func TestStatsStart(t *testing.T) {
 		error:        "500 error",
 	}
 
-	var ticker = time.NewTicker(slaveReportInterval + 100*time.Millisecond)
+	var ticker = time.NewTicker(slaveReportInterval + 500*time.Millisecond)
 	for {
 		select {
 		case <-ticker.C:
