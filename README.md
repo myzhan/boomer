@@ -168,6 +168,17 @@ Entering interactive mode (type "help" for commands, "o" for options)
 (pprof) top
 ```
 
+## Exporter
+If you are not satisfied with the build-in web monitor in Locust, you can run prometheus_exporter.py instead of dummy.py as your master.
+
+Try this
+
+```bash
+locust --master -f prometheus_exporter.py
+```
+
+Thanks to Prometheus and Grafana, you will get an awesome dashboard: [Locust for Prometheus](https://grafana.com/grafana/dashboards/12081)
+
 ## Contributing
 
 If you are enjoying boomer and willing to add new features to it, you are welcome.

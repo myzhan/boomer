@@ -18,8 +18,8 @@ class LocustCollector(object):
     registry = REGISTRY
 
     def collect(self):
-        # locust_runner is not None, it indicates that test started.
-        if runners.locust_runner:
+        # collect metrics only when locust runner is hatching or running.
+        if runners.locust_runner and runners.locust_runner.state in (runners.STATE_HATCHING, runners.STATE_RUNNING):
 
             stats = []
 
@@ -35,19 +35,25 @@ class LocustCollector(object):
                     "max_response_time": s.max_response_time,
                     "current_rps": s.current_rps,
                     "median_response_time": s.median_response_time,
+                    "ninetieth_response_time": s.get_response_time_percentile(0.9),
+                    # only total stats can use current_response_time, so sad.
+                    #"current_response_time_percentile_95": s.get_current_response_time_percentile(0.95),
                     "avg_content_length": s.avg_content_length,
+                    "current_fail_per_sec": s.current_fail_per_sec
                 })
 
+            # perhaps StatsError.parse_error in e.to_dict only works in python slave, take notices!
             errors = [e.to_dict() for e in six.itervalues(runners.locust_runner.errors)]
 
             metric = Metric('locust_user_count', 'Swarmed users', 'gauge')
             metric.add_sample('locust_user_count', value=runners.locust_runner.user_count, labels={})
             yield metric
-
+            
             metric = Metric('locust_errors', 'Locust requests errors', 'gauge')
             for err in errors:
                 metric.add_sample('locust_errors', value=err['occurrences'],
-                                  labels={'path': err['name'], 'method': err['method']})
+                                  labels={'path': err['name'], 'method': err['method'],
+                                          'error': err['error']})
             yield metric
 
             is_distributed = isinstance(runners.locust_runner, runners.MasterLocustRunner)
@@ -64,18 +70,24 @@ class LocustCollector(object):
             metric.add_sample('locust_state', value=1, labels={'state': runners.locust_runner.state})
             yield metric
 
-            stats_metrics = ['avg_content_length', 'avg_response_time', 'current_rps', 'max_response_time',
-                             'median_response_time', 'min_response_time', 'num_failures', 'num_requests']
+            stats_metrics = ['avg_content_length', 'avg_response_time', 'current_rps', 'current_fail_per_sec',
+                             'max_response_time', 'ninetieth_response_time', 'median_response_time', 'min_response_time',
+                             'num_failures', 'num_requests']
 
             for mtr in stats_metrics:
                 mtype = 'gauge'
                 if mtr in ['num_requests', 'num_failures']:
                     mtype = 'counter'
-                metric = Metric('locust_requests_' + mtr, 'Locust requests ' + mtr, mtype)
+                metric = Metric('locust_stats_' + mtr, 'Locust stats ' + mtr, mtype)
                 for stat in stats:
-                    if 'Total' not in stat['name']:
-                        metric.add_sample('locust_requests_' + mtr, value=stat[mtr],
+                    # Aggregated stat's method label is None, so name it as Aggregated
+                    # locust has changed name Total to Aggregated since 0.12.1
+                    if 'Aggregated' != stat['name']:
+                        metric.add_sample('locust_stats_' + mtr, value=stat[mtr],
                                           labels={'path': stat['name'], 'method': stat['method']})
+                    else:
+                        metric.add_sample('locust_stats_' + mtr, value=stat[mtr],
+                                          labels={'path': stat['name'], 'method': 'Aggregated'})
                 yield metric
 
 
