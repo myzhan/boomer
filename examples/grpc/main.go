@@ -12,7 +12,7 @@ import (
 
 var verbose = false
 
-// 修改为要压测的服务接口
+// change to your own service and method
 var service = "helloworld.Greeter"
 var method = "SayHello"
 var timeout uint = 3000
@@ -28,11 +28,11 @@ var (
 func rpcReq() {
 	startTime := time.Now()
 
-	// 构建请求对象
+	// make the request
 	request := &HelloRequest{}
 	request.Name = req.Name
 
-	// 初始化响应对象
+	// init the response
 	resp := new(HelloReply)
 	err := client.Call(request, resp)
 
@@ -44,7 +44,7 @@ func rpcReq() {
 		}
 		boomer.RecordFailure("rpc", "error", 0.0, err.Error())
 	} else {
-		// 添加自定义断言
+		// make your assertion
 		boomer.RecordSuccess("rpc", "succ",
 			elapsed.Nanoseconds()/int64(time.Millisecond), int64(len(resp.String())))
 		if verbose {
@@ -64,7 +64,7 @@ func main() {
 	flag.Parse()
 
 	log.Printf(reqJSONStr)
-	// json反序列化
+	// json unserialize, input different parameters
 	err := json.Unmarshal([]byte(reqJSONStr), &req)
 
 	if nil != err {
@@ -72,6 +72,7 @@ func main() {
 		return
 	}
 
+	// init requester
 	client = grequester.NewRequester(addr, service, method, timeout, poolsize)
 
 	task := &boomer.Task{
