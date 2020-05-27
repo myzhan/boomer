@@ -474,8 +474,8 @@ func TestOnMessage(t *testing.T) {
 
 	// start hatching
 	runner.onMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate":  float64(10),
-		"num_clients": int64(10),
+		"hatch_rate": float64(10),
+		"num_users":  int64(10),
 	}, runner.nodeID))
 
 	msg := <-runner.client.sendChannel()
