@@ -4,7 +4,7 @@ import six
 from itertools import chain
 
 from flask import request, Response
-from locust import Locust, TaskSet, task, web, runners, stats as locust_stats
+from locust import User, task, web, runners, stats as locust_stats
 from prometheus_client import Metric, REGISTRY, exposition
 
 # This locustfile adds an external web endpoint to the locust master, and makes it serve as a prometheus exporter.
@@ -103,12 +103,7 @@ def prometheus_exporter():
 
 REGISTRY.register(LocustCollector())
 
-
-class DummyTaskSet(TaskSet):
+class Dummy(User):
     @task(20)
     def hello(self):
         pass
-
-
-class Dummy(Locust):
-    task_set = DummyTaskSet
