@@ -4,7 +4,8 @@ import six
 from itertools import chain
 
 from flask import request, Response
-from locust import User, task, web, runners, stats as locust_stats
+from locust import stats as locust_stats, runners as locust_runners
+from locust import User, task, events
 from prometheus_client import Metric, REGISTRY, exposition
 
 # This locustfile adds an external web endpoint to the locust master, and makes it serve as a prometheus exporter.
@@ -17,14 +18,17 @@ from prometheus_client import Metric, REGISTRY, exposition
 class LocustCollector(object):
     registry = REGISTRY
 
+    def __init__(self, environment, runner):
+        self.environment = environment
+        self.runner = runner
+
     def collect(self):
         # collect metrics only when locust runner is hatching or running.
-        if runners.locust_runner and runners.locust_runner.state in (runners.STATE_HATCHING, runners.STATE_RUNNING):
+        runner = self.runner
 
+        if runner and runner.state in (locust_runners.STATE_HATCHING, locust_runners.STATE_RUNNING):
             stats = []
-
-            for s in chain(locust_stats.sort_stats(runners.locust_runner.request_stats),
-                           [runners.locust_runner.stats.total]):
+            for s in chain(locust_stats.sort_stats(runner.stats.entries), [runner.stats.total]):
                 stats.append({
                     "method": s.method,
                     "name": s.name,
@@ -43,10 +47,10 @@ class LocustCollector(object):
                 })
 
             # perhaps StatsError.parse_error in e.to_dict only works in python slave, take notices!
-            errors = [e.to_dict() for e in six.itervalues(runners.locust_runner.errors)]
+            errors = [e.to_dict() for e in six.itervalues(runner.stats.errors)]
 
             metric = Metric('locust_user_count', 'Swarmed users', 'gauge')
-            metric.add_sample('locust_user_count', value=runners.locust_runner.user_count, labels={})
+            metric.add_sample('locust_user_count', value=runner.user_count, labels={})
             yield metric
             
             metric = Metric('locust_errors', 'Locust requests errors', 'gauge')
@@ -56,18 +60,18 @@ class LocustCollector(object):
                                           'error': err['error']})
             yield metric
 
-            is_distributed = isinstance(runners.locust_runner, runners.MasterLocustRunner)
+            is_distributed = isinstance(runner, locust_runners.MasterRunner)
             if is_distributed:
                 metric = Metric('locust_slave_count', 'Locust number of slaves', 'gauge')
-                metric.add_sample('locust_slave_count', value=len(runners.locust_runner.clients.values()), labels={})
+                metric.add_sample('locust_slave_count', value=len(runner.clients.values()), labels={})
                 yield metric
 
             metric = Metric('locust_fail_ratio', 'Locust failure ratio', 'gauge')
-            metric.add_sample('locust_fail_ratio', value=runners.locust_runner.stats.total.fail_ratio, labels={})
+            metric.add_sample('locust_fail_ratio', value=runner.stats.total.fail_ratio, labels={})
             yield metric
 
             metric = Metric('locust_state', 'State of the locust swarm', 'gauge')
-            metric.add_sample('locust_state', value=1, labels={'state': runners.locust_runner.state})
+            metric.add_sample('locust_state', value=1, labels={'state': runner.state})
             yield metric
 
             stats_metrics = ['avg_content_length', 'avg_response_time', 'current_rps', 'current_fail_per_sec',
@@ -91,17 +95,20 @@ class LocustCollector(object):
                 yield metric
 
 
-@web.app.route("/export/prometheus")
-def prometheus_exporter():
-    registry = REGISTRY
-    encoder, content_type = exposition.choose_encoder(request.headers.get('Accept'))
-    if 'name[]' in request.args:
-        registry = REGISTRY.restricted_registry(request.args.get('name[]'))
-    body = encoder(registry)
-    return Response(body, content_type=content_type)
+@events.init.add_listener
+def locust_init(environment, runner, **kwargs):
+    print("locust init event received")
+    if environment.web_ui and runner:
+        @environment.web_ui.app.route("/export/prometheus")
+        def prometheus_exporter():
+            registry = REGISTRY
+            encoder, content_type = exposition.choose_encoder(request.headers.get('Accept'))
+            if 'name[]' in request.args:
+                registry = REGISTRY.restricted_registry(request.args.get('name[]'))
+            body = encoder(registry)
+            return Response(body, content_type=content_type)
+        REGISTRY.register(LocustCollector(environment, runner))
 
-
-REGISTRY.register(LocustCollector())
 
 class Dummy(User):
     @task(20)
