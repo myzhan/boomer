@@ -333,16 +333,20 @@ func (r *slaveRunner) close() {
 func (r *slaveRunner) onHatchMessage(msg *message) {
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
 	rate, _ := msg.Data["hatch_rate"]
-	clients, _ := msg.Data["num_clients"]
+	users, ok := msg.Data["num_users"]
+	if !ok {
+		// keep compatible with previous version of locust.
+		users, _ = msg.Data["num_clients"]
+	}
 	hatchRate := rate.(float64)
 	workers := 0
-	if _, ok := clients.(uint64); ok {
-		workers = int(clients.(uint64))
+	if _, ok := users.(uint64); ok {
+		workers = int(users.(uint64))
 	} else {
-		workers = int(clients.(int64))
+		workers = int(users.(int64))
 	}
 	if workers == 0 || hatchRate == 0 {
-		log.Printf("Invalid hatch message from master, num_clients is %d, hatch_rate is %.2f\n",
+		log.Printf("Invalid hatch message from master, users is %d, hatch_rate is %.2f\n",
 			workers, hatchRate)
 	} else {
 		Events.Publish("boomer:hatch", workers, hatchRate)
@@ -457,8 +461,10 @@ func (r *slaveRunner) run() {
 		for {
 			select {
 			case <-ticker.C:
+				CPUUsage := GetCurrentCPUUsage()
 				data := map[string]interface{}{
-					"state": r.state,
+					"state":             r.state,
+					"current_cpu_usage": CPUUsage,
 				}
 				r.client.sendChannel() <- newMessage("heartbeat", data, r.nodeID)
 			case <-r.closeChan:

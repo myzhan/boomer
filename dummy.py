@@ -1,11 +1,8 @@
 # coding: utf8
 
-from locust import Locust, TaskSet, task
+from locust import User, task
 
-class MyTaskSet(TaskSet):
+class Dummy(User):
     @task(20)
     def hello(self):
         pass
-
-class Dummy(Locust):
-    task_set = MyTaskSet

@@ -172,8 +172,8 @@ func TestDistributedRun(t *testing.T) {
 	b.Run(taskA)
 
 	server.toClient <- newMessage("hatch", map[string]interface{}{
-		"hatch_rate":  float64(10),
-		"num_clients": int64(10),
+		"hatch_rate": float64(10),
+		"num_users":  int64(10),
 	}, b.slaveRunner.nodeID)
 
 	time.Sleep(4 * time.Second)
@@ -295,8 +295,8 @@ func TestRun(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	server.toClient <- newMessage("hatch", map[string]interface{}{
-		"hatch_rate":  float64(10),
-		"num_clients": int64(10),
+		"hatch_rate": float64(10),
+		"num_users":  int64(10),
 	}, defaultBoomer.slaveRunner.nodeID)
 
 	time.Sleep(4 * time.Second)

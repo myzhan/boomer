@@ -111,7 +111,7 @@ func TestSpawnWorkers(t *testing.T) {
 	runner.hatchRate = 10
 
 	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 	if currentClients > 3 {
@@ -130,7 +130,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 			Fn: func() {
 				lock.Lock()
 				defer lock.Unlock()
-				taskCalls[name] += 1
+				taskCalls[name]++
 			},
 		}
 	}
@@ -149,8 +149,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
 
-	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
-	time.Sleep(4 * time.Second)
+	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
@@ -199,7 +198,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 			Fn: func() {
 				lock.Lock()
 				defer lock.Unlock()
-				taskCalls[name] += 1
+				taskCalls[name]++
 			},
 		}
 	}
@@ -225,8 +224,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
 
-	go runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
-	time.Sleep(4 * time.Second)
+	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
@@ -304,7 +302,7 @@ func TestHatchAndStop(t *testing.T) {
 
 	runner.startHatching(10, float64(10), runner.hatchComplete)
 	// wait for spawning goroutines
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
 	}
@@ -376,8 +374,8 @@ func TestOnHatchMessage(t *testing.T) {
 	}()
 
 	runner.onHatchMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate":  float64(20),
-		"num_clients": int64(20),
+		"hatch_rate": float64(20),
+		"num_users":  int64(20),
 	}, runner.nodeID))
 
 	if workers != 20 {
@@ -476,8 +474,8 @@ func TestOnMessage(t *testing.T) {
 
 	// start hatching
 	runner.onMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate":  float64(10),
-		"num_clients": int64(10),
+		"hatch_rate": float64(10),
+		"num_users":  int64(10),
 	}, runner.nodeID))
 
 	msg := <-runner.client.sendChannel()
@@ -486,7 +484,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -498,10 +496,10 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send hatch_complete message when hatch completed, got", msg.Type)
 	}
 
-	// increase num_clients while running
+	// increase num_users while running
 	runner.onMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate":  float64(20),
-		"num_clients": int64(20),
+		"hatch_rate": float64(20),
+		"num_users":  int64(20),
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
@@ -509,7 +507,7 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
 	}
 
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
@@ -537,8 +535,8 @@ func TestOnMessage(t *testing.T) {
 
 	// hatch again
 	runner.onMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate":  float64(10),
-		"num_clients": uint64(10),
+		"hatch_rate": float64(10),
+		"num_users":  uint64(10),
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
@@ -547,7 +545,7 @@ func TestOnMessage(t *testing.T) {
 	}
 
 	// hatch complete and running
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
 		t.Error("State of runner is not running after hatch, got", runner.state)
 	}
