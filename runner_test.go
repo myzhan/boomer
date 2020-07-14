@@ -29,7 +29,7 @@ func (o *HitOutput) OnStop() {
 
 func TestSafeRun(t *testing.T) {
 	runner := &runner{}
-	runner.safeRun(func() {
+	runner.safeRun(TaskArgs{}, func(TaskArgs) {
 		panic("Runner will catch this panic")
 	})
 }
@@ -82,7 +82,7 @@ func TestOutputOnStop(t *testing.T) {
 func TestLocalRunner(t *testing.T) {
 	taskA := &Task{
 		Weight: 10,
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(time.Second)
 		},
 		Name: "TaskA",
@@ -97,7 +97,7 @@ func TestLocalRunner(t *testing.T) {
 func TestSpawnWorkers(t *testing.T) {
 	taskA := &Task{
 		Weight: 10,
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(time.Second)
 		},
 		Name: "TaskA",
@@ -110,7 +110,7 @@ func TestSpawnWorkers(t *testing.T) {
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.hatchRate = 10
 
-	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
+	go runner.spawnWorkers(TaskArgs{}, 10, runner.stopChan, runner.hatchComplete)
 	time.Sleep(10 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
@@ -127,7 +127,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 		return &Task{
 			Name:   name,
 			Weight: weight,
-			Fn: func() {
+			Fn: func(TaskArgs) {
 				lock.Lock()
 				defer lock.Unlock()
 				taskCalls[name]++
@@ -149,7 +149,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
 
-	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	runner.spawnWorkers(TaskArgs{}, numToSpawn, runner.stopChan, runner.hatchComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
@@ -195,7 +195,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 		return &Task{
 			Name:   name,
 			Weight: weight,
-			Fn: func() {
+			Fn: func(TaskArgs) {
 				lock.Lock()
 				defer lock.Unlock()
 				taskCalls[name]++
@@ -224,7 +224,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	const hatchRate float64 = 10
 	runner.hatchRate = hatchRate
 
-	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	runner.spawnWorkers(TaskArgs{}, numToSpawn, runner.stopChan, runner.hatchComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
@@ -272,12 +272,12 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 
 func TestHatchAndStop(t *testing.T) {
 	taskA := &Task{
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(time.Second)
 		},
 	}
 	taskB := &Task{
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(2 * time.Second)
 		},
 	}
@@ -300,7 +300,7 @@ func TestHatchAndStop(t *testing.T) {
 		}
 	}()
 
-	runner.startHatching(10, float64(10), runner.hatchComplete)
+	runner.startHatching(TaskArgs{}, 10, float64(10), runner.hatchComplete)
 	// wait for spawning goroutines
 	time.Sleep(2 * time.Second)
 	if runner.numClients != 10 {
@@ -322,7 +322,7 @@ func TestHatchAndStop(t *testing.T) {
 
 func TestStop(t *testing.T) {
 	taskA := &Task{
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(time.Second)
 		},
 	}
@@ -346,7 +346,7 @@ func TestStop(t *testing.T) {
 
 func TestOnHatchMessage(t *testing.T) {
 	taskA := &Task{
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(time.Second)
 		},
 	}
@@ -441,12 +441,12 @@ func TestOnQuitMessage(t *testing.T) {
 
 func TestOnMessage(t *testing.T) {
 	taskA := &Task{
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(time.Second)
 		},
 	}
 	taskB := &Task{
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			time.Sleep(2 * time.Second)
 		},
 	}

@@ -99,9 +99,9 @@ func (ts *WeighingTaskSet) GetWeight() (weight int) {
 
 // Run will pick up a task in the task set randomly and run.
 // It can is used as a Task.Fn.
-func (ts *WeighingTaskSet) Run() {
+func (ts *WeighingTaskSet) Run(args TaskArgs) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	roll := r.Intn(ts.offset)
 	task := ts.GetTask(roll)
-	task.Fn()
+	task.Fn(args)
 }

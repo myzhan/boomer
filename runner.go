@@ -37,6 +37,7 @@ type runner struct {
 
 	numClients int32
 	hatchRate  float64
+	host       string
 
 	// all running workers(goroutines) will select on this channel.
 	// close this channel will stop all running workers.
@@ -50,7 +51,7 @@ type runner struct {
 
 // safeRun runs fn and recovers from unexpected panics.
 // it prevents panics from Task.Fn crashing boomer.
-func (r *runner) safeRun(fn func()) {
+func (r *runner) safeRun(args TaskArgs, fn func(args TaskArgs)) {
 	defer func() {
 		// don't panic
 		err := recover()
@@ -62,7 +63,7 @@ func (r *runner) safeRun(fn func()) {
 			os.Stderr.Write(stackTrace)
 		}
 	}()
-	fn()
+	fn(args)
 }
 
 func (r *runner) addOutput(o Output) {
@@ -117,8 +118,8 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
-	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
+func (r *runner) spawnWorkers(args TaskArgs, spawnCount int, quit chan bool, hatchCompleteFunc func()) {
+	log.Printf("Hatching and swarming %d clients at the rate %.2f clients/s, targeting %q", spawnCount, r.hatchRate, args.Host)
 
 	defer func() {
 		if hatchCompleteFunc != nil {
@@ -146,10 +147,10 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 						if r.rateLimitEnabled {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
-								r.safeRun(task.Fn)
+								r.safeRun(TaskArgs{Host: r.host}, task.Fn)
 							}
 						} else {
-							r.safeRun(task.Fn)
+							r.safeRun(args, task.Fn)
 						}
 					}
 				}
@@ -198,14 +199,14 @@ func (r *runner) getTask() *Task {
 	return nil
 }
 
-func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
+func (r *runner) startHatching(args TaskArgs, spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
 	r.hatchRate = hatchRate
 	r.numClients = 0
 
-	go r.spawnWorkers(spawnCount, r.stopChan, hatchCompleteFunc)
+	go r.spawnWorkers(args, spawnCount, r.stopChan, hatchCompleteFunc)
 }
 
 func (r *runner) stop() {
@@ -234,6 +235,7 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatc
 	r.hatchCount = hatchCount
 	r.closeChan = make(chan bool)
 	r.addOutput(NewConsoleOutput())
+	r.host = host
 
 	if rateLimiter != nil {
 		r.rateLimitEnabled = true
@@ -268,7 +270,7 @@ func (r *localRunner) run() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
-	r.startHatching(r.hatchCount, r.hatchRate, nil)
+	r.startHatching(TaskArgs{Host: r.host}, r.hatchCount, r.hatchRate, nil)
 
 	wg.Wait()
 }
@@ -331,7 +333,22 @@ func (r *slaveRunner) close() {
 }
 
 func (r *slaveRunner) onHatchMessage(msg *message) {
+	log.Printf("msg.Data: %#v", msg.Data)
 	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
+	var target = host
+	if ti, ok := msg.Data["host"]; ok {
+		switch t := ti.(type) {
+		case string:
+			target = t
+		case []uint8:
+			bs := make([]byte, len(t))
+			for i := range t {
+				bs[i] = t[i]
+			}
+			target = string(bs)
+		}
+	}
+
 	rate, _ := msg.Data["hatch_rate"]
 	users, ok := msg.Data["num_users"]
 	if !ok {
@@ -351,7 +368,7 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
-	r.startHatching(workers, hatchRate, r.hatchComplete)
+	r.startHatching(TaskArgs{Host: target}, workers, hatchRate, r.hatchComplete)
 }
 
 // Runner acts as a state machine.

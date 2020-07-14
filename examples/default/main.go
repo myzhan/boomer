@@ -7,7 +7,7 @@ import (
 	"github.com/myzhan/boomer"
 )
 
-func foo() {
+func foo(args boomer.TaskArgs) {
 	start := time.Now()
 	time.Sleep(100 * time.Millisecond)
 	elapsed := time.Since(start)
@@ -17,7 +17,7 @@ func foo() {
 	boomer.RecordSuccess("http", "foo", elapsed.Nanoseconds()/int64(time.Millisecond), int64(10))
 }
 
-func bar() {
+func bar(args boomer.TaskArgs) {
 	start := time.Now()
 	time.Sleep(100 * time.Millisecond)
 	elapsed := time.Since(start)

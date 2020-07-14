@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -21,6 +22,7 @@ var memoryProfile string
 var memoryProfileDuration time.Duration
 var cpuProfile string
 var cpuProfileDuration time.Duration
+var host string
 
 var successRetiredWarning = &sync.Once{}
 var failureRetiredWarning = &sync.Once{}
@@ -86,4 +88,5 @@ func init() {
 	flag.DurationVar(&memoryProfileDuration, "mem-profile-duration", 30*time.Second, "Memory profile duration.")
 	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling.")
 	flag.DurationVar(&cpuProfileDuration, "cpu-profile-duration", 30*time.Second, "CPU profile duration.")
+	flag.StringVar(&host, "host", os.Getenv("TARGET_HOST"), "url host argument to pass to jobs")
 }

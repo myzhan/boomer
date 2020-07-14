@@ -9,7 +9,7 @@ func TestWeighingTaskSetWithSingleTask(t *testing.T) {
 	taskA := &Task{
 		Name:   "A",
 		Weight: 1,
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			taskAIsRun = true
 		},
 	}
@@ -25,7 +25,7 @@ func TestWeighingTaskSetWithSingleTask(t *testing.T) {
 		t.Error("Out of bound, should return nil")
 	}
 
-	ts.Run()
+	ts.Run(TaskArgs{})
 
 	if !taskAIsRun {
 		t.Error("Task A should be run")

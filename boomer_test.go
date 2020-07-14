@@ -118,7 +118,7 @@ func TestStandaloneRun(t *testing.T) {
 	count := int64(0)
 	taskA := &Task{
 		Name: "increaseCount",
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			atomic.AddInt64(&count, 1)
 			runtime.Goexit()
 		},
@@ -164,7 +164,7 @@ func TestDistributedRun(t *testing.T) {
 	count := int64(0)
 	taskA := &Task{
 		Name: "increaseCount",
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			atomic.AddInt64(&count, 1)
 			runtime.Goexit()
 		},
@@ -189,19 +189,19 @@ func TestRunTasksForTest(t *testing.T) {
 	count := 0
 	taskA := &Task{
 		Name: "increaseCount",
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			count++
 		},
 	}
 	taskWithoutName := &Task{
 		Name: "",
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			count++
 		},
 	}
 	runTasks = "increaseCount,foobar"
 
-	runTasksForTest(taskA, taskWithoutName)
+	runTasksForTest(TaskArgs{}, taskA, taskWithoutName)
 
 	if count != 1 {
 		t.Error("count is", count, "expected: 1")
@@ -213,7 +213,7 @@ func TestRunTasksForTest(t *testing.T) {
 func TestRunTasksWithBoomerReport(t *testing.T) {
 	taskA := &Task{
 		Name: "report",
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			// it should not panic.
 			RecordSuccess("http", "foo", int64(1), int64(10))
 			RecordFailure("udp", "bar", int64(1), "udp error")
@@ -221,7 +221,7 @@ func TestRunTasksWithBoomerReport(t *testing.T) {
 	}
 	runTasks = "report"
 
-	runTasksForTest(taskA)
+	runTasksForTest(TaskArgs{}, taskA)
 
 	runTasks = ""
 }
@@ -285,7 +285,7 @@ func TestRun(t *testing.T) {
 	count := int64(0)
 	taskA := &Task{
 		Name: "increaseCount",
-		Fn: func() {
+		Fn: func(TaskArgs) {
 			atomic.AddInt64(&count, 1)
 			runtime.Goexit()
 		},
