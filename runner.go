@@ -345,17 +345,13 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 	} else {
 		workers = int(users.(int64))
 	}
-	if workers == 0 || hatchRate == 0 {
-		log.Printf("Invalid hatch message from master, users is %d, hatch_rate is %.2f\n",
-			workers, hatchRate)
-	} else {
-		Events.Publish("boomer:hatch", workers, hatchRate)
 
-		if r.rateLimitEnabled {
-			r.rateLimiter.Start()
-		}
-		r.startHatching(workers, hatchRate, r.hatchComplete)
+	Events.Publish("boomer:hatch", workers, hatchRate)
+
+	if r.rateLimitEnabled {
+		r.rateLimiter.Start()
 	}
+	r.startHatching(workers, hatchRate, r.hatchComplete)
 }
 
 // Runner acts as a state machine.
