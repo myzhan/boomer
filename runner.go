@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -47,6 +48,12 @@ type runner struct {
 	closeChan chan bool
 
 	outputs []Output
+
+	// lastTime is the last time we sampled CPU usage
+	lastTime time.Time
+
+	// lastCPUTime is the value value we got from CPU usage
+	lastCPUTime float64
 }
 
 // safeRun runs fn and recovers from unexpected panics.
@@ -470,14 +477,27 @@ func (r *slaveRunner) run() {
 	// See: https://github.com/locustio/locust/commit/a8c0d7d8c588f3980303358298870f2ea394ab93
 	go func() {
 		var ticker = time.NewTicker(heartbeatInterval)
+		r.lastTime = time.Now()
+		r.lastCPUTime = GetCurrentCPUUsage()
+		cpuCount := float64(runtime.GOMAXPROCS(0))
 		for {
 			select {
 			case <-ticker.C:
-				CPUUsage := GetCurrentCPUUsage()
+				currentCPUTime := GetCurrentCPUUsage()
+				since := time.Since(r.lastTime).Seconds()
+				usage := (currentCPUTime - r.lastCPUTime)
+				r.lastTime = time.Now()
+				r.lastCPUTime = currentCPUTime
+
+				cpuUsage := 0.0
+				if since != 0.0 {
+					cpuUsage = ((usage / since) * 100) / cpuCount
+				}
 				data := map[string]interface{}{
 					"state":             r.state,
-					"current_cpu_usage": CPUUsage,
+					"current_cpu_usage": cpuUsage,
 				}
+
 				r.client.sendChannel() <- newMessage("heartbeat", data, r.nodeID)
 			case <-r.closeChan:
 				return
