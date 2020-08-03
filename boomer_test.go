@@ -327,8 +327,7 @@ func TestSetInitTask(t *testing.T) {
 	taskInit := &Task{
 		Name: "initTask",
 		Fn: func() {
-			atomic.AddInt64(&count, -1)
-			runtime.Goexit()
+			atomic.AddInt64(&count, 2)
 		},
 	}
 	taskA := &Task{
@@ -352,8 +351,8 @@ func TestSetInitTask(t *testing.T) {
 
 	defaultBoomer.Quit()
 
-	if count != 9 {
-		t.Error("count is", count, "expected: 9")
+	if count != 30 {
+		t.Error("count is", count, "expected: 30")
 	}
 }
 
