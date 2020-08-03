@@ -308,6 +308,55 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestSetInitTask(t *testing.T) {
+	flag.Parse()
+
+	masterHost = "0.0.0.0"
+	rand.Seed(Now())
+	masterPort = rand.Intn(1000) + 10240
+
+	server := newTestServer(masterHost, masterPort)
+	defer server.close()
+
+	log.Println(fmt.Sprintf("Starting to serve on %s:%d", masterHost, masterPort))
+	server.start()
+
+	time.Sleep(20 * time.Millisecond)
+
+	count := int64(0)
+	taskInit := &Task{
+		Name: "initTask",
+		Fn: func() {
+			atomic.AddInt64(&count, -1)
+			runtime.Goexit()
+		},
+	}
+	taskA := &Task{
+		Name: "increaseCount",
+		Fn: func() {
+			atomic.AddInt64(&count, 1)
+			runtime.Goexit()
+		},
+	}
+
+	SetInitTask(taskInit)
+	go Run(taskA)
+	time.Sleep(20 * time.Millisecond)
+
+	server.toClient <- newMessage("hatch", map[string]interface{}{
+		"hatch_rate": float64(10),
+		"num_users":  int64(10),
+	}, defaultBoomer.slaveRunner.nodeID)
+
+	time.Sleep(4 * time.Second)
+
+	defaultBoomer.Quit()
+
+	if count != 10 {
+		t.Error("count is", count, "expected: 10")
+	}
+}
+
 func TestRecordSuccess(t *testing.T) {
 	masterHost := "127.0.0.1"
 	masterPort := 5557

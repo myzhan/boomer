@@ -35,8 +35,8 @@ type Boomer struct {
 	mode        Mode
 	rateLimiter RateLimiter
 	slaveRunner *slaveRunner
-
 	localRunner *localRunner
+	initTask    *Task
 	hatchCount  int
 	hatchRate   float64
 
@@ -120,12 +120,14 @@ func (b *Boomer) Run(tasks ...*Task) {
 	switch b.mode {
 	case DistributedMode:
 		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter)
+		b.slaveRunner.initTask = b.initTask
 		for _, o := range b.outputs {
 			b.slaveRunner.addOutput(o)
 		}
 		b.slaveRunner.run()
 	case StandaloneMode:
 		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.hatchCount, b.hatchRate)
+		b.localRunner.initTask = b.initTask
 		for _, o := range b.outputs {
 			b.localRunner.addOutput(o)
 		}
@@ -133,6 +135,11 @@ func (b *Boomer) Run(tasks ...*Task) {
 	default:
 		log.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")
 	}
+}
+
+// SetInitTask set init task for boomer
+func (b *Boomer) SetInitTask(task *Task) {
+	b.initTask = task
 }
 
 // RecordSuccess reports a success.
@@ -265,6 +272,15 @@ func Run(tasks ...*Task) {
 	}
 
 	log.Println("shut down")
+}
+
+// DefaultBoomer return the default boomer.
+func DefaultBoomer() *Boomer {
+	return defaultBoomer
+}
+
+func SetInitTask(task *Task) {
+	defaultBoomer.initTask = task
 }
 
 // RecordSuccess reports a success.
