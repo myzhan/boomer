@@ -1,4 +1,4 @@
-module boomer
+module github.com/eyotang/boomer
 
 go 1.13
 
