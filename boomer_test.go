@@ -352,8 +352,8 @@ func TestSetInitTask(t *testing.T) {
 
 	defaultBoomer.Quit()
 
-	if count != 10 {
-		t.Error("count is", count, "expected: 10")
+	if count != 9 {
+		t.Error("count is", count, "expected: 9")
 	}
 }
 
