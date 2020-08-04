@@ -82,7 +82,7 @@ func TestOutputOnStop(t *testing.T) {
 func TestLocalRunner(t *testing.T) {
 	taskA := &Task{
 		Weight: 10,
-		Fn: func() {
+		Fn: func(*Context) {
 			time.Sleep(time.Second)
 		},
 		Name: "TaskA",

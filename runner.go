@@ -51,7 +51,7 @@ type runner struct {
 
 // safeRun runs fn and recovers from unexpected panics.
 // it prevents panics from Task.Fn crashing boomer.
-func (r *runner) safeRun(fn func()) {
+func (r *runner) safeRun(fn func(ctx *Context), ctx *Context) {
 	defer func() {
 		// don't panic
 		err := recover()
@@ -63,7 +63,7 @@ func (r *runner) safeRun(fn func()) {
 			os.Stderr.Write(stackTrace)
 		}
 	}()
-	fn()
+	fn(ctx)
 }
 
 func (r *runner) addOutput(o Output) {
@@ -138,8 +138,9 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 		default:
 			atomic.AddInt32(&r.numClients, 1)
 			go func() {
+				ctx := NewContext()
 				if t := r.getInitTask(); t != nil {
-					r.safeRun(t.Fn)
+					r.safeRun(t.Fn, ctx)
 				}
 				for {
 					task := r.getTask()
@@ -150,10 +151,10 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc 
 						if r.rateLimitEnabled {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
-								r.safeRun(task.Fn)
+								r.safeRun(task.Fn, ctx)
 							}
 						} else {
-							r.safeRun(task.Fn)
+							r.safeRun(task.Fn, ctx)
 						}
 					}
 				}
