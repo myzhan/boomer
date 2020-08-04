@@ -2,6 +2,7 @@ package boomer
 
 import (
 	"encoding/json"
+	"reflect"
 )
 
 type Context struct {
@@ -14,11 +15,23 @@ func NewContext() *Context {
 
 func (ctx *Context) MSet(data map[interface{}]interface{}) {
 	for key, value := range data {
+		if key == nil {
+			panic("nil key")
+		}
+		if !reflect.TypeOf(key).Comparable() {
+			panic("key is not comparable")
+		}
 		ctx.items[key] = value
 	}
 }
 
 func (ctx *Context) Set(key, value interface{}) {
+	if key == nil {
+		panic("nil key")
+	}
+	if !reflect.TypeOf(key).Comparable() {
+		panic("key is not comparable")
+	}
 	ctx.items[key] = value
 }
 
