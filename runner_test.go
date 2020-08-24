@@ -108,9 +108,9 @@ func TestSpawnWorkers(t *testing.T) {
 	defer runner.close()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
-	runner.hatchRate = 10
+	runner.spawnRate = 10
 
-	go runner.spawnWorkers(10, runner.stopChan, runner.hatchComplete)
+	go runner.spawnWorkers(10, runner.stopChan, runner.spawnComplete)
 	time.Sleep(10 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
@@ -146,10 +146,10 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
 	const numToSpawn int = 30
-	const hatchRate float64 = 10
-	runner.hatchRate = hatchRate
+	const spawnRate float64 = 10
+	runner.spawnRate = spawnRate
 
-	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
@@ -221,10 +221,10 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
 	const numToSpawn int = 30
-	const hatchRate float64 = 10
-	runner.hatchRate = hatchRate
+	const spawnRate float64 = 10
+	runner.spawnRate = spawnRate
 
-	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.hatchComplete)
+	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
@@ -270,7 +270,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	}
 }
 
-func TestHatchAndStop(t *testing.T) {
+func TestSpawnAndStop(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {
 			time.Sleep(time.Second)
@@ -291,7 +291,7 @@ func TestHatchAndStop(t *testing.T) {
 		for {
 			select {
 			case <-ticker.C:
-				t.Error("Timeout waiting for message sent by startHatching()")
+				t.Error("Timeout waiting for message sent by startSpawning()")
 				return
 			case <-runner.stats.clearStatsChan:
 				// just quit
@@ -300,7 +300,7 @@ func TestHatchAndStop(t *testing.T) {
 		}
 	}()
 
-	runner.startHatching(10, float64(10), runner.hatchComplete)
+	runner.startSpawning(10, float64(10), runner.spawnComplete)
 	// wait for spawning goroutines
 	time.Sleep(2 * time.Second)
 	if runner.numClients != 10 {
@@ -308,8 +308,8 @@ func TestHatchAndStop(t *testing.T) {
 	}
 
 	msg := <-runner.client.sendChannel()
-	if msg.Type != "hatch_complete" {
-		t.Error("Runner should send hatch_complete message when hatching completed, got", msg.Type)
+	if msg.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawning completed, got", msg.Type)
 	}
 	runner.stop()
 
@@ -344,7 +344,7 @@ func TestStop(t *testing.T) {
 	}
 }
 
-func TestOnHatchMessage(t *testing.T) {
+func TestOnSpawnMessage(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {
 			time.Sleep(time.Second)
@@ -355,13 +355,13 @@ func TestOnHatchMessage(t *testing.T) {
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
 
-	workers, hatchRate := 0, float64(0)
+	workers, spawnRate := 0, float64(0)
 	callback := func(param1 int, param2 float64) {
 		workers = param1
-		hatchRate = param2
+		spawnRate = param2
 	}
-	Events.Subscribe("boomer:hatch", callback)
-	defer Events.Unsubscribe("boomer:hatch", callback)
+	Events.Subscribe("boomer:spawn", callback)
+	defer Events.Unsubscribe("boomer:spawn", callback)
 
 	go func() {
 		// consumes clearStatsChannel
@@ -373,16 +373,16 @@ func TestOnHatchMessage(t *testing.T) {
 		}
 	}()
 
-	runner.onHatchMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate": float64(20),
+	runner.onSpawnMessage(newMessage("spawn", map[string]interface{}{
+		"spawn_rate": float64(20),
 		"num_users":  int64(20),
 	}, runner.nodeID))
 
 	if workers != 20 {
 		t.Error("workers should be overwrote by callback function, expected: 20, was:", workers)
 	}
-	if hatchRate != 20 {
-		t.Error("hatchRate should be overwrote by callback function, expected: 20, was:", hatchRate)
+	if spawnRate != 20 {
+		t.Error("spawnRate should be overwrote by callback function, expected: 20, was:", spawnRate)
 	}
 
 	runner.onMessage(newMessage("stop", nil, runner.nodeID))
@@ -463,7 +463,7 @@ func TestOnMessage(t *testing.T) {
 		for {
 			select {
 			case <-runner.stats.clearStatsChan:
-				// receive two hatch message from master
+				// receive two spawn message from master
 				if count >= 2 {
 					return
 				}
@@ -472,51 +472,51 @@ func TestOnMessage(t *testing.T) {
 		}
 	}()
 
-	// start hatching
-	runner.onMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate": float64(10),
+	// start spawning
+	runner.onMessage(newMessage("spawn", map[string]interface{}{
+		"spawn_rate": float64(10),
 		"num_users":  int64(10),
 	}, runner.nodeID))
 
 	msg := <-runner.client.sendChannel()
-	if msg.Type != "hatching" {
-		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
+	if msg.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
 	}
 
-	// hatch complete and running
+	// spawn complete and running
 	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
-		t.Error("State of runner is not running after hatch, got", runner.state)
+		t.Error("State of runner is not running after spawn, got", runner.state)
 	}
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "hatch_complete" {
-		t.Error("Runner should send hatch_complete message when hatch completed, got", msg.Type)
+	if msg.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawn completed, got", msg.Type)
 	}
 
 	// increase num_users while running
-	runner.onMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate": float64(20),
+	runner.onMessage(newMessage("spawn", map[string]interface{}{
+		"spawn_rate": float64(20),
 		"num_users":  int64(20),
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "hatching" {
-		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
+	if msg.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
 	}
 
 	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
-		t.Error("State of runner is not running after hatch, got", runner.state)
+		t.Error("State of runner is not running after spawn, got", runner.state)
 	}
 	if runner.numClients != 20 {
 		t.Error("Number of goroutines mismatches, expected: 20, current count:", runner.numClients)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "hatch_complete" {
-		t.Error("Runner should send hatch_complete message when hatch completed, got", msg.Type)
+	if msg.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawn completed, got", msg.Type)
 	}
 
 	// stop all the workers
@@ -533,28 +533,28 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send client_ready message, got", msg.Type)
 	}
 
-	// hatch again
-	runner.onMessage(newMessage("hatch", map[string]interface{}{
-		"hatch_rate": float64(10),
+	// spawn again
+	runner.onMessage(newMessage("spawn", map[string]interface{}{
+		"spawn_rate": float64(10),
 		"num_users":  uint64(10),
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "hatching" {
-		t.Error("Runner should send hatching message when starting hatch, got", msg.Type)
+	if msg.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
 	}
 
-	// hatch complete and running
+	// spawn complete and running
 	time.Sleep(2 * time.Second)
 	if runner.state != stateRunning {
-		t.Error("State of runner is not running after hatch, got", runner.state)
+		t.Error("State of runner is not running after spawn, got", runner.state)
 	}
 	if runner.numClients != 10 {
 		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "hatch_complete" {
-		t.Error("Runner should send hatch_complete message when hatch completed, got", msg.Type)
+	if msg.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawn completed, got", msg.Type)
 	}
 
 	// stop all the workers

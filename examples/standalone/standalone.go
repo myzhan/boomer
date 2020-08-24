@@ -29,7 +29,7 @@ func main() {
 	}
 
 	numClients := 10
-	hatchRate := 10
-	globalBoomer = boomer.NewStandaloneBoomer(numClients, hatchRate)
+	spawnRate := 10
+	globalBoomer = boomer.NewStandaloneBoomer(numClients, spawnRate)
 	globalBoomer.Run(task1)
 }

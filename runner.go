@@ -14,7 +14,7 @@ import (
 
 const (
 	stateInit     = "ready"
-	stateHatching = "hatching"
+	stateSpawning = "spawning"
 	stateRunning  = "running"
 	stateStopped  = "stopped"
 	stateQuitting = "quitting"
@@ -36,7 +36,7 @@ type runner struct {
 	stats            *requestStats
 
 	numClients int32
-	hatchRate  float64
+	spawnRate  float64
 
 	// all running workers(goroutines) will select on this channel.
 	// close this channel will stop all running workers.
@@ -117,22 +117,22 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) spawnWorkers(spawnCount int, quit chan bool, hatchCompleteFunc func()) {
-	log.Println("Hatching and swarming", spawnCount, "clients at the rate", r.hatchRate, "clients/s...")
+func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc func()) {
+	log.Println("Spawning", spawnCount, "clients at the rate", r.spawnRate, "clients/s...")
 
 	defer func() {
-		if hatchCompleteFunc != nil {
-			hatchCompleteFunc()
+		if spawnCompleteFunc != nil {
+			spawnCompleteFunc()
 		}
 	}()
 
 	for i := 1; i <= spawnCount; i++ {
-		sleepTime := time.Duration(1000000/r.hatchRate) * time.Microsecond
+		sleepTime := time.Duration(1000000/r.spawnRate) * time.Microsecond
 		time.Sleep(sleepTime)
 
 		select {
 		case <-quit:
-			// quit hatching goroutine
+			// quit spawning goroutine
 			return
 		default:
 			atomic.AddInt32(&r.numClients, 1)
@@ -198,14 +198,14 @@ func (r *runner) getTask() *Task {
 	return nil
 }
 
-func (r *runner) startHatching(spawnCount int, hatchRate float64, hatchCompleteFunc func()) {
+func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
-	r.hatchRate = hatchRate
+	r.spawnRate = spawnRate
 	r.numClients = 0
 
-	go r.spawnWorkers(spawnCount, r.stopChan, hatchCompleteFunc)
+	go r.spawnWorkers(spawnCount, r.stopChan, spawnCompleteFunc)
 }
 
 func (r *runner) stop() {
@@ -224,14 +224,14 @@ func (r *runner) stop() {
 type localRunner struct {
 	runner
 
-	hatchCount int
+	spawnCount int
 }
 
-func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, hatchCount int, hatchRate float64) (r *localRunner) {
+func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spawnRate float64) (r *localRunner) {
 	r = &localRunner{}
 	r.setTasks(tasks)
-	r.hatchRate = hatchRate
-	r.hatchCount = hatchCount
+	r.spawnRate = spawnRate
+	r.spawnCount = spawnCount
 	r.closeChan = make(chan bool)
 	r.addOutput(NewConsoleOutput())
 
@@ -268,7 +268,7 @@ func (r *localRunner) run() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
-	r.startHatching(r.hatchCount, r.hatchRate, nil)
+	r.startSpawning(r.spawnCount, r.spawnRate, nil)
 
 	wg.Wait()
 }
@@ -307,10 +307,10 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 	return r
 }
 
-func (r *slaveRunner) hatchComplete() {
+func (r *slaveRunner) spawnComplete() {
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
-	r.client.sendChannel() <- newMessage("hatch_complete", data, r.nodeID)
+	r.client.sendChannel() <- newMessage("spawning_complete", data, r.nodeID)
 	r.state = stateRunning
 }
 
@@ -330,15 +330,11 @@ func (r *slaveRunner) close() {
 	close(r.closeChan)
 }
 
-func (r *slaveRunner) onHatchMessage(msg *message) {
-	r.client.sendChannel() <- newMessage("hatching", nil, r.nodeID)
-	rate, _ := msg.Data["hatch_rate"]
-	users, ok := msg.Data["num_users"]
-	if !ok {
-		// keep compatible with previous version of locust.
-		users, _ = msg.Data["num_clients"]
-	}
-	hatchRate := rate.(float64)
+func (r *slaveRunner) onSpawnMessage(msg *message) {
+	r.client.sendChannel() <- newMessage("spawning", nil, r.nodeID)
+	rate := msg.Data["spawn_rate"]
+	users := msg.Data["num_users"]
+	spawnRate := rate.(float64)
 	workers := 0
 	if _, ok := users.(uint64); ok {
 		workers = int(users.(uint64))
@@ -346,33 +342,39 @@ func (r *slaveRunner) onHatchMessage(msg *message) {
 		workers = int(users.(int64))
 	}
 
-	Events.Publish("boomer:hatch", workers, hatchRate)
+	Events.Publish("boomer:hatch", workers, spawnRate)
+	Events.Publish("boomer:spawn", workers, spawnRate)
 
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
-	r.startHatching(workers, hatchRate, r.hatchComplete)
+	r.startSpawning(workers, spawnRate, r.spawnComplete)
 }
 
 // Runner acts as a state machine.
 func (r *slaveRunner) onMessage(msg *message) {
+	if msg.Type == "hatch" {
+		log.Println("The master sent a 'hatch' message, you are using an unsupported locust version, please update locust to 1.2.")
+		return
+	}
+
 	switch r.state {
 	case stateInit:
 		switch msg.Type {
-		case "hatch":
-			r.state = stateHatching
-			r.onHatchMessage(msg)
+		case "spawn":
+			r.state = stateSpawning
+			r.onSpawnMessage(msg)
 		case "quit":
 			Events.Publish("boomer:quit")
 		}
-	case stateHatching:
+	case stateSpawning:
 		fallthrough
 	case stateRunning:
 		switch msg.Type {
-		case "hatch":
-			r.state = stateHatching
+		case "spawn":
+			r.state = stateSpawning
 			r.stop()
-			r.onHatchMessage(msg)
+			r.onSpawnMessage(msg)
 		case "stop":
 			r.stop()
 			r.state = stateStopped
@@ -388,9 +390,9 @@ func (r *slaveRunner) onMessage(msg *message) {
 		}
 	case stateStopped:
 		switch msg.Type {
-		case "hatch":
-			r.state = stateHatching
-			r.onHatchMessage(msg)
+		case "spawn":
+			r.state = stateSpawning
+			r.onSpawnMessage(msg)
 		case "quit":
 			Events.Publish("boomer:quit")
 			r.state = stateInit

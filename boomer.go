@@ -37,8 +37,8 @@ type Boomer struct {
 	slaveRunner *slaveRunner
 
 	localRunner *localRunner
-	hatchCount  int
-	hatchRate   float64
+	spawnCount  int
+	spawnRate   float64
 
 	cpuProfile         string
 	cpuProfileDuration time.Duration
@@ -59,10 +59,10 @@ func NewBoomer(masterHost string, masterPort int) *Boomer {
 }
 
 // NewStandaloneBoomer returns a new Boomer, which can run without master.
-func NewStandaloneBoomer(hatchCount int, hatchRate float64) *Boomer {
+func NewStandaloneBoomer(spawnCount int, spawnRate float64) *Boomer {
 	return &Boomer{
-		hatchCount: hatchCount,
-		hatchRate:  hatchRate,
+		spawnCount: spawnCount,
+		spawnRate:  spawnRate,
 		mode:       StandaloneMode,
 	}
 }
@@ -125,7 +125,7 @@ func (b *Boomer) Run(tasks ...*Task) {
 		}
 		b.slaveRunner.run()
 	case StandaloneMode:
-		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.hatchCount, b.hatchRate)
+		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.spawnCount, b.spawnRate)
 		for _, o := range b.outputs {
 			b.localRunner.addOutput(o)
 		}

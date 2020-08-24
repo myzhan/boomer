@@ -141,7 +141,7 @@ func proxy() {
 	}
 }
 
-func startTest(workers int, hatchRate float64) {
+func startTest(workers int, spawnRate float64) {
 	testStarted = true
 }
 
@@ -156,7 +156,7 @@ func deadend() {
 }
 
 func main() {
-	boomer.Events.Subscribe("boomer:hatch", startTest)
+	boomer.Events.Subscribe("boome:spawn", startTest)
 	boomer.Events.Subscribe("boomer:stop", stopTest)
 
 	task := &boomer.Task{

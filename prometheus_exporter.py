@@ -23,10 +23,10 @@ class LocustCollector(object):
         self.runner = runner
 
     def collect(self):
-        # collect metrics only when locust runner is hatching or running.
+        # collect metrics only when locust runner is spawning or running.
         runner = self.runner
 
-        if runner and runner.state in (locust_runners.STATE_HATCHING, locust_runners.STATE_RUNNING):
+        if runner and runner.state in (locust_runners.STATE_SPAWNING, locust_runners.STATE_RUNNING):
             stats = []
             for s in chain(locust_stats.sort_stats(runner.stats.entries), [runner.stats.total]):
                 stats.append({
