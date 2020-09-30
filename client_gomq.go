@@ -54,6 +54,7 @@ func (c *gomqSocketClient) connect() (err error) {
 
 func (c *gomqSocketClient) close() {
 	close(c.shutdownChan)
+	c.dealerSocket.Close()
 }
 
 func (c *gomqSocketClient) recvChannel() chan *message {
