@@ -58,7 +58,9 @@ func (c *czmqSocketClient) connect() (err error) {
 
 func (c *czmqSocketClient) close() {
 	close(c.shutdownChan)
-	c.dealerSocket.Destroy()
+	if c.dealerSocket != nil {
+		c.dealerSocket.Destroy()
+	}
 }
 
 func (c *czmqSocketClient) recvChannel() chan *message {
