@@ -140,6 +140,7 @@ func (s *requestStats) start() {
 			case m := <-s.requestSuccessChan:
 				s.logRequest(m.requestType, m.name, m.responseTime, m.responseLength)
 			case n := <-s.requestFailureChan:
+				s.logRequest(n.requestType, n.name, n.responseTime, 0)
 				s.logError(n.requestType, n.name, n.error)
 			case <-s.clearStatsChan:
 				s.clearAll()
