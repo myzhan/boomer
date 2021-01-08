@@ -266,6 +266,8 @@ func (r *localRunner) run() {
 		}
 	}()
 
+	Events.Publish("boomer:spawn", r.spawnCount, r.spawnRate)
+
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
