@@ -200,6 +200,9 @@ func (r *runner) getTask() *Task {
 }
 
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
+	Events.Publish("boomer:hatch", spawnCount, spawnRate)
+	Events.Publish("boomer:spawn", spawnCount, spawnRate)
+
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
@@ -265,8 +268,6 @@ func (r *localRunner) run() {
 			}
 		}
 	}()
-
-	Events.Publish("boomer:spawn", r.spawnCount, r.spawnRate)
 
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
@@ -344,9 +345,6 @@ func (r *slaveRunner) onSpawnMessage(msg *message) {
 	} else {
 		workers = int(users.(int64))
 	}
-
-	Events.Publish("boomer:hatch", workers, spawnRate)
-	Events.Publish("boomer:spawn", workers, spawnRate)
 
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
