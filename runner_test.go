@@ -283,6 +283,7 @@ func TestSpawnAndStop(t *testing.T) {
 	}
 	tasks := []*Task{taskA, taskB}
 	runner := newSlaveRunner("localhost", 5557, tasks, nil)
+	runner.state = stateSpawning
 	defer runner.close()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
@@ -606,5 +607,92 @@ func TestGetReady(t *testing.T) {
 	userCount := msg.Data["user_count"].(int64)
 	if userCount != int64(10) {
 		t.Error("User count mismatch, expect: 10, got:", userCount)
+	}
+}
+
+func TestEarlyStop(t *testing.T) {
+	task := &Task{
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+	}
+	tasks := []*Task{task}
+
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
+	defer runner.close()
+	runner.client = newClient("localhost", 5557, runner.nodeID)
+	runner.state = stateInit
+
+	go func() {
+		// consumes clearStatsChannel
+		count := 0
+		for {
+			select {
+			case <-runner.stats.clearStatsChan:
+				// receive two spawn message from master
+				if count >= 2 {
+					return
+				}
+				count++
+			}
+		}
+	}()
+
+	// start spawning
+	runner.onMessage(newMessage("spawn", map[string]interface{}{
+		"spawn_rate": float64(1),
+		"num_users":  int64(1),
+	}, runner.nodeID))
+
+	msg := <-runner.client.sendChannel()
+	if msg.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
+	}
+
+	// sleep less than the time it takes to complete spawning
+	time.Sleep(500 * time.Millisecond)
+	if runner.state != stateSpawning {
+		t.Error("State of runner is not spawning, got", runner.state)
+	}
+
+	// stop before spawning is complete
+	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "client_stopped" {
+		t.Error("Runner should send client_stopped message, got", msg.Type)
+	}
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "client_ready" {
+		t.Error("Runner should send client_ready message, got", msg.Type)
+	}
+
+	if runner.numClients != 0 {
+		t.Error("Number of goroutines mismatches, expected: 0, current count:", runner.numClients)
+	}
+	// wait for task to complete
+	time.Sleep(time.Second)
+
+	// start spawning again should not cause panic
+	runner.onMessage(newMessage("spawn", map[string]interface{}{
+		"spawn_rate": float64(1),
+		"num_users":  int64(1),
+	}, runner.nodeID))
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
+	}
+
+	// stop
+	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "client_stopped" {
+		t.Error("Runner should send client_stopped message, got", msg.Type)
+	}
+	msg = <-runner.client.sendChannel()
+	if msg.Type != "client_ready" {
+		t.Error("Runner should send client_ready message, got", msg.Type)
+	}
+	if runner.numClients != 0 {
+		t.Error("Number of goroutines mismatches, expected: 0, current count:", runner.numClients)
 	}
 }
