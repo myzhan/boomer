@@ -120,12 +120,6 @@ func (r *runner) outputOnStop() {
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc func()) {
 	log.Println("Spawning", spawnCount, "clients at the rate", r.spawnRate, "clients/s...")
 
-	defer func() {
-		if spawnCompleteFunc != nil {
-			spawnCompleteFunc()
-		}
-	}()
-
 	for i := 1; i <= spawnCount; i++ {
 		sleepTime := time.Duration(1000000/r.spawnRate) * time.Microsecond
 		time.Sleep(sleepTime)
@@ -156,6 +150,10 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc 
 				}
 			}()
 		}
+	}
+	
+	if spawnCompleteFunc != nil {
+		spawnCompleteFunc()
 	}
 }
 
