@@ -14,8 +14,8 @@ install:
   - go get github.com/google/uuid
   - go get github.com/olekukonko/tablewriter
   - go get github.com/stretchr/testify/assert
-  - go get github.com/shirou/gopsutil
   - go get golang.org/x/sys/unix
+  - go get github.com/prometheus/procfs
 
 script:
   - go test -timeout 1m -coverprofile=coverage.txt -covermode=atomic
