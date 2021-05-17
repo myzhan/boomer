@@ -8,14 +8,14 @@ go:
   - tip
 
 install:
-  - go get github.com/asaskevich/EventBus
-  - go get github.com/ugorji/go/codec
-  - go get github.com/zeromq/gomq
-  - go get github.com/google/uuid
-  - go get github.com/olekukonko/tablewriter
-  - go get github.com/stretchr/testify/assert
-  - go get github.com/shirou/gopsutil
-  - go get golang.org/x/sys/unix
+  - go get -u github.com/asaskevich/EventBus
+  - go get -u github.com/ugorji/go/codec
+  - go get -u github.com/zeromq/gomq
+  - go get -u github.com/google/uuid
+  - go get -u github.com/olekukonko/tablewriter
+  - go get -u github.com/stretchr/testify/assert
+  - go get -u github.com/shirou/gopsutil
+  - go get -u golang.org/x/sys/unix
 
 script:
   - go test -timeout 1m -coverprofile=coverage.txt -covermode=atomic
