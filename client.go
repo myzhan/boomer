@@ -5,5 +5,6 @@ type client interface {
 	close()
 	recvChannel() chan *message
 	sendChannel() chan *message
+	sendStatsChannel() chan *message
 	disconnectedChannel() chan bool
 }

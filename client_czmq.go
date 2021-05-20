@@ -18,6 +18,7 @@ type czmqSocketClient struct {
 
 	fromMaster             chan *message
 	toMaster               chan *message
+	statsToMaster          chan *message
 	disconnectedFromMaster chan bool
 	shutdownChan           chan bool
 }
@@ -29,7 +30,8 @@ func newClient(masterHost string, masterPort int, identity string) (client *czmq
 		masterPort:             masterPort,
 		identity:               identity,
 		fromMaster:             make(chan *message, 100),
-		toMaster:               make(chan *message, 100),
+		toMaster:               make(chan *message, 1000),
+		statsToMaster:          make(chan *message, 1000),
 		disconnectedFromMaster: make(chan bool),
 		shutdownChan:           make(chan bool),
 	}
@@ -96,13 +98,22 @@ func (c *czmqSocketClient) sendChannel() chan *message {
 	return c.toMaster
 }
 
+func (c *gomqSocketClient) sendStatsChannel() chan *message {
+	return c.statsToMaster
+}
+
 func (c *czmqSocketClient) send() {
 	for {
 		select {
 		case <-c.shutdownChan:
 			return
 		case msg := <-c.toMaster:
-			c.sendMessage(msg)
+			go c.sendMessage(msg)
+			if msg.Type == "quit" {
+				c.disconnectedFromMaster <- true
+			}
+		case msg := <-c.statsToMaster:
+			go c.sendMessage(msg)
 			if msg.Type == "quit" {
 				c.disconnectedFromMaster <- true
 			}
