@@ -15,6 +15,7 @@ install:
   - go get -u github.com/olekukonko/tablewriter
   - go get -u github.com/stretchr/testify/assert
   - go get -u github.com/shirou/gopsutil
+  - go get -u github.com/tklauser/go-sysconf
   - go get -u golang.org/x/sys/unix
 
 script:
