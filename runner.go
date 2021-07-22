@@ -423,6 +423,7 @@ func (r *slaveRunner) run() {
 		} else {
 			log.Printf("Failed to connect to master(%s:%d) with error %v\n", r.masterHost, r.masterPort, err)
 		}
+		Events.Publish("connect:fail")
 		return
 	}
 
