@@ -345,6 +345,30 @@ func TestStop(t *testing.T) {
 	}
 }
 
+func TestConnectFail(t *testing.T) {
+	taskA := &Task{
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+	}
+	tasks := []*Task{taskA}
+	runner := newSlaveRunner("localhost", 5557, tasks, nil)
+	runner.stopChan = make(chan bool)
+
+	failed := false
+	handler := func() {
+		failed = true
+	}
+	Events.Subscribe("connect:fail", handler)
+	defer Events.Unsubscribe("connect:fail", handler)
+
+	runner.stop()
+
+	if failed != true {
+		t.Error("Expected stopped to be true, was", failed)
+	}
+}
+
 func TestOnSpawnMessage(t *testing.T) {
 	taskA := &Task{
 		Fn: func() {

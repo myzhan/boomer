@@ -151,7 +151,7 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc 
 			}()
 		}
 	}
-	
+
 	if spawnCompleteFunc != nil {
 		spawnCompleteFunc()
 	}
