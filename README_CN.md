@@ -13,7 +13,10 @@ boomer 的版本号跟随 locust 的版本，如果 locust 引入不兼容的改
 ## 安装
 
 ```bash
+# 安装 master 分支
 $ go get github.com/myzhan/boomer
+# 安装 v1.6.0 版本
+$ go get github.com/myzhan/boomer@v1.6.0
 ```
 
 ### 编译
