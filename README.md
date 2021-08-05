@@ -14,10 +14,18 @@ It will listen and report to the locust master automatically, your test results 
 
 Use it as a library, not a general-purpose benchmarking tool.
 
+## Versioning
+
+Boomer used to support all versions of locust, even if locust didn't keep backward compatibility.
+
+Now boomer follows locust's versioning, and the master branch works with locust's master branch.
+
+If locust introduces breaking changes, boomer will have a tagged version that works previous version of locust.
+
 ## Install
 
 ```bash
-go get github.com/myzhan/boomer
+$ go get github.com/myzhan/boomer
 ```
 
 ### Build
@@ -28,15 +36,15 @@ Because of the instability of gomq, you can switch to [goczmq](https://github.co
 
 ```bash
 # use gomq
-go build -o a.out main.go
+$ go build -o a.out main.go
 # use goczmq
-go build -tags 'goczmq' -o a.out main.go
+$ go build -tags 'goczmq' -o a.out main.go
 ```
 
 If you fail to compile boomer with gomq, try to update gomq first.
 
 ```bash
-go get -u github.com/zeromq/gomq
+$ go get -u github.com/zeromq/gomq
 ```
 
 ## Examples(main.go)
@@ -95,14 +103,14 @@ func main(){
 For debug purpose, you can run tasks without connecting to the master.
 
 ```bash
-go build -o a.out main.go
+$ go build -o a.out main.go
 ./a.out --run-tasks foo,bar
 ```
 
 Otherwise, start the master using the included `dummy.py`.
 
 ```bash
-locust --master -f dummy.py
+$ locust --master -f dummy.py
 ```
 
 --max-rps means the max count that all the Task.Fn can be called in one second.
@@ -110,19 +118,19 @@ locust --master -f dummy.py
 The result may be misleading if you call boomer.RecordSuccess() more than once in Task.Fn.
 
 ```bash
-go build -o a.out main.go
-./a.out --max-rps 10000
+$ go build -o a.out main.go
+$ ./a.out --max-rps 10000
 ```
 
 If you want the RPS increase from zero to max-rps or infinity.
 
 ```
-go build -o a.out main.go
+$ go build -o a.out main.go
 # The default interval is 1 second
-./a.out --request-increase-rate 10
+$ ./a.out --request-increase-rate 10
 # Change the interval to 1 minute
 # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h"
-./a.out --request-increase-rate 10/1m
+$ ./a.out --request-increase-rate 10/1m
 ```
 
 So far, dummy.py is necessary when starting a master, because locust needs such a file.
@@ -174,7 +182,7 @@ If you are not satisfied with the build-in web monitor in Locust, you can run pr
 Try this
 
 ```bash
-locust --master -f prometheus_exporter.py
+$ locust --master -f prometheus_exporter.py
 ```
 
 Thanks to Prometheus and Grafana, you will get an awesome dashboard: [Locust for Prometheus](https://grafana.com/grafana/dashboards/12081)

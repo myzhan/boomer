@@ -6,10 +6,14 @@ boomer 完整地实现了 locust 的通讯协议，运行在 slave 模式下，�
 
 与 locust 原生的实现相比，解决了两个问题。一是单台施压机上，能充分利用多个 CPU 核心来施压，二是再也不用提防阻塞 IO 操作导致 gevent 阻塞。
 
+## 版本
+
+boomer 的版本号跟随 locust 的版本，如果 locust 引入不兼容的改动，master 分支会跟随着 locust 做不兼容的改动。同时，当前版本会打上 tag，以便用户继续使用旧版本。
+
 ## 安装
 
 ```bash
-go get github.com/myzhan/boomer
+$ go get github.com/myzhan/boomer
 ```
 
 ### 编译
@@ -19,15 +23,15 @@ boomer 默认使用 gomq，一个纯 Go 语言实现的 ZeroMQ 客户端。
 
 ```bash
 # 默认使用 gomq
-go build -o a.out main.go
+$ go build -o a.out main.go
 # 使用 goczmq
-go build -tags 'goczmq' -o a.out main.go
+$ go build -tags 'goczmq' -o a.out main.go
 ```
 
 如果使用 gomq 编译失败，先尝试更新 gomq 的版本。
 
 ```bash
-go get -u github.com/zeromq/gomq
+$ go get -u github.com/zeromq/gomq
 ```
 
 ## 例子(main.go)
@@ -83,8 +87,8 @@ func main(){
 为了方便调试，可以单独运行 task，不必连接到 master。
 
 ```bash
-go build -o a.out main.go
-./a.out --run-tasks foo,bar
+$ go build -o a.out main.go
+$ ./a.out --run-tasks foo,bar
 ```
 
 --max-rps 表示一秒内所有 Task.Fn 函数能被调用的最多次数。
@@ -92,19 +96,19 @@ go build -o a.out main.go
 下面这种情况，如果在同一个 Task.Fn 函数里面多次调用 boomer.RecordSuccess()，那么统计到的 RPS 会超过 10000。
 
 ```bash
-go build -o a.out main.go
-./a.out --max-rps 10000
+$ go build -o a.out main.go
+$ ./a.out --max-rps 10000
 ```
 
 线性增长的 RPS，从 0 开始，每秒增加 10 个请求。
 
 ```bash
-go build -o a.out main.go
+$ go build -o a.out main.go
 # 默认间隔 1 秒增加 1 次
-./a.out --request-increase-rate 10
+$ ./a.out --request-increase-rate 10
 # 间隔 1 分钟增加 1 次
 # 有效的时间单位 "ns", "us" (or "µs"), "ms", "s", "m", "h"
-./a.out --request-increase-rate 10/1m
+$ ./a.out --request-increase-rate 10/1m
 ```
 
 locust 启动时，需要一个 locustfile，随便一个符合它要求的即可，这里提供了一个 dummy.py。
