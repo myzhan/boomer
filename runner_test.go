@@ -309,15 +309,17 @@ func TestSpawnAndStop(t *testing.T) {
 	}
 
 	msg := <-runner.client.sendChannel()
-	if msg.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawning completed, got", msg.Type)
+	m := msg.(*genericMessage)
+	if m.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawning completed, got", m.Type)
 	}
 	runner.stop()
 
 	runner.onQuiting()
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "quit" {
-		t.Error("Runner should send quit message on quitting, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "quit" {
+		t.Error("Runner should send quit message on quitting, got", m.Type)
 	}
 }
 
@@ -374,7 +376,7 @@ func TestOnSpawnMessage(t *testing.T) {
 		}
 	}()
 
-	runner.onSpawnMessage(newMessage("spawn", map[string]interface{}{
+	runner.onSpawnMessage(newGenericMessage("spawn", map[string]interface{}{
 		"spawn_rate": float64(20),
 		"num_users":  int64(20),
 	}, runner.nodeID))
@@ -386,7 +388,7 @@ func TestOnSpawnMessage(t *testing.T) {
 		t.Error("spawnRate should be overwrote by callback function, expected: 20, was:", spawnRate)
 	}
 
-	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 }
 
 func TestOnQuitMessage(t *testing.T) {
@@ -403,7 +405,7 @@ func TestOnQuitMessage(t *testing.T) {
 	defer Events.Unsubscribe("boomer:quit", receiver)
 	var ticker = time.NewTicker(20 * time.Millisecond)
 
-	runner.onMessage(newMessage("quit", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
 	select {
 	case <-quitMessages:
 		break
@@ -414,7 +416,7 @@ func TestOnQuitMessage(t *testing.T) {
 
 	runner.state = stateRunning
 	runner.stopChan = make(chan bool)
-	runner.onMessage(newMessage("quit", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
 	select {
 	case <-quitMessages:
 		break
@@ -427,7 +429,7 @@ func TestOnQuitMessage(t *testing.T) {
 	}
 
 	runner.state = stateStopped
-	runner.onMessage(newMessage("quit", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
 	select {
 	case <-quitMessages:
 		break
@@ -474,14 +476,15 @@ func TestOnMessage(t *testing.T) {
 	}()
 
 	// start spawning
-	runner.onMessage(newMessage("spawn", map[string]interface{}{
+	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
 		"spawn_rate": float64(10),
 		"num_users":  int64(10),
 	}, runner.nodeID))
 
 	msg := <-runner.client.sendChannel()
-	if msg.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
+	m := msg.(*genericMessage)
+	if m.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
 	}
 
 	// spawn complete and running
@@ -493,19 +496,21 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawn completed, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawn completed, got", m.Type)
 	}
 
 	// increase num_users while running
-	runner.onMessage(newMessage("spawn", map[string]interface{}{
+	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
 		"spawn_rate": float64(20),
 		"num_users":  int64(20),
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
 	}
 
 	time.Sleep(2 * time.Second)
@@ -516,33 +521,37 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Number of goroutines mismatches, expected: 20, current count:", runner.numClients)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawn completed, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawn completed, got", m.Type)
 	}
 
 	// stop all the workers
-	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	if runner.state != stateInit {
 		t.Error("State of runner is not init, got", runner.state)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_stopped" {
+		t.Error("Runner should send client_stopped message, got", m.Type)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_ready" {
+		t.Error("Runner should send client_ready message, got", m.Type)
 	}
 
 	// spawn again
-	runner.onMessage(newMessage("spawn", map[string]interface{}{
+	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
 		"spawn_rate": float64(10),
 		"num_users":  uint64(10),
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
 	}
 
 	// spawn complete and running
@@ -554,22 +563,25 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawn completed, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "spawning_complete" {
+		t.Error("Runner should send spawning_complete message when spawn completed, got", m.Type)
 	}
 
 	// stop all the workers
-	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	if runner.state != stateInit {
 		t.Error("State of runner is not init, got", runner.state)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_stopped" {
+		t.Error("Runner should send client_stopped message, got", m.Type)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_ready" {
+		t.Error("Runner should send client_ready message, got", m.Type)
 	}
 }
 
@@ -588,8 +600,9 @@ func TestGetReady(t *testing.T) {
 
 	r.run()
 
-	msg := <-server.fromClient
-	if msg.Type != "client_ready" {
+	clientReady := <-server.fromClient
+	crm := clientReady.(*clientReadyMessage)
+	if crm.Type != "client_ready" {
 		t.Error("Runner should send client_ready message to server.")
 	}
 
@@ -599,12 +612,13 @@ func TestGetReady(t *testing.T) {
 	data := make(map[string]interface{})
 	r.stats.messageToRunnerChan <- data
 
-	msg = <-server.fromClient
-	if msg.Type != "stats" {
+	msg := <-server.fromClient
+	m := msg.(*genericMessage)
+	if m.Type != "stats" {
 		t.Error("Runner should send stats message to server.")
 	}
 
-	userCount := msg.Data["user_count"].(int64)
+	userCount := m.Data["user_count"].(int64)
 	if userCount != int64(10) {
 		t.Error("User count mismatch, expect: 10, got:", userCount)
 	}
@@ -639,14 +653,15 @@ func TestEarlyStop(t *testing.T) {
 	}()
 
 	// start spawning
-	runner.onMessage(newMessage("spawn", map[string]interface{}{
+	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
 		"spawn_rate": float64(1),
 		"num_users":  int64(1),
 	}, runner.nodeID))
 
 	msg := <-runner.client.sendChannel()
-	if msg.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
+	m := msg.(*genericMessage)
+	if m.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
 	}
 
 	// sleep less than the time it takes to complete spawning
@@ -656,14 +671,16 @@ func TestEarlyStop(t *testing.T) {
 	}
 
 	// stop before spawning is complete
-	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_stopped" {
+		t.Error("Runner should send client_stopped message, got", m.Type)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_ready" {
+		t.Error("Runner should send client_ready message, got", m.Type)
 	}
 
 	if runner.numClients != 0 {
@@ -673,24 +690,28 @@ func TestEarlyStop(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// start spawning again should not cause panic
-	runner.onMessage(newMessage("spawn", map[string]interface{}{
+	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
 		"spawn_rate": float64(1),
 		"num_users":  int64(1),
 	}, runner.nodeID))
+
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "spawning" {
+		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
 	}
 
 	// stop
-	runner.onMessage(newMessage("stop", nil, runner.nodeID))
+	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_stopped" {
+		t.Error("Runner should send client_stopped message, got", m.Type)
 	}
 	msg = <-runner.client.sendChannel()
-	if msg.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", msg.Type)
+	m = msg.(*genericMessage)
+	if m.Type != "client_ready" {
+		t.Error("Runner should send client_ready message, got", m.Type)
 	}
 	if runner.numClients != 0 {
 		t.Error("Number of goroutines mismatches, expected: 0, current count:", runner.numClients)

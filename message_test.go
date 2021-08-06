@@ -9,13 +9,13 @@ func TestEncodeAndDecode(t *testing.T) {
 	data := make(map[string]interface{})
 	data["a"] = 1
 	data["b"] = "hello"
-	msg := newMessage("test", data, "nodeID")
+	msg := newGenericMessage("test", data, "nodeID")
 
 	encoded, err := msg.serialize()
 	if err != nil {
 		t.Error(err)
 	}
-	decoded, err := newMessageFromBytes(encoded)
+	decoded, err := newGenericMessageFromBytes(encoded)
 	if err != nil {
 		t.Error(err)
 	}

@@ -80,8 +80,8 @@ type testServer struct {
 	bindHost       string
 	bindPort       int
 	nodeID         string
-	fromClient     chan *message
-	toClient       chan *message
+	fromClient     chan message
+	toClient       chan message
 	routerSocket   Router
 	shutdownSignal chan bool
 }
@@ -91,8 +91,8 @@ func newTestServer(bindHost string, bindPort int) (server *testServer) {
 		bindHost:       bindHost,
 		bindPort:       bindPort,
 		nodeID:         getNodeID(),
-		fromClient:     make(chan *message, 100),
-		toClient:       make(chan *message, 100),
+		fromClient:     make(chan message, 100),
+		toClient:       make(chan message, 100),
 		shutdownSignal: make(chan bool, 1),
 	}
 }
@@ -116,7 +116,7 @@ func (s *testServer) send() {
 	}
 }
 
-func (s *testServer) sendMessage(msg *message) {
+func (s *testServer) sendMessage(msg message) {
 	defer func() {
 		// don't panic
 		err := recover()
@@ -147,9 +147,14 @@ func (s *testServer) recv() {
 			if err != nil {
 				log.Printf("Error reading: %v\n", err)
 			} else {
-				msgFromClient, err := newMessageFromBytes(msg[0])
+				msgFromClient, err := newGenericMessageFromBytes(msg[0])
 				if err != nil {
-					log.Println("Msgpack decode fail:", err)
+					clientReadyMessage, err2 := newClientReadyMessageFromBytes(msg[0])
+					if err2 != nil {
+						log.Println("Msgpack decode fail:", err)
+					} else {
+						s.fromClient <- clientReadyMessage
+					}
 				} else {
 					s.fromClient <- msgFromClient
 				}
@@ -186,15 +191,17 @@ func TestPingPong(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond)
 
-	client.sendChannel() <- newMessage("ping", nil, "testing ping pong")
+	client.sendChannel() <- newGenericMessage("ping", nil, "testing ping pong")
 	msg := <-server.fromClient
-	if msg.Type != "ping" || msg.NodeID != "testing ping pong" {
+	m := msg.(*genericMessage)
+	if m.Type != "ping" || m.NodeID != "testing ping pong" {
 		t.Error("server doesn't recv ping message")
 	}
 
-	server.toClient <- newMessage("pong", nil, "testing ping pong")
+	server.toClient <- newGenericMessage("pong", nil, "testing ping pong")
 	msg = <-client.recvChannel()
-	if msg.Type != "pong" || msg.NodeID != "testing ping pong" {
+	m = msg.(*genericMessage)
+	if m.Type != "pong" || m.NodeID != "testing ping pong" {
 		t.Error("client doesn't recv pong message")
 	}
 }

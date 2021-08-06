@@ -151,7 +151,7 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc 
 			}()
 		}
 	}
-	
+
 	if spawnCompleteFunc != nil {
 		spawnCompleteFunc()
 	}
@@ -312,13 +312,13 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 func (r *slaveRunner) spawnComplete() {
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
-	r.client.sendChannel() <- newMessage("spawning_complete", data, r.nodeID)
+	r.client.sendChannel() <- newGenericMessage("spawning_complete", data, r.nodeID)
 	r.state = stateRunning
 }
 
 func (r *slaveRunner) onQuiting() {
 	if r.state != stateQuitting {
-		r.client.sendChannel() <- newMessage("quit", nil, r.nodeID)
+		r.client.sendChannel() <- newGenericMessage("quit", nil, r.nodeID)
 	}
 }
 
@@ -332,8 +332,10 @@ func (r *slaveRunner) close() {
 	close(r.closeChan)
 }
 
-func (r *slaveRunner) onSpawnMessage(msg *message) {
-	r.client.sendChannel() <- newMessage("spawning", nil, r.nodeID)
+func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
+	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
+
+	log.Printf("%v\n", msg)
 	rate := msg.Data["spawn_rate"]
 	users := msg.Data["num_users"]
 	spawnRate := rate.(float64)
@@ -351,7 +353,13 @@ func (r *slaveRunner) onSpawnMessage(msg *message) {
 }
 
 // Runner acts as a state machine.
-func (r *slaveRunner) onMessage(msg *message) {
+func (r *slaveRunner) onMessage(msgInterface message) {
+	msg, ok := msgInterface.(*genericMessage)
+	if !ok {
+		log.Println("Receive unknown type of meesage from master.")
+		return
+	}
+
 	if msg.Type == "hatch" {
 		log.Println("The master sent a 'hatch' message, you are using an unsupported locust version, please update locust to 1.2.")
 		return
@@ -378,8 +386,8 @@ func (r *slaveRunner) onMessage(msg *message) {
 			r.stop()
 			r.state = stateStopped
 			log.Println("Recv stop message from master, all the goroutines are stopped")
-			r.client.sendChannel() <- newMessage("client_stopped", nil, r.nodeID)
-			r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
+			r.client.sendChannel() <- newGenericMessage("client_stopped", nil, r.nodeID)
+			r.client.sendChannel() <- newGenericMessage("client_ready", nil, r.nodeID)
 			r.state = stateInit
 		case "quit":
 			r.stop()
@@ -432,7 +440,8 @@ func (r *slaveRunner) run() {
 	r.stats.start()
 
 	// tell master, I'm ready
-	r.client.sendChannel() <- newMessage("client_ready", nil, r.nodeID)
+	// locust allows workers to bypass version check by sending -1 as version
+	r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
 
 	// report to master
 	go func() {
@@ -443,7 +452,7 @@ func (r *slaveRunner) run() {
 					continue
 				}
 				data["user_count"] = r.numClients
-				r.client.sendChannel() <- newMessage("stats", data, r.nodeID)
+				r.client.sendChannel() <- newGenericMessage("stats", data, r.nodeID)
 				r.outputOnEevent(data)
 			case <-r.closeChan:
 				return
@@ -463,7 +472,7 @@ func (r *slaveRunner) run() {
 					"state":             r.state,
 					"current_cpu_usage": CPUUsage,
 				}
-				r.client.sendChannel() <- newMessage("heartbeat", data, r.nodeID)
+				r.client.sendChannel() <- newGenericMessage("heartbeat", data, r.nodeID)
 			case <-r.closeChan:
 				return
 			}

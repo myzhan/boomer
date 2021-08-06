@@ -17,8 +17,8 @@ type gomqSocketClient struct {
 
 	dealerSocket gomq.Dealer
 
-	fromMaster             chan *message
-	toMaster               chan *message
+	fromMaster             chan message
+	toMaster               chan message
 	disconnectedFromMaster chan bool
 	shutdownChan           chan bool
 }
@@ -29,8 +29,8 @@ func newClient(masterHost string, masterPort int, identity string) (client *gomq
 		masterHost:             masterHost,
 		masterPort:             masterPort,
 		identity:               identity,
-		fromMaster:             make(chan *message, 100),
-		toMaster:               make(chan *message, 100),
+		fromMaster:             make(chan message, 100),
+		toMaster:               make(chan message, 100),
 		disconnectedFromMaster: make(chan bool),
 		shutdownChan:           make(chan bool),
 	}
@@ -59,7 +59,7 @@ func (c *gomqSocketClient) close() {
 	}
 }
 
-func (c *gomqSocketClient) recvChannel() chan *message {
+func (c *gomqSocketClient) recvChannel() chan message {
 	return c.fromMaster
 }
 
@@ -80,7 +80,7 @@ func (c *gomqSocketClient) recv() {
 				log.Printf("Error reading: %v\n", err)
 				continue
 			}
-			decodedMsg, err := newMessageFromBytes(body)
+			decodedMsg, err := newGenericMessageFromBytes(body)
 			if err != nil {
 				log.Printf("Msgpack decode fail: %v\n", err)
 				continue
@@ -94,7 +94,7 @@ func (c *gomqSocketClient) recv() {
 	}
 }
 
-func (c *gomqSocketClient) sendChannel() chan *message {
+func (c *gomqSocketClient) sendChannel() chan message {
 	return c.toMaster
 }
 
@@ -105,14 +105,19 @@ func (c *gomqSocketClient) send() {
 			return
 		case msg := <-c.toMaster:
 			c.sendMessage(msg)
-			if msg.Type == "quit" {
-				c.disconnectedFromMaster <- true
+
+			// We may send genericMessage or clientReadyMessage to master.
+			m, ok := msg.(*genericMessage)
+			if ok {
+				if m.Type == "quit" {
+					c.disconnectedFromMaster <- true
+				}
 			}
 		}
 	}
 }
 
-func (c *gomqSocketClient) sendMessage(msg *message) {
+func (c *gomqSocketClient) sendMessage(msg message) {
 	serializedMessage, err := msg.serialize()
 	if err != nil {
 		log.Printf("Msgpack encode fail: %v\n", err)
