@@ -35,6 +35,9 @@ type runner struct {
 	rateLimitEnabled bool
 	stats            *requestStats
 
+	// TODO: we save user_class_count in spawn message and send it back to master without modification, may be a bad idea?
+	userClassesCountFromMaster map[string]int64
+
 	numClients int32
 	spawnRate  float64
 
@@ -118,12 +121,9 @@ func (r *runner) outputOnStop() {
 }
 
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc func()) {
-	log.Println("Spawning", spawnCount, "clients at the rate", r.spawnRate, "clients/s...")
+	log.Println("Spawning", spawnCount, "clients immediately")
 
 	for i := 1; i <= spawnCount; i++ {
-		sleepTime := time.Duration(1000000/r.spawnRate) * time.Microsecond
-		time.Sleep(sleepTime)
-
 		select {
 		case <-quit:
 			// quit spawning goroutine
@@ -204,7 +204,6 @@ func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteF
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
 
-	r.spawnRate = spawnRate
 	r.numClients = 0
 
 	go r.spawnWorkers(spawnCount, r.stopChan, spawnCompleteFunc)
@@ -312,6 +311,7 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 func (r *slaveRunner) spawnComplete() {
 	data := make(map[string]interface{})
 	data["count"] = r.numClients
+	data["user_classes_count"] = r.userClassesCountFromMaster
 	r.client.sendChannel() <- newGenericMessage("spawning_complete", data, r.nodeID)
 	r.state = stateRunning
 }
@@ -332,24 +332,42 @@ func (r *slaveRunner) close() {
 	close(r.closeChan)
 }
 
+func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
+	userClassesCount := msg.Data["user_classes_count"]
+	userClassesCountMap := userClassesCount.(map[interface{}]interface{})
+
+	// Save the original field and send it back to master in spawnComplete message.
+	r.userClassesCountFromMaster = make(map[string]int64)
+	amount := 0
+	for class, num := range userClassesCountMap {
+		n, ok := num.(int64)
+		c, ok2 := class.(string)
+		if !ok || !ok2 {
+			log.Printf("user_classes_count in spawn message can't be casted to map[string]int64, current type is %T, ignored!\n", num)
+			continue
+		}
+		r.userClassesCountFromMaster[c] = n
+		amount = amount + int(n)
+	}
+	return amount
+}
+
+// TODO: Since locust 2.0, spawn rate and user count are both handled by master.
+// But user count is divided by user classes defined in locustfile, because locust assumes that
+// master and workers use the same locustfile. Before we find a better way to deal with this,
+// boomer sums up the total amout of users in spawn message and uses task weight to spawn goroutines like before.
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
-
-	log.Printf("%v\n", msg)
-	rate := msg.Data["spawn_rate"]
-	users := msg.Data["num_users"]
-	spawnRate := rate.(float64)
-	workers := 0
-	if _, ok := users.(uint64); ok {
-		workers = int(users.(uint64))
-	} else {
-		workers = int(users.(int64))
+	workers := r.sumUsersAmount(msg)
+	if workers == 0 {
+		// Unexpected value, ignore.
+		return
 	}
 
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
-	r.startSpawning(workers, spawnRate, r.spawnComplete)
+	r.startSpawning(workers, float64(workers), r.spawnComplete)
 }
 
 // Runner acts as a state machine.
@@ -452,6 +470,7 @@ func (r *slaveRunner) run() {
 					continue
 				}
 				data["user_count"] = r.numClients
+				data["user_classes_count"] = r.userClassesCountFromMaster
 				r.client.sendChannel() <- newGenericMessage("stats", data, r.nodeID)
 				r.outputOnEevent(data)
 			case <-r.closeChan:

@@ -108,14 +108,13 @@ func TestSpawnWorkers(t *testing.T) {
 	defer runner.close()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
-	runner.spawnRate = 10
 
 	go runner.spawnWorkers(10, runner.stopChan, runner.spawnComplete)
 	time.Sleep(10 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
-	if currentClients > 3 {
-		t.Error("Spawning goroutines too fast, current count", currentClients)
+	if currentClients != 10 {
+		t.Error("Unexpected count", currentClients)
 	}
 }
 
@@ -129,15 +128,15 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 			Weight: weight,
 			Fn: func() {
 				lock.Lock()
-				defer lock.Unlock()
 				taskCalls[name]++
+				lock.Unlock()
 			},
 		}
 	}
 	tasks := []*Task{
-		createTask(`one hundred`, 100),
-		createTask(`ten`, 10),
-		createTask(`one`, 1),
+		createTask("one hundred", 100),
+		createTask("ten", 10),
+		createTask("one", 1),
 	}
 
 	runner := newSlaveRunner("localhost", 5557, tasks, nil)
@@ -146,18 +145,17 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
 	const numToSpawn int = 30
-	const spawnRate float64 = 10
-	runner.spawnRate = spawnRate
 
 	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
+	time.Sleep(2 * time.Second)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
 	assert.Equal(t, numToSpawn, int(currentClients))
 	lock.Lock()
-	hundreds := taskCalls[`one hundred`]
-	tens := taskCalls[`ten`]
-	ones := taskCalls[`one`]
+	hundreds := taskCalls["one hundred"]
+	tens := taskCalls["ten"]
+	ones := taskCalls["one"]
 	lock.Unlock()
 
 	total := hundreds + tens + ones
@@ -197,8 +195,8 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 			Weight: weight,
 			Fn: func() {
 				lock.Lock()
-				defer lock.Unlock()
 				taskCalls[name]++
+				lock.Unlock()
 			},
 		}
 	}
@@ -221,19 +219,18 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
 	const numToSpawn int = 30
-	const spawnRate float64 = 10
-	runner.spawnRate = spawnRate
 
 	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
+	time.Sleep(2 * time.Second)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 
 	assert.Equal(t, numToSpawn, int(currentClients))
 	lock.Lock()
-	thousands := taskCalls[`one thousand`]
-	hundreds := taskCalls[`one hundred`]
-	tens := taskCalls[`ten`]
-	ones := taskCalls[`one`]
+	thousands := taskCalls["one thousand"]
+	hundreds := taskCalls["one hundred"]
+	tens := taskCalls["ten"]
+	ones := taskCalls["one"]
 	lock.Unlock()
 
 	total := hundreds + tens + ones + thousands
@@ -377,8 +374,10 @@ func TestOnSpawnMessage(t *testing.T) {
 	}()
 
 	runner.onSpawnMessage(newGenericMessage("spawn", map[string]interface{}{
-		"spawn_rate": float64(20),
-		"num_users":  int64(20),
+		"user_classes_count": map[interface{}]interface{}{
+			"Dummy":  int64(10),
+			"Dummy2": int64(10),
+		},
 	}, runner.nodeID))
 
 	if workers != 20 {
@@ -477,8 +476,10 @@ func TestOnMessage(t *testing.T) {
 
 	// start spawning
 	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
-		"spawn_rate": float64(10),
-		"num_users":  int64(10),
+		"user_classes_count": map[interface{}]interface{}{
+			"Dummy":  int64(5),
+			"Dummy2": int64(5),
+		},
 	}, runner.nodeID))
 
 	msg := <-runner.client.sendChannel()
@@ -501,10 +502,12 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send spawning_complete message when spawn completed, got", m.Type)
 	}
 
-	// increase num_users while running
+	// increase goroutines while running
 	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
-		"spawn_rate": float64(20),
-		"num_users":  int64(20),
+		"user_classes_count": map[interface{}]interface{}{
+			"Dummy":  int64(10),
+			"Dummy2": int64(10),
+		},
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
@@ -544,8 +547,10 @@ func TestOnMessage(t *testing.T) {
 
 	// spawn again
 	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
-		"spawn_rate": float64(10),
-		"num_users":  uint64(10),
+		"user_classes_count": map[interface{}]interface{}{
+			"Dummy":  int64(5),
+			"Dummy2": int64(5),
+		},
 	}, runner.nodeID))
 
 	msg = <-runner.client.sendChannel()
@@ -621,99 +626,5 @@ func TestGetReady(t *testing.T) {
 	userCount := m.Data["user_count"].(int64)
 	if userCount != int64(10) {
 		t.Error("User count mismatch, expect: 10, got:", userCount)
-	}
-}
-
-func TestEarlyStop(t *testing.T) {
-	task := &Task{
-		Fn: func() {
-			time.Sleep(time.Second)
-		},
-	}
-	tasks := []*Task{task}
-
-	runner := newSlaveRunner("localhost", 5557, tasks, nil)
-	defer runner.close()
-	runner.client = newClient("localhost", 5557, runner.nodeID)
-	runner.state = stateInit
-
-	go func() {
-		// consumes clearStatsChannel
-		count := 0
-		for {
-			select {
-			case <-runner.stats.clearStatsChan:
-				// receive two spawn message from master
-				if count >= 2 {
-					return
-				}
-				count++
-			}
-		}
-	}()
-
-	// start spawning
-	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
-		"spawn_rate": float64(1),
-		"num_users":  int64(1),
-	}, runner.nodeID))
-
-	msg := <-runner.client.sendChannel()
-	m := msg.(*genericMessage)
-	if m.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
-	}
-
-	// sleep less than the time it takes to complete spawning
-	time.Sleep(500 * time.Millisecond)
-	if runner.state != stateSpawning {
-		t.Error("State of runner is not spawning, got", runner.state)
-	}
-
-	// stop before spawning is complete
-	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
-	msg = <-runner.client.sendChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", m.Type)
-	}
-	msg = <-runner.client.sendChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", m.Type)
-	}
-
-	if runner.numClients != 0 {
-		t.Error("Number of goroutines mismatches, expected: 0, current count:", runner.numClients)
-	}
-	// wait for task to complete
-	time.Sleep(time.Second)
-
-	// start spawning again should not cause panic
-	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
-		"spawn_rate": float64(1),
-		"num_users":  int64(1),
-	}, runner.nodeID))
-
-	msg = <-runner.client.sendChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
-	}
-
-	// stop
-	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
-	msg = <-runner.client.sendChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", m.Type)
-	}
-	msg = <-runner.client.sendChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", m.Type)
-	}
-	if runner.numClients != 0 {
-		t.Error("Number of goroutines mismatches, expected: 0, current count:", runner.numClients)
 	}
 }
