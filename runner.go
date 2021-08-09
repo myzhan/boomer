@@ -198,7 +198,6 @@ func (r *runner) getTask() *Task {
 }
 
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
-	Events.Publish("boomer:hatch", spawnCount, spawnRate)
 	Events.Publish("boomer:spawn", spawnCount, spawnRate)
 
 	r.stats.clearStatsChan <- true
@@ -375,11 +374,6 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	msg, ok := msgInterface.(*genericMessage)
 	if !ok {
 		log.Println("Receive unknown type of meesage from master.")
-		return
-	}
-
-	if msg.Type == "hatch" {
-		log.Println("The master sent a 'hatch' message, you are using an unsupported locust version, please update locust to 1.2.")
 		return
 	}
 
