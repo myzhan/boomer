@@ -399,7 +399,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.state = stateStopped
 			log.Println("Recv stop message from master, all the goroutines are stopped")
 			r.client.sendChannel() <- newGenericMessage("client_stopped", nil, r.nodeID)
-			r.client.sendChannel() <- newGenericMessage("client_ready", nil, r.nodeID)
+			r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
 			r.state = stateInit
 		case "quit":
 			r.stop()
