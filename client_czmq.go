@@ -16,8 +16,8 @@ type czmqSocketClient struct {
 
 	dealerSocket *goczmq.Sock
 
-	fromMaster             chan *message
-	toMaster               chan *message
+	fromMaster             chan message
+	toMaster               chan message
 	disconnectedFromMaster chan bool
 	shutdownChan           chan bool
 }
@@ -28,8 +28,8 @@ func newClient(masterHost string, masterPort int, identity string) (client *czmq
 		masterHost:             masterHost,
 		masterPort:             masterPort,
 		identity:               identity,
-		fromMaster:             make(chan *message, 100),
-		toMaster:               make(chan *message, 100),
+		fromMaster:             make(chan message, 100),
+		toMaster:               make(chan message, 100),
 		disconnectedFromMaster: make(chan bool),
 		shutdownChan:           make(chan bool),
 	}
@@ -63,7 +63,7 @@ func (c *czmqSocketClient) close() {
 	}
 }
 
-func (c *czmqSocketClient) recvChannel() chan *message {
+func (c *czmqSocketClient) recvChannel() chan message {
 	return c.fromMaster
 }
 
@@ -78,7 +78,7 @@ func (c *czmqSocketClient) recv() {
 				log.Printf("Error reading: %v\n", err)
 				continue
 			}
-			decodedMsg, err := newMessageFromBytes(msg)
+			decodedMsg, err := newGenericMessageFromBytes(msg)
 			if err != nil {
 				log.Printf("Msgpack decode fail: %v\n", err)
 				continue
@@ -92,7 +92,7 @@ func (c *czmqSocketClient) recv() {
 	}
 }
 
-func (c *czmqSocketClient) sendChannel() chan *message {
+func (c *czmqSocketClient) sendChannel() chan message {
 	return c.toMaster
 }
 
@@ -103,14 +103,17 @@ func (c *czmqSocketClient) send() {
 			return
 		case msg := <-c.toMaster:
 			c.sendMessage(msg)
-			if msg.Type == "quit" {
-				c.disconnectedFromMaster <- true
+			m, ok := msg.(*genericMessage)
+			if ok {
+				if m.Type == "quit" {
+					c.disconnectedFromMaster <- true
+				}
 			}
 		}
 	}
 }
 
-func (c *czmqSocketClient) sendMessage(msg *message) {
+func (c *czmqSocketClient) sendMessage(msg message) {
 	serializedMessage, err := msg.serialize()
 	if err != nil {
 		log.Printf("Msgpack encode fail: %v\n", err)
