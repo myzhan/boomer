@@ -339,10 +339,10 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 	r.userClassesCountFromMaster = make(map[string]int64)
 	amount := 0
 	for class, num := range userClassesCountMap {
-		n, ok := num.(int64)
-		c, ok2 := class.(string)
+		c, ok := class.(string)
+		n, ok2 := castToInt64(num)
 		if !ok || !ok2 {
-			log.Printf("user_classes_count in spawn message can't be casted to map[string]int64, current type is %T, ignored!\n", num)
+			log.Printf("user_classes_count in spawn message can't be casted to map[string]int64, current type is map[%T]%T, ignored!\n", class, num)
 			continue
 		}
 		r.userClassesCountFromMaster[c] = n

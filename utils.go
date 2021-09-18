@@ -16,6 +16,18 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
+func castToInt64(num interface{}) (ret int64, ok bool) {
+	t_int64, ok := num.(int64)
+	if ok {
+		return t_int64, true
+	}
+	t_uint64, ok := num.(uint64)
+	if ok {
+		return int64(t_uint64), true
+	}
+	return int64(0), false
+}
+
 func round(val float64, roundOn float64, places int) (newVal float64) {
 	var round float64
 	pow := math.Pow(10, float64(places))
