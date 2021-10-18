@@ -1,4 +1,4 @@
-module github.com/myzhan/boomer
+module github.com/debugtalk/boomer
 
 go 1.16
 
