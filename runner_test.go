@@ -540,8 +540,8 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send client_stopped message, got", m.Type)
 	}
 	msg = <-runner.client.sendChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "client_ready" {
+	crm := msg.(*clientReadyMessage)
+	if crm.Type != "client_ready" {
 		t.Error("Runner should send client_ready message, got", m.Type)
 	}
 
@@ -584,8 +584,8 @@ func TestOnMessage(t *testing.T) {
 		t.Error("Runner should send client_stopped message, got", m.Type)
 	}
 	msg = <-runner.client.sendChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "client_ready" {
+	crm = msg.(*clientReadyMessage)
+	if crm.Type != "client_ready" {
 		t.Error("Runner should send client_ready message, got", m.Type)
 	}
 }
