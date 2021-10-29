@@ -233,7 +233,6 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 	r.spawnRate = spawnRate
 	r.spawnCount = spawnCount
 	r.closeChan = make(chan bool)
-	r.addOutput(NewConsoleOutput())
 
 	if rateLimiter != nil {
 		r.rateLimitEnabled = true
