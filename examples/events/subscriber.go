@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/myzhan/boomer"
+	"github.com/debugtalk/boomer"
 )
 
 // This is an example about how to subscribe to boomer's internal events.

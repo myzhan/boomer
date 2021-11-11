@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/myzhan/boomer"
+	"github.com/debugtalk/boomer"
 )
 
 // This is a tool like Apache Benchmark a.k.a "ab".

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bugVanisher/grequester"
-	"github.com/myzhan/boomer"
+	"github.com/debugtalk/boomer"
 )
 
 var verbose = false
