@@ -40,11 +40,6 @@ github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f/go.mod h1:E3G3o1h8I7cfc
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/debugtalk/gomq v0.0.0-20211018092527-f7d8995747e8 h1:xMOf22iLpJkFIAd1C7vlgaZZ2BQzbMz5QfWKvlJUO74=
-github.com/debugtalk/gomq v0.0.0-20211018092527-f7d8995747e8/go.mod h1:96UL0RdmGBY48GjFZEKx4beSXx46h9HLpz9YVLtPZ+0=
-github.com/debugtalk/gomq/zmtp v0.0.0-20211018091650-b8562d02082a/go.mod h1:TVI6L49T8bFL4yPV3d/MblBnCFbmRNXJIJdxQgkPWSg=
-github.com/debugtalk/gomq/zmtp v0.0.0-20211018092527-f7d8995747e8 h1:3TyDRxh3d2p4LFDgdJ0SdNqyKGU/QzDg4+VNuoxCPtQ=
-github.com/debugtalk/gomq/zmtp v0.0.0-20211018092527-f7d8995747e8/go.mod h1:TVI6L49T8bFL4yPV3d/MblBnCFbmRNXJIJdxQgkPWSg=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
@@ -212,6 +207,10 @@ github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 h1:k/gmLsJDWwWqbLC
 github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9/go.mod h1:E1AXubJBdNmFERAOucpDIxNzeGfLzg0mYh+UfMWdChA=
 github.com/zeromq/goczmq v4.1.0+incompatible h1:cGVQaU6kIwwrGso0Pgbl84tzAz/h7FJ3wYQjSonjFFc=
 github.com/zeromq/goczmq v4.1.0+incompatible/go.mod h1:1uZybAJoSRCvZMH2rZxEwWBSmC4T7CB/xQOfChwPEzg=
+github.com/zeromq/gomq v0.0.0-20201031135124-cef4e507bb8e h1:vGjfCnWv/zWeO1ivv4+OUPgTzG/WV1iGfZwVdtUpLkM=
+github.com/zeromq/gomq v0.0.0-20201031135124-cef4e507bb8e/go.mod h1:SkCxcSQ7BQEA9FvDzbj+3hV6EMhSywyxWnHwUXVIyLY=
+github.com/zeromq/gomq/zmtp v0.0.0-20201031135124-cef4e507bb8e h1:pjp04/sSr2TYuaPdt+u6Cc1M38Aocp+3er0akr3auFg=
+github.com/zeromq/gomq/zmtp v0.0.0-20201031135124-cef4e507bb8e/go.mod h1:LBjWEodY/ESvKRwLw3bc7mhn49oiI8qlXUqeqLn0pcU=
 go.etcd.io/bbolt v1.3.6 h1:/ecaJf0sk1l4l6V4awd65v2C3ILy7MSj+s/x1ADCIMU=
 go.etcd.io/bbolt v1.3.6/go.mod h1:qXsaaIqmgQH0T+OPdb99Bf+PKfBBQVAdyD6TY9G8XM4=
 go.etcd.io/etcd v3.3.27+incompatible h1:5hMrpf6REqTHV2LW2OclNpRtxI0k9ZplMemJsMSWju0=

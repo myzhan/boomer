@@ -11,8 +11,6 @@ require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
-	github.com/debugtalk/gomq v0.0.0-20211018092527-f7d8995747e8
-	github.com/debugtalk/gomq/zmtp v0.0.0-20211018092527-f7d8995747e8
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -37,6 +35,8 @@ require (
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9
 	github.com/zeromq/goczmq v4.1.0+incompatible
+	github.com/zeromq/gomq v0.0.0-20201031135124-cef4e507bb8e
+	github.com/zeromq/gomq/zmtp v0.0.0-20201031135124-cef4e507bb8e
 	go.etcd.io/etcd v3.3.27+incompatible
 	go.uber.org/zap v1.19.1 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
