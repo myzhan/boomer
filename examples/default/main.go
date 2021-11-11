@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/debugtalk/boomer"
+	"github.com/myzhan/boomer"
 )
 
 func foo() {

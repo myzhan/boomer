@@ -16,7 +16,7 @@ import (
 
 	"github.com/yuin/gopher-lua/parse"
 
-	"github.com/debugtalk/boomer"
+	"github.com/myzhan/boomer"
 	lua "github.com/yuin/gopher-lua"
 )
 

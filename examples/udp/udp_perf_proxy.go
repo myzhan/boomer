@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/debugtalk/boomer"
+	"github.com/myzhan/boomer"
 )
 
 //                            +------------+

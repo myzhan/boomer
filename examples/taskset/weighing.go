@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/debugtalk/boomer"
+	"github.com/myzhan/boomer"
 )
 
 func waitForQuit() {

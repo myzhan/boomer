@@ -7,7 +7,7 @@ import (
 	"plugin"
 	"strings"
 
-	"github.com/debugtalk/boomer"
+	"github.com/myzhan/boomer"
 )
 
 // Trying to implement boomer-cli without any test scenarios

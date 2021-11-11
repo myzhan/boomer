@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/debugtalk/boomer"
+	"github.com/myzhan/boomer"
 	"go.etcd.io/etcd/clientv3"
 )
 

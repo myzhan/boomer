@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/debugtalk/boomer"
+	"github.com/myzhan/boomer"
 )
 
 // GetName returns a string assigned to task.Name
