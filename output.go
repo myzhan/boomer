@@ -110,7 +110,7 @@ func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 	for _, stat := range stats {
 		s := stat.(map[string]interface{})
 		row := make([]string, 10)
-		row[0], row[1] = s["name"].(string), s["method"].(string)
+		row[0], row[1] = s["method"].(string), s["name"].(string)
 
 		numRequests := s["num_requests"].(int64)
 		row[2] = strconv.FormatInt(numRequests, 10)

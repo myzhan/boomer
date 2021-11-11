@@ -31,5 +31,6 @@ func main() {
 	numClients := 10
 	spawnRate := float64(10)
 	globalBoomer = boomer.NewStandaloneBoomer(numClients, spawnRate)
+	globalBoomer.AddOutput(boomer.NewConsoleOutput())
 	globalBoomer.Run(task1)
 }

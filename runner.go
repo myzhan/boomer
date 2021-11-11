@@ -233,7 +233,6 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 	r.spawnRate = spawnRate
 	r.spawnCount = spawnCount
 	r.closeChan = make(chan bool)
-	r.addOutput(NewConsoleOutput())
 
 	if rateLimiter != nil {
 		r.rateLimitEnabled = true
@@ -358,10 +357,6 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
-	if workers == 0 {
-		// Unexpected value, ignore.
-		return
-	}
 
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
