@@ -8,15 +8,7 @@ go:
   - tip
 
 install:
-  - go get -u github.com/asaskevich/EventBus
-  - go get -u github.com/ugorji/go/codec
-  - go get -u github.com/zeromq/gomq
-  - go get -u github.com/google/uuid
-  - go get -u github.com/olekukonko/tablewriter
-  - go get -u github.com/stretchr/testify/assert
-  - go get -u github.com/shirou/gopsutil
-  - go get -u github.com/tklauser/go-sysconf
-  - go get -u golang.org/x/sys/unix
+  - go mod download
 
 script:
   - go test -timeout 1m -coverprofile=coverage.txt -covermode=atomic
