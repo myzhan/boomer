@@ -244,6 +244,7 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 }
 
 func (r *localRunner) run() {
+	r.outputOnStart()
 	r.state = stateInit
 	r.stats.start()
 
@@ -270,6 +271,7 @@ func (r *localRunner) run() {
 	r.startSpawning(r.spawnCount, r.spawnRate, nil)
 
 	wg.Wait()
+	r.outputOnStop()
 }
 
 func (r *localRunner) close() {
