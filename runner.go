@@ -255,6 +255,7 @@ func (r *localRunner) run() {
 			select {
 			case data := <-r.stats.messageToRunnerChan:
 				data["user_count"] = r.numClients
+				data["state"] = r.state
 				r.outputOnEevent(data)
 			case <-r.closeChan:
 				Events.Publish("boomer:quit")

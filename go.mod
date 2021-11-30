@@ -7,6 +7,7 @@ require (
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
 	github.com/google/uuid v1.3.0
 	github.com/olekukonko/tablewriter v0.0.5
+	github.com/prometheus/client_golang v1.11.0
 	github.com/shirou/gopsutil v3.21.10+incompatible
 	github.com/stretchr/testify v1.7.0
 	github.com/tklauser/go-sysconf v0.3.9 // indirect

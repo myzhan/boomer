@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -19,9 +20,9 @@ type requestFailure struct {
 }
 
 type requestStats struct {
-	entries   map[string]*statsEntry
+	entries   map[string]*StatsEntry
 	errors    map[string]*statsError
-	total     *statsEntry
+	total     *StatsEntry
 	startTime int64
 
 	requestSuccessChan  chan *requestSuccess
@@ -32,7 +33,7 @@ type requestStats struct {
 }
 
 func newRequestStats() (stats *requestStats) {
-	entries := make(map[string]*statsEntry)
+	entries := make(map[string]*StatsEntry)
 	errors := make(map[string]*statsError)
 
 	stats = &requestStats{
@@ -45,9 +46,9 @@ func newRequestStats() (stats *requestStats) {
 	stats.messageToRunnerChan = make(chan map[string]interface{}, 10)
 	stats.shutdownChan = make(chan bool)
 
-	stats.total = &statsEntry{
-		name:   "Total",
-		method: "",
+	stats.total = &StatsEntry{
+		Name:   "Total",
+		Method: "",
 	}
 	stats.total.reset()
 
@@ -77,14 +78,14 @@ func (s *requestStats) logError(method, name, err string) {
 	entry.occured()
 }
 
-func (s *requestStats) get(name string, method string) (entry *statsEntry) {
+func (s *requestStats) get(name string, method string) (entry *StatsEntry) {
 	entry, ok := s.entries[name+method]
 	if !ok {
-		newEntry := &statsEntry{
-			name:          name,
-			method:        method,
-			numReqsPerSec: make(map[int64]int64),
-			responseTimes: make(map[int64]int64),
+		newEntry := &StatsEntry{
+			Name:          name,
+			Method:        method,
+			NumReqsPerSec: make(map[int64]int64),
+			ResponseTimes: make(map[int64]int64),
 		}
 		newEntry.reset()
 		s.entries[name+method] = newEntry
@@ -94,13 +95,13 @@ func (s *requestStats) get(name string, method string) (entry *statsEntry) {
 }
 
 func (s *requestStats) clearAll() {
-	s.total = &statsEntry{
-		name:   "Total",
-		method: "",
+	s.total = &StatsEntry{
+		Name:   "Total",
+		Method: "",
 	}
 	s.total.reset()
 
-	s.entries = make(map[string]*statsEntry)
+	s.entries = make(map[string]*StatsEntry)
 	s.errors = make(map[string]*statsError)
 	s.startTime = time.Now().Unix()
 }
@@ -108,7 +109,7 @@ func (s *requestStats) clearAll() {
 func (s *requestStats) serializeStats() []interface{} {
 	entries := make([]interface{}, 0, len(s.entries))
 	for _, v := range s.entries {
-		if !(v.numRequests == 0 && v.numFailures == 0) {
+		if !(v.NumRequests == 0 && v.NumFailures == 0) {
 			entries = append(entries, v.getStrippedReport())
 		}
 	}
@@ -160,70 +161,90 @@ func (s *requestStats) close() {
 	close(s.shutdownChan)
 }
 
-type statsEntry struct {
-	name                 string
-	method               string
-	numRequests          int64
-	numFailures          int64
-	totalResponseTime    int64
-	minResponseTime      int64
-	maxResponseTime      int64
-	numReqsPerSec        map[int64]int64
-	numFailPerSec        map[int64]int64
-	responseTimes        map[int64]int64
-	totalContentLength   int64
-	startTime            int64
-	lastRequestTimestamp int64
+// StatsEntry represents a single stats entry (name and method)
+type StatsEntry struct {
+	// Name (URL) of this stats entry
+	Name string `json:"name"`
+	// Method (GET, POST, PUT, etc.)
+	Method string `json:"method"`
+	// The number of requests made
+	NumRequests int64 `json:"num_requests"`
+	// Number of failed request
+	NumFailures int64 `json:"num_failures"`
+	// Total sum of the response times
+	TotalResponseTime int64 `json:"total_response_time"`
+	// Minimum response time
+	MinResponseTime int64 `json:"min_response_time"`
+	// Maximum response time
+	MaxResponseTime int64 `json:"max_response_time"`
+	// A {second => request_count} dict that holds the number of requests made per second
+	NumReqsPerSec map[int64]int64 `json:"num_reqs_per_sec"`
+	// A (second => failure_count) dict that hold the number of failures per second
+	NumFailPerSec map[int64]int64 `json:"num_fail_per_sec"`
+	// A {response_time => count} dict that holds the response time distribution of all the requests
+	// The keys (the response time in ms) are rounded to store 1, 2, ... 9, 10, 20. .. 90,
+	// 100, 200 .. 900, 1000, 2000 ... 9000, in order to save memory.
+	// This dict is used to calculate the median and percentile response times.
+	ResponseTimes map[int64]int64 `json:"response_times"`
+	// The sum of the content length of all the requests for this entry
+	TotalContentLength int64 `json:"total_content_length"`
+	// Time of the first request for this entry
+	StartTime int64 `json:"start_time"`
+	// Time of the last request for this entry
+	LastRequestTimestamp int64 `json:"last_request_timestamp"`
+	// Boomer doesn't allow None response time for requests like locust.
+	// num_none_requests is added to keep compatible with locust.
+	NumNoneRequests int64 `json:"num_none_requests"`
 }
 
-func (s *statsEntry) reset() {
-	s.startTime = time.Now().Unix()
-	s.numRequests = 0
-	s.numFailures = 0
-	s.totalResponseTime = 0
-	s.responseTimes = make(map[int64]int64)
-	s.minResponseTime = 0
-	s.maxResponseTime = 0
-	s.lastRequestTimestamp = time.Now().Unix()
-	s.numReqsPerSec = make(map[int64]int64)
-	s.numFailPerSec = make(map[int64]int64)
-	s.totalContentLength = 0
+func (s *StatsEntry) reset() {
+	s.StartTime = time.Now().Unix()
+	s.NumRequests = 0
+	s.NumFailures = 0
+	s.TotalResponseTime = 0
+	s.ResponseTimes = make(map[int64]int64)
+	s.MinResponseTime = 0
+	s.MaxResponseTime = 0
+	s.LastRequestTimestamp = time.Now().Unix()
+	s.NumReqsPerSec = make(map[int64]int64)
+	s.NumFailPerSec = make(map[int64]int64)
+	s.TotalContentLength = 0
 }
 
-func (s *statsEntry) log(responseTime int64, contentLength int64) {
-	s.numRequests++
+func (s *StatsEntry) log(responseTime int64, contentLength int64) {
+	s.NumRequests++
 
 	s.logTimeOfRequest()
 	s.logResponseTime(responseTime)
 
-	s.totalContentLength += contentLength
+	s.TotalContentLength += contentLength
 }
 
-func (s *statsEntry) logTimeOfRequest() {
+func (s *StatsEntry) logTimeOfRequest() {
 	key := time.Now().Unix()
-	_, ok := s.numReqsPerSec[key]
+	_, ok := s.NumReqsPerSec[key]
 	if !ok {
-		s.numReqsPerSec[key] = 1
+		s.NumReqsPerSec[key] = 1
 	} else {
-		s.numReqsPerSec[key]++
+		s.NumReqsPerSec[key]++
 	}
 
-	s.lastRequestTimestamp = key
+	s.LastRequestTimestamp = key
 }
 
-func (s *statsEntry) logResponseTime(responseTime int64) {
-	s.totalResponseTime += responseTime
+func (s *StatsEntry) logResponseTime(responseTime int64) {
+	s.TotalResponseTime += responseTime
 
-	if s.minResponseTime == 0 {
-		s.minResponseTime = responseTime
+	if s.MinResponseTime == 0 {
+		s.MinResponseTime = responseTime
 	}
 
-	if responseTime < s.minResponseTime {
-		s.minResponseTime = responseTime
+	if responseTime < s.MinResponseTime {
+		s.MinResponseTime = responseTime
 	}
 
-	if responseTime > s.maxResponseTime {
-		s.maxResponseTime = responseTime
+	if responseTime > s.MaxResponseTime {
+		s.MaxResponseTime = responseTime
 	}
 
 	var roundedResponseTime int64
@@ -242,47 +263,39 @@ func (s *statsEntry) logResponseTime(responseTime int64) {
 		roundedResponseTime = int64(round(float64(responseTime), .5, -3))
 	}
 
-	_, ok := s.responseTimes[roundedResponseTime]
+	_, ok := s.ResponseTimes[roundedResponseTime]
 	if !ok {
-		s.responseTimes[roundedResponseTime] = 1
+		s.ResponseTimes[roundedResponseTime] = 1
 	} else {
-		s.responseTimes[roundedResponseTime]++
+		s.ResponseTimes[roundedResponseTime]++
 	}
 }
 
-func (s *statsEntry) logError(err string) {
-	s.numFailures++
+func (s *StatsEntry) logError(err string) {
+	s.NumFailures++
 	key := time.Now().Unix()
-	_, ok := s.numFailPerSec[key]
+	_, ok := s.NumFailPerSec[key]
 	if !ok {
-		s.numFailPerSec[key] = 1
+		s.NumFailPerSec[key] = 1
 	} else {
-		s.numFailPerSec[key]++
+		s.NumFailPerSec[key]++
 	}
 }
 
-func (s *statsEntry) serialize() map[string]interface{} {
-	result := make(map[string]interface{})
-	result["name"] = s.name
-	result["method"] = s.method
-	result["last_request_timestamp"] = s.lastRequestTimestamp
-	result["start_time"] = s.startTime
-	result["num_requests"] = s.numRequests
-	// Boomer doesn't allow None response time for requests like locust.
-	// num_none_requests is added to keep compatible with locust.
-	result["num_none_requests"] = 0
-	result["num_failures"] = s.numFailures
-	result["total_response_time"] = s.totalResponseTime
-	result["max_response_time"] = s.maxResponseTime
-	result["min_response_time"] = s.minResponseTime
-	result["total_content_length"] = s.totalContentLength
-	result["response_times"] = s.responseTimes
-	result["num_reqs_per_sec"] = s.numReqsPerSec
-	result["num_fail_per_sec"] = s.numFailPerSec
+func (s *StatsEntry) serialize() map[string]interface{} {
+	var result map[string]interface{}
+	val, err := json.Marshal(s)
+	if err != nil {
+		return nil
+	}
+	err = json.Unmarshal(val, &result)
+	if err != nil {
+		return nil
+	}
 	return result
 }
 
-func (s *statsEntry) getStrippedReport() map[string]interface{} {
+func (s *StatsEntry) getStrippedReport() map[string]interface{} {
 	report := s.serialize()
 	s.reset()
 	return report

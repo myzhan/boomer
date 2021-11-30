@@ -13,37 +13,37 @@ func TestLogRequest(t *testing.T) {
 	newStats.logRequest("http", "success", 1, 20)
 	entry := newStats.get("success", "http")
 
-	if entry.numRequests != 4 {
-		t.Error("numRequests is wrong, expected: 4, got:", entry.numRequests)
+	if entry.NumRequests != 4 {
+		t.Error("numRequests is wrong, expected: 4, got:", entry.NumRequests)
 	}
-	if entry.minResponseTime != 1 {
-		t.Error("minResponseTime is wrong, expected: 1, got:", entry.minResponseTime)
+	if entry.MinResponseTime != 1 {
+		t.Error("minResponseTime is wrong, expected: 1, got:", entry.MinResponseTime)
 	}
-	if entry.maxResponseTime != 3 {
-		t.Error("maxResponseTime is wrong, expected: 3, got:", entry.maxResponseTime)
+	if entry.MaxResponseTime != 3 {
+		t.Error("maxResponseTime is wrong, expected: 3, got:", entry.MaxResponseTime)
 	}
-	if entry.totalResponseTime != 8 {
-		t.Error("totalResponseTime is wrong, expected: 8, got:", entry.totalResponseTime)
+	if entry.TotalResponseTime != 8 {
+		t.Error("totalResponseTime is wrong, expected: 8, got:", entry.TotalResponseTime)
 	}
-	if entry.totalContentLength != 130 {
-		t.Error("totalContentLength is wrong, expected: 130, got:", entry.totalContentLength)
+	if entry.TotalContentLength != 130 {
+		t.Error("totalContentLength is wrong, expected: 130, got:", entry.TotalContentLength)
 	}
 
 	// check newStats.total
-	if newStats.total.numRequests != 4 {
-		t.Error("newStats.total.numRequests is wrong, expected: 4, got:", newStats.total.numRequests)
+	if newStats.total.NumRequests != 4 {
+		t.Error("newStats.total.numRequests is wrong, expected: 4, got:", newStats.total.NumRequests)
 	}
-	if newStats.total.minResponseTime != 1 {
-		t.Error("newStats.total.minResponseTime is wrong, expected: 1, got:", newStats.total.minResponseTime)
+	if newStats.total.MinResponseTime != 1 {
+		t.Error("newStats.total.minResponseTime is wrong, expected: 1, got:", newStats.total.MinResponseTime)
 	}
-	if newStats.total.maxResponseTime != 3 {
-		t.Error("newStats.total.maxResponseTime is wrong, expected: 3, got:", newStats.total.maxResponseTime)
+	if newStats.total.MaxResponseTime != 3 {
+		t.Error("newStats.total.maxResponseTime is wrong, expected: 3, got:", newStats.total.MaxResponseTime)
 	}
-	if newStats.total.totalResponseTime != 8 {
-		t.Error("newStats.total.totalResponseTime is wrong, expected: 8, got:", newStats.total.totalResponseTime)
+	if newStats.total.TotalResponseTime != 8 {
+		t.Error("newStats.total.totalResponseTime is wrong, expected: 8, got:", newStats.total.TotalResponseTime)
 	}
-	if newStats.total.totalContentLength != 130 {
-		t.Error("newStats.total.totalContentLength is wrong, expected: 130, got:", newStats.total.totalContentLength)
+	if newStats.total.TotalContentLength != 130 {
+		t.Error("newStats.total.totalContentLength is wrong, expected: 130, got:", newStats.total.TotalContentLength)
 	}
 }
 
@@ -60,7 +60,7 @@ func TestRoundedResponseTime(t *testing.T) {
 	newStats.logRequest("http", "success", 3432, 1)
 	newStats.logRequest("http", "success", 58760, 1)
 	entry := newStats.get("success", "http")
-	responseTimes := entry.responseTimes
+	responseTimes := entry.ResponseTimes
 
 	if len(responseTimes) != 3 {
 		t.Error("len(responseTimes) is wrong, expected: 3, got:", len(responseTimes))
@@ -86,12 +86,12 @@ func TestLogError(t *testing.T) {
 	newStats.logError("http", "failure", "400 error")
 	entry := newStats.get("failure", "http")
 
-	if entry.numFailures != 3 {
-		t.Error("numFailures is wrong, expected: 3, got:", entry.numFailures)
+	if entry.NumFailures != 3 {
+		t.Error("numFailures is wrong, expected: 3, got:", entry.NumFailures)
 	}
 
-	if newStats.total.numFailures != 3 {
-		t.Error("newStats.total.numFailures is wrong, expected: 3, got:", newStats.total.numFailures)
+	if newStats.total.NumFailures != 3 {
+		t.Error("newStats.total.numFailures is wrong, expected: 3, got:", newStats.total.NumFailures)
 	}
 
 	// md5("httpfailure500 error") = 547c38e4e4742c1c581f9e2809ba4f55
@@ -128,8 +128,8 @@ func TestClearAll(t *testing.T) {
 	newStats.logRequest("http", "success", 1, 20)
 	newStats.clearAll()
 
-	if newStats.total.numRequests != 0 {
-		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.numRequests)
+	if newStats.total.NumRequests != 0 {
+		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.NumRequests)
 	}
 }
 
@@ -140,8 +140,8 @@ func TestClearAllByChannel(t *testing.T) {
 	newStats.logRequest("http", "success", 1, 20)
 	newStats.clearStatsChan <- true
 
-	if newStats.total.numRequests != 0 {
-		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.numRequests)
+	if newStats.total.NumRequests != 0 {
+		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.NumRequests)
 	}
 }
 
