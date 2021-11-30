@@ -17,6 +17,27 @@ By default, the standalone mode works with a ConsoleOutput, which will print the
 test result to the console, you can write you own output and add more by calling
 boomer.AddOutput().
 
+Here is an example for pushing output to Prometheus Pushgateway.
+
+.. code-block:: go
+
+   var globalBoomer *boomer.Boomer
+
+   func main() {
+      task1 := &boomer.Task{
+         Name:   "foo",
+         Weight: 10,
+         Fn:     foo,
+      }
+
+      numClients := 10
+      spawnRate := float64(10)
+      globalBoomer = boomer.NewStandaloneBoomer(numClients, spawnRate)
+      globalBoomer.AddOutput(boomer.NewPrometheusPusherOutput("http://localhost:9091", "hrp"))
+      globalBoomer.Run(task1)
+   }
+
+
 .. literalinclude:: ../../examples/standalone/standalone.go
    :language: go
    :linenos:
