@@ -155,18 +155,23 @@ func TestSerializeStats(t *testing.T) {
 		return
 	}
 
-	first := serialized[0].(map[string]interface{})
-	if first["name"].(string) != "success" {
-		t.Error("The name is wrong, expected:", "success", "got:", first["name"].(string))
+	first := serialized[0]
+	entry, err := deserializeStatsEntry(first)
+	if err != nil {
+		t.Fail()
 	}
-	if first["method"].(string) != "http" {
-		t.Error("The method is wrong, expected:", "http", "got:", first["method"].(string))
+
+	if entry.Name != "success" {
+		t.Error("The name is wrong, expected:", "success", "got:", entry.Name)
 	}
-	if first["num_requests"].(int64) != int64(1) {
-		t.Error("The num_requests is wrong, expected:", 1, "got:", first["num_requests"].(int64))
+	if entry.Method != "http" {
+		t.Error("The method is wrong, expected:", "http", "got:", entry.Method)
 	}
-	if first["num_failures"].(int64) != int64(0) {
-		t.Error("The num_failures is wrong, expected:", 0, "got:", first["num_failures"].(int64))
+	if entry.NumRequests != int64(1) {
+		t.Error("The num_requests is wrong, expected:", 1, "got:", entry.NumRequests)
+	}
+	if entry.NumFailures != int64(0) {
+		t.Error("The num_failures is wrong, expected:", 0, "got:", entry.NumFailures)
 	}
 }
 

@@ -89,7 +89,7 @@ func getCurrentRps(numRequests int64, numReqsPerSecond map[int64]int64) (current
 	return currentRps
 }
 
-func getStatsFailPerSec(numFailures int64, numFailPerSecond map[int64]int64) (currentFailPerSec int64) {
+func getCurrentFailPerSec(numFailures int64, numFailPerSecond map[int64]int64) (currentFailPerSec int64) {
 	currentFailPerSec = int64(0)
 	numFailPerSecondLength := int64(len(numFailPerSecond))
 	if numFailPerSecondLength != 0 {
@@ -99,6 +99,9 @@ func getStatsFailPerSec(numFailures int64, numFailPerSecond map[int64]int64) (cu
 }
 
 func getTotalFailRatio(totalRequests, totalFailures int64) (failRatio float64) {
+	if totalRequests == 0 {
+		return 0
+	}
 	return float64(totalFailures) / float64(totalRequests)
 }
 
@@ -114,8 +117,9 @@ func (o *ConsoleOutput) OnStop() {
 
 // OnEvent will print to the console.
 func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
-	output, err := convertDataOutput(data)
+	output, err := convertData(data)
 	if err != nil {
+		log.Println(fmt.Sprintf("convert data error: %v", err))
 		return
 	}
 
@@ -145,7 +149,7 @@ func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 }
 
 type statsEntryOutput struct {
-	StatsEntry
+	statsEntry
 
 	medianResponseTime int64   // median response time
 	avgResponseTime    float64 // average response time, round float to 2 decimal places
@@ -164,7 +168,7 @@ type dataOutput struct {
 	Errors         map[string]map[string]interface{} `json:"errors"`
 }
 
-func convertDataOutput(data map[string]interface{}) (output *dataOutput, err error) {
+func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 	userCount, ok := data["user_count"].(int32)
 	if !ok {
 		return nil, fmt.Errorf("user_count is not int32")
@@ -213,19 +217,19 @@ func deserializeStatsEntry(stat interface{}) (entryOutput *statsEntryOutput, err
 	if err != nil {
 		return nil, err
 	}
-	entry := StatsEntry{}
+	entry := statsEntry{}
 	if err = json.Unmarshal(statBytes, &entry); err != nil {
 		return nil, err
 	}
 
 	numRequests := entry.NumRequests
 	entryOutput = &statsEntryOutput{
-		StatsEntry:         entry,
+		statsEntry:         entry,
 		medianResponseTime: getMedianResponseTime(numRequests, entry.ResponseTimes),
 		avgResponseTime:    getAvgResponseTime(numRequests, entry.TotalResponseTime),
 		avgContentLength:   getAvgContentLength(numRequests, entry.TotalContentLength),
 		currentRps:         getCurrentRps(numRequests, entry.NumReqsPerSec),
-		currentFailPerSec:  getStatsFailPerSec(entry.NumFailures, entry.NumFailPerSec),
+		currentFailPerSec:  getCurrentFailPerSec(entry.NumFailures, entry.NumFailPerSec),
 	}
 	return
 }
@@ -349,7 +353,7 @@ func NewPrometheusPusherOutput(gatewayURL, jobName string) *PrometheusPusherOutp
 	}
 }
 
-// PrometheusPusherOutput pushes boomer stats to Prometheus Pushgateway for standalone mode.
+// PrometheusPusherOutput pushes boomer stats to Prometheus Pushgateway.
 type PrometheusPusherOutput struct {
 	pusher *push.Pusher // Prometheus Pushgateway Pusher
 }
@@ -385,8 +389,9 @@ func (o *PrometheusPusherOutput) OnStop() {
 
 // OnEvent will push metric to Prometheus Pushgataway
 func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
-	output, err := convertDataOutput(data)
+	output, err := convertData(data)
 	if err != nil {
+		log.Println(fmt.Sprintf("convert data error: %v", err))
 		return
 	}
 
@@ -430,6 +435,6 @@ func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 	}
 
 	if err := o.pusher.Push(); err != nil {
-		fmt.Println("Could not push to Pushgateway:", err)
+		log.Println(fmt.Sprintf("Could not push to Pushgateway: error: %v", err))
 	}
 }

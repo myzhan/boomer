@@ -244,9 +244,9 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 }
 
 func (r *localRunner) run() {
-	r.outputOnStart()
 	r.state = stateInit
 	r.stats.start()
+	r.outputOnStart()
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -261,6 +261,7 @@ func (r *localRunner) run() {
 				Events.Publish("boomer:quit")
 				r.stop()
 				wg.Done()
+				r.outputOnStop()
 				return
 			}
 		}
@@ -272,7 +273,6 @@ func (r *localRunner) run() {
 	r.startSpawning(r.spawnCount, r.spawnRate, nil)
 
 	wg.Wait()
-	r.outputOnStop()
 }
 
 func (r *localRunner) close() {
@@ -448,6 +448,7 @@ func (r *slaveRunner) run() {
 	r.startListener()
 
 	r.stats.start()
+	r.outputOnStart()
 
 	// tell master, I'm ready
 	// locust allows workers to bypass version check by sending -1 as version
@@ -466,6 +467,7 @@ func (r *slaveRunner) run() {
 				r.client.sendChannel() <- newGenericMessage("stats", data, r.nodeID)
 				r.outputOnEevent(data)
 			case <-r.closeChan:
+				r.outputOnStop()
 				return
 			}
 		}

@@ -20,9 +20,9 @@ type requestFailure struct {
 }
 
 type requestStats struct {
-	entries   map[string]*StatsEntry
+	entries   map[string]*statsEntry
 	errors    map[string]*statsError
-	total     *StatsEntry
+	total     *statsEntry
 	startTime int64
 
 	requestSuccessChan  chan *requestSuccess
@@ -33,7 +33,7 @@ type requestStats struct {
 }
 
 func newRequestStats() (stats *requestStats) {
-	entries := make(map[string]*StatsEntry)
+	entries := make(map[string]*statsEntry)
 	errors := make(map[string]*statsError)
 
 	stats = &requestStats{
@@ -46,7 +46,7 @@ func newRequestStats() (stats *requestStats) {
 	stats.messageToRunnerChan = make(chan map[string]interface{}, 10)
 	stats.shutdownChan = make(chan bool)
 
-	stats.total = &StatsEntry{
+	stats.total = &statsEntry{
 		Name:   "Total",
 		Method: "",
 	}
@@ -78,10 +78,10 @@ func (s *requestStats) logError(method, name, err string) {
 	entry.occured()
 }
 
-func (s *requestStats) get(name string, method string) (entry *StatsEntry) {
+func (s *requestStats) get(name string, method string) (entry *statsEntry) {
 	entry, ok := s.entries[name+method]
 	if !ok {
-		newEntry := &StatsEntry{
+		newEntry := &statsEntry{
 			Name:          name,
 			Method:        method,
 			NumReqsPerSec: make(map[int64]int64),
@@ -95,13 +95,13 @@ func (s *requestStats) get(name string, method string) (entry *StatsEntry) {
 }
 
 func (s *requestStats) clearAll() {
-	s.total = &StatsEntry{
+	s.total = &statsEntry{
 		Name:   "Total",
 		Method: "",
 	}
 	s.total.reset()
 
-	s.entries = make(map[string]*StatsEntry)
+	s.entries = make(map[string]*statsEntry)
 	s.errors = make(map[string]*statsError)
 	s.startTime = time.Now().Unix()
 }
@@ -161,8 +161,8 @@ func (s *requestStats) close() {
 	close(s.shutdownChan)
 }
 
-// StatsEntry represents a single stats entry (name and method)
-type StatsEntry struct {
+// statsEntry represents a single stats entry (name and method)
+type statsEntry struct {
 	// Name (URL) of this stats entry
 	Name string `json:"name"`
 	// Method (GET, POST, PUT, etc.)
@@ -197,7 +197,7 @@ type StatsEntry struct {
 	NumNoneRequests int64 `json:"num_none_requests"`
 }
 
-func (s *StatsEntry) reset() {
+func (s *statsEntry) reset() {
 	s.StartTime = time.Now().Unix()
 	s.NumRequests = 0
 	s.NumFailures = 0
@@ -211,7 +211,7 @@ func (s *StatsEntry) reset() {
 	s.TotalContentLength = 0
 }
 
-func (s *StatsEntry) log(responseTime int64, contentLength int64) {
+func (s *statsEntry) log(responseTime int64, contentLength int64) {
 	s.NumRequests++
 
 	s.logTimeOfRequest()
@@ -220,7 +220,7 @@ func (s *StatsEntry) log(responseTime int64, contentLength int64) {
 	s.TotalContentLength += contentLength
 }
 
-func (s *StatsEntry) logTimeOfRequest() {
+func (s *statsEntry) logTimeOfRequest() {
 	key := time.Now().Unix()
 	_, ok := s.NumReqsPerSec[key]
 	if !ok {
@@ -232,7 +232,7 @@ func (s *StatsEntry) logTimeOfRequest() {
 	s.LastRequestTimestamp = key
 }
 
-func (s *StatsEntry) logResponseTime(responseTime int64) {
+func (s *statsEntry) logResponseTime(responseTime int64) {
 	s.TotalResponseTime += responseTime
 
 	if s.MinResponseTime == 0 {
@@ -271,7 +271,7 @@ func (s *StatsEntry) logResponseTime(responseTime int64) {
 	}
 }
 
-func (s *StatsEntry) logError(err string) {
+func (s *statsEntry) logError(err string) {
 	s.NumFailures++
 	key := time.Now().Unix()
 	_, ok := s.NumFailPerSec[key]
@@ -282,7 +282,7 @@ func (s *StatsEntry) logError(err string) {
 	}
 }
 
-func (s *StatsEntry) serialize() map[string]interface{} {
+func (s *statsEntry) serialize() map[string]interface{} {
 	var result map[string]interface{}
 	val, err := json.Marshal(s)
 	if err != nil {
@@ -295,7 +295,7 @@ func (s *StatsEntry) serialize() map[string]interface{} {
 	return result
 }
 
-func (s *StatsEntry) getStrippedReport() map[string]interface{} {
+func (s *statsEntry) getStrippedReport() map[string]interface{} {
 	report := s.serialize()
 	s.reset()
 	return report
