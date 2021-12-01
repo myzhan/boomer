@@ -122,7 +122,6 @@ func (r *runner) outputOnStop() {
 
 func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc func()) {
 	log.Println("Spawning", spawnCount, "clients immediately")
-	r.state = stateSpawning
 
 	for i := 1; i <= spawnCount; i++ {
 		select {
@@ -156,7 +155,6 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc 
 	if spawnCompleteFunc != nil {
 		spawnCompleteFunc()
 	}
-	r.state = stateRunning
 }
 
 // setTasks will set the runner's task list AND the total task weight
@@ -221,8 +219,6 @@ func (r *runner) stop() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Stop()
 	}
-
-	r.state = stateStopped
 }
 
 type localRunner struct {
@@ -259,7 +255,6 @@ func (r *localRunner) run() {
 			select {
 			case data := <-r.stats.messageToRunnerChan:
 				data["user_count"] = r.numClients
-				data["state"] = r.state
 				r.outputOnEevent(data)
 			case <-r.closeChan:
 				Events.Publish("boomer:quit")
@@ -318,6 +313,7 @@ func (r *slaveRunner) spawnComplete() {
 	data["count"] = r.numClients
 	data["user_classes_count"] = r.userClassesCountFromMaster
 	r.client.sendChannel() <- newGenericMessage("spawning_complete", data, r.nodeID)
+	r.state = stateRunning
 }
 
 func (r *slaveRunner) onQuiting() {
@@ -382,6 +378,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	case stateInit:
 		switch msg.Type {
 		case "spawn":
+			r.state = stateSpawning
 			r.onSpawnMessage(msg)
 		case "quit":
 			Events.Publish("boomer:quit")
@@ -391,10 +388,12 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	case stateRunning:
 		switch msg.Type {
 		case "spawn":
+			r.state = stateSpawning
 			r.stop()
 			r.onSpawnMessage(msg)
 		case "stop":
 			r.stop()
+			r.state = stateStopped
 			log.Println("Recv stop message from master, all the goroutines are stopped")
 			r.client.sendChannel() <- newGenericMessage("client_stopped", nil, r.nodeID)
 			r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
@@ -408,6 +407,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	case stateStopped:
 		switch msg.Type {
 		case "spawn":
+			r.state = stateSpawning
 			r.onSpawnMessage(msg)
 		case "quit":
 			Events.Publish("boomer:quit")

@@ -124,8 +124,8 @@ func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 	}
 
 	currentTime := time.Now()
-	println(fmt.Sprintf("Current time: %s, State: %s, Users: %d, Total RPS: %d, Total Fail Ratio: %.1f%%",
-		currentTime.Format("2006/01/02 15:04:05"), output.State, output.UserCount, output.TotalRPS, output.TotalFailRatio*100))
+	println(fmt.Sprintf("Current time: %s, Users: %d, Total RPS: %d, Total Fail Ratio: %.1f%%",
+		currentTime.Format("2006/01/02 15:04:05"), output.UserCount, output.TotalRPS, output.TotalFailRatio*100))
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Type", "Name", "# requests", "# fails", "Median", "Average", "Min", "Max", "Content Size", "# reqs/sec", "# fails/sec"})
 
@@ -160,7 +160,6 @@ type statsEntryOutput struct {
 
 type dataOutput struct {
 	UserCount      int32                             `json:"user_count"`
-	State          string                            `json:"state"`
 	TotalStats     *statsEntryOutput                 `json:"stats_total"`
 	TotalRPS       int64                             `json:"total_rps"`
 	TotalFailRatio float64                           `json:"total_fail_ratio"`
@@ -172,10 +171,6 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 	userCount, ok := data["user_count"].(int32)
 	if !ok {
 		return nil, fmt.Errorf("user_count is not int32")
-	}
-	state, ok := data["state"].(string)
-	if !ok {
-		return nil, fmt.Errorf("state is not string")
 	}
 	stats, ok := data["stats"].([]interface{})
 	if !ok {
@@ -194,7 +189,6 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 
 	output = &dataOutput{
 		UserCount:      userCount,
-		State:          state,
 		TotalStats:     entryTotalOutput,
 		TotalRPS:       getCurrentRps(entryTotalOutput.NumRequests, entryTotalOutput.NumReqsPerSec),
 		TotalFailRatio: getTotalFailRatio(entryTotalOutput.NumRequests, entryTotalOutput.NumFailures),
@@ -316,13 +310,6 @@ var (
 
 // gauges for total
 var (
-	gaugeRunningState = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "state",
-			Help:      "The current state of the execution (0=ready 1=spawning 2=running 3=stopped 4=quitting).",
-		},
-	)
 	gaugeUsers = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -374,7 +361,6 @@ func (o *PrometheusPusherOutput) OnStart() {
 		gaugeCurrentRPS,
 		gaugeCurrentFailPerSec,
 		// gauges for total
-		gaugeRunningState,
 		gaugeUsers,
 		gaugeTotalRPS,
 		gaugeTotalFailRatio,
@@ -403,22 +389,6 @@ func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 
 	// failure ratio in total
 	gaugeTotalFailRatio.Set(output.TotalFailRatio)
-
-	// boomer state
-	var stateCode = 0 // ready
-	switch output.State {
-	case "ready":
-		stateCode = 0
-	case "spawning":
-		stateCode = 1
-	case "running":
-		stateCode = 2
-	case "stopped":
-		stateCode = 3
-	case "quitting":
-		stateCode = 4
-	}
-	gaugeRunningState.Set(float64(stateCode))
 
 	for _, stat := range output.Stats {
 		method := stat.Method
