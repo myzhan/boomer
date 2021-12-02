@@ -13,9 +13,13 @@ Standalone
 When running in standalone mode, boomer doesn't need to connect to a locust master
 and start testing immediately.
 
-By default, the standalone mode works with a ConsoleOutput, which will print the
-test result to the console, you can write you own output and add more by calling
-boomer.AddOutput().
+You can write you own output and add more by calling boomer.AddOutput().
+
+Here is an example for writting to stdout.
+
+.. code-block:: go
+
+   AddOutput(new boomer.NewConsoleOutput())
 
 Here is an example for pushing output to Prometheus Pushgateway.
 
