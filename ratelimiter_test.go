@@ -25,29 +25,28 @@ func TestRampUpRateLimiter(t *testing.T) {
 	rateLimiter.Start()
 	defer rateLimiter.Stop()
 
-	time.Sleep(110 * time.Millisecond)
+	time.Sleep(110 * time.Millisecond) // fill 10 in 100ms, the bucket is now 10
 
-	for i := 0; i < 10; i++ {
-		blocked := rateLimiter.Acquire()
+	for i := 0; i < 10; i++ { // acquire 10, the bucket will become 0
+		blocked := rateLimiter.Acquire() // -1
 		if blocked {
 			t.Error("Unexpected blocked by rate limiter")
 		}
 	}
-	blocked := rateLimiter.Acquire()
+	blocked := rateLimiter.Acquire() // bucket is empty, should block
 	if !blocked {
 		t.Error("Should be blocked")
 	}
 
-	time.Sleep(110 * time.Millisecond)
+	time.Sleep(190 * time.Millisecond) // fill 20 in 200ms, the bucket is now 20
 
-	// now, the threshold is 20
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 20; i++ { // acquire 20, the bucket will become 0
 		blocked := rateLimiter.Acquire()
 		if blocked {
 			t.Error("Unexpected blocked by rate limiter")
 		}
 	}
-	blocked = rateLimiter.Acquire()
+	blocked = rateLimiter.Acquire() // bucket is empty, should block
 	if !blocked {
 		t.Error("Should be blocked")
 	}
