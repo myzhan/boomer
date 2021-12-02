@@ -34,5 +34,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }} # Repository upload token
           file: ./cover.out # Path to coverage file to upload
           flags: unittests # Flag upload to group coverage metrics
-          fail_ci_if_error: true # Specify whether or not CI build should fail if Codecov runs into an error during upload
           verbose: true

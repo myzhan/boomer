@@ -155,9 +155,12 @@ func TestDistributedRun(t *testing.T) {
 	defer server.close()
 
 	log.Println(fmt.Sprintf("Starting to serve on %s:%d", masterHost, masterPort))
-	server.start()
+	err := server.start()
+	if err != nil {
+		t.Error(err)
+	}
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(20 * time.Millisecond)
 
 	b := NewBoomer(masterHost, masterPort)
 

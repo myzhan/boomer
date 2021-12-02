@@ -234,20 +234,13 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	lock.Unlock()
 
 	total := hundreds + tens + ones + thousands
-	t.Logf("total tasks run: %d\n", total)
+	t.Logf("total tasks run: %d\n, taskCalls: %+v", total, taskCalls)
 
 	assert.True(t, total > 1111)
 
-	assert.True(t, ones > 1)
-	actPercentage := float64(ones) / float64(total)
-	expectedPercentage := 1.0 / 1111.0
-	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of ones task: exp %v, act %v", expectedPercentage, actPercentage)
-	}
-
 	assert.True(t, tens > 10)
-	actPercentage = float64(tens) / float64(total)
-	expectedPercentage = 10.0 / 1111.0
+	actPercentage := float64(tens) / float64(total)
+	expectedPercentage := 10.0 / 1111.0
 	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
 		t.Errorf("Unexpected percentage of tens task: exp %v, act %v", expectedPercentage, actPercentage)
 	}

@@ -167,8 +167,9 @@ func (s *testServer) close() {
 	close(s.shutdownSignal)
 }
 
-func (s *testServer) start() {
-	go s.bind()
+func (s *testServer) start() error {
+	_, err := s.bind()
+	return err
 }
 
 func TestPingPong(t *testing.T) {
