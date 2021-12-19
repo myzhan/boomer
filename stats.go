@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+type transaction struct {
+	name                string
+	totalElapsedTime    int64
+	totalResponseLength int64
+}
+
 type requestSuccess struct {
 	requestType    string
 	name           string
@@ -25,6 +31,7 @@ type requestStats struct {
 	total     *statsEntry
 	startTime int64
 
+	transactionChan     chan *transaction
 	requestSuccessChan  chan *requestSuccess
 	requestFailureChan  chan *requestFailure
 	clearStatsChan      chan bool
@@ -53,6 +60,10 @@ func newRequestStats() (stats *requestStats) {
 	stats.total.reset()
 
 	return stats
+}
+
+func (s *requestStats) logTransaction(name string, responseTime int64, contentLength int64) {
+	s.get(name, "transaction").log(responseTime, contentLength)
 }
 
 func (s *requestStats) logRequest(method, name string, responseTime int64, contentLength int64) {
@@ -138,6 +149,8 @@ func (s *requestStats) start() {
 		var ticker = time.NewTicker(slaveReportInterval)
 		for {
 			select {
+			case t := <-s.transactionChan:
+				s.logTransaction(t.name, t.totalElapsedTime, t.totalResponseLength)
 			case m := <-s.requestSuccessChan:
 				s.logRequest(m.requestType, m.name, m.responseTime, m.responseLength)
 			case n := <-s.requestFailureChan:
@@ -249,7 +262,7 @@ func (s *statsEntry) logResponseTime(responseTime int64) {
 
 	var roundedResponseTime int64
 
-	// to avoid to much data that has to be transferred to the master node when
+	// to avoid too much data that has to be transferred to the master node when
 	// running in distributed mode, we save the response time rounded in a dict
 	// so that 147 becomes 150, 3432 becomes 3400 and 58760 becomes 59000
 	// see also locust's stats.py
