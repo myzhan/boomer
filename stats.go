@@ -46,6 +46,7 @@ func newRequestStats() (stats *requestStats) {
 		entries: entries,
 		errors:  errors,
 	}
+	stats.transactionChan = make(chan *transaction, 100)
 	stats.requestSuccessChan = make(chan *requestSuccess, 100)
 	stats.requestFailureChan = make(chan *requestFailure, 100)
 	stats.clearStatsChan = make(chan bool)

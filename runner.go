@@ -355,7 +355,7 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 // TODO: Since locust 2.0, spawn rate and user count are both handled by master.
 // But user count is divided by user classes defined in locustfile, because locust assumes that
 // master and workers use the same locustfile. Before we find a better way to deal with this,
-// boomer sums up the total amout of users in spawn message and uses task weight to spawn goroutines like before.
+// boomer sums up the total amount of users in spawn message and uses task weight to spawn goroutines like before.
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
