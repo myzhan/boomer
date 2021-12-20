@@ -5,9 +5,10 @@ import (
 )
 
 type transaction struct {
-	name                string
-	totalElapsedTime    int64
-	totalResponseLength int64
+	name        string
+	success     bool
+	elapsedTime int64
+	contentSize int64
 }
 
 type requestSuccess struct {
@@ -30,7 +31,10 @@ type requestStats struct {
 	total     *statsEntry
 	startTime int64
 
-	transactionChan     chan *transaction
+	transactionChan   chan *transaction
+	transactionPassed int64 // accumulated number of passed transactions
+	transactionFailed int64 // accumulated number of failed transactions
+
 	requestSuccessChan  chan *requestSuccess
 	requestFailureChan  chan *requestFailure
 	clearStatsChan      chan bool
@@ -62,7 +66,12 @@ func newRequestStats() (stats *requestStats) {
 	return stats
 }
 
-func (s *requestStats) logTransaction(name string, responseTime int64, contentLength int64) {
+func (s *requestStats) logTransaction(name string, success bool, responseTime int64, contentLength int64) {
+	if success {
+		s.transactionPassed++
+	} else {
+		s.transactionFailed++
+	}
 	s.get(name, "transaction").log(responseTime, contentLength)
 }
 
@@ -112,6 +121,8 @@ func (s *requestStats) clearAll() {
 	}
 	s.total.reset()
 
+	s.transactionPassed = 0
+	s.transactionFailed = 0
 	s.entries = make(map[string]*statsEntry)
 	s.errors = make(map[string]*statsError)
 	s.startTime = time.Now().Unix()
@@ -137,6 +148,10 @@ func (s *requestStats) serializeErrors() map[string]map[string]interface{} {
 
 func (s *requestStats) collectReportData() map[string]interface{} {
 	data := make(map[string]interface{})
+	data["transactions"] = map[string]int64{
+		"passed": s.transactionPassed,
+		"failed": s.transactionFailed,
+	}
 	data["stats"] = s.serializeStats()
 	data["stats_total"] = s.total.getStrippedReport()
 	data["errors"] = s.serializeErrors()
@@ -150,7 +165,7 @@ func (s *requestStats) start() {
 		for {
 			select {
 			case t := <-s.transactionChan:
-				s.logTransaction(t.name, t.totalElapsedTime, t.totalResponseLength)
+				s.logTransaction(t.name, t.success, t.elapsedTime, t.contentSize)
 			case m := <-s.requestSuccessChan:
 				s.logRequest(m.requestType, m.name, m.responseTime, m.responseLength)
 			case n := <-s.requestFailureChan:

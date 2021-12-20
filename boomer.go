@@ -136,22 +136,24 @@ func (b *Boomer) Run(tasks ...*Task) {
 }
 
 // RecordTransaction reports a transaction stat.
-func (b *Boomer) RecordTransaction(name string, totalElapsedTime int64, totalResponseLength int64) {
+func (b *Boomer) RecordTransaction(name string, success bool, elapsedTime int64, contentSize int64) {
 	if b.localRunner == nil && b.slaveRunner == nil {
 		return
 	}
 	switch b.mode {
 	case DistributedMode:
 		b.slaveRunner.stats.transactionChan <- &transaction{
-			name:                name,
-			totalElapsedTime:    totalElapsedTime,
-			totalResponseLength: totalResponseLength,
+			name:        name,
+			success:     success,
+			elapsedTime: elapsedTime,
+			contentSize: contentSize,
 		}
 	case StandaloneMode:
 		b.localRunner.stats.transactionChan <- &transaction{
-			name:                name,
-			totalElapsedTime:    totalElapsedTime,
-			totalResponseLength: totalResponseLength,
+			name:        name,
+			success:     success,
+			elapsedTime: elapsedTime,
+			contentSize: contentSize,
 		}
 	}
 }

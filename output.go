@@ -126,6 +126,8 @@ func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 	currentTime := time.Now()
 	println(fmt.Sprintf("Current time: %s, Users: %d, Total RPS: %d, Total Fail Ratio: %.1f%%",
 		currentTime.Format("2006/01/02 15:04:05"), output.UserCount, output.TotalRPS, output.TotalFailRatio*100))
+	println(fmt.Sprintf("Accumulated Transactions: %d Passed, %d Failed",
+		output.TransactionsPassed, output.TransactionsFailed))
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Type", "Name", "# requests", "# fails", "Median", "Average", "Min", "Max", "Content Size", "# reqs/sec", "# fails/sec"})
 
@@ -159,12 +161,14 @@ type statsEntryOutput struct {
 }
 
 type dataOutput struct {
-	UserCount      int32                             `json:"user_count"`
-	TotalStats     *statsEntryOutput                 `json:"stats_total"`
-	TotalRPS       int64                             `json:"total_rps"`
-	TotalFailRatio float64                           `json:"total_fail_ratio"`
-	Stats          []*statsEntryOutput               `json:"stats"`
-	Errors         map[string]map[string]interface{} `json:"errors"`
+	UserCount          int32                             `json:"user_count"`
+	TotalStats         *statsEntryOutput                 `json:"stats_total"`
+	TransactionsPassed int64                             `json:"transactions_passed"`
+	TransactionsFailed int64                             `json:"transactions_failed"`
+	TotalRPS           int64                             `json:"total_rps"`
+	TotalFailRatio     float64                           `json:"total_fail_ratio"`
+	Stats              []*statsEntryOutput               `json:"stats"`
+	Errors             map[string]map[string]interface{} `json:"errors"`
 }
 
 func convertData(data map[string]interface{}) (output *dataOutput, err error) {
@@ -177,6 +181,13 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 		return nil, fmt.Errorf("stats is not []interface{}")
 	}
 
+	transactions, ok := data["transactions"].(map[string]int64)
+	if !ok {
+		return nil, fmt.Errorf("transactions is not map[string]int64")
+	}
+	transactionsPassed := transactions["passed"]
+	transactionsFailed := transactions["failed"]
+
 	// convert stats in total
 	statsTotal, ok := data["stats_total"].(interface{})
 	if !ok {
@@ -188,11 +199,13 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 	}
 
 	output = &dataOutput{
-		UserCount:      userCount,
-		TotalStats:     entryTotalOutput,
-		TotalRPS:       getCurrentRps(entryTotalOutput.NumRequests, entryTotalOutput.NumReqsPerSec),
-		TotalFailRatio: getTotalFailRatio(entryTotalOutput.NumRequests, entryTotalOutput.NumFailures),
-		Stats:          make([]*statsEntryOutput, 0, len(stats)),
+		UserCount:          userCount,
+		TotalStats:         entryTotalOutput,
+		TransactionsPassed: transactionsPassed,
+		TransactionsFailed: transactionsFailed,
+		TotalRPS:           getCurrentRps(entryTotalOutput.NumRequests, entryTotalOutput.NumReqsPerSec),
+		TotalFailRatio:     getTotalFailRatio(entryTotalOutput.NumRequests, entryTotalOutput.NumFailures),
+		Stats:              make([]*statsEntryOutput, 0, len(stats)),
 	}
 
 	// convert stats
@@ -203,6 +216,9 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 		}
 		output.Stats = append(output.Stats, entryOutput)
 	}
+	sort.Slice(output.Stats, func(i, j int) bool {
+		return output.Stats[i].Name < output.Stats[j].Name
+	})
 	return
 }
 
@@ -331,6 +347,20 @@ var (
 			Help:      "The ratio of request failures in total",
 		},
 	)
+	gaugeTransactionsPassed = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "transactions_passed",
+			Help:      "The accumulated number of passed transactions",
+		},
+	)
+	gaugeTransactionsFailed = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "transactions_failed",
+			Help:      "The accumulated number of failed transactions",
+		},
+	)
 )
 
 // NewPrometheusPusherOutput returns a PrometheusPusherOutput.
@@ -364,6 +394,8 @@ func (o *PrometheusPusherOutput) OnStart() {
 		gaugeUsers,
 		gaugeTotalRPS,
 		gaugeTotalFailRatio,
+		gaugeTransactionsPassed,
+		gaugeTransactionsFailed,
 	)
 	o.pusher = o.pusher.Gatherer(registry)
 }
@@ -389,6 +421,10 @@ func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 
 	// failure ratio in total
 	gaugeTotalFailRatio.Set(output.TotalFailRatio)
+
+	// accumulated number of transactions
+	gaugeTransactionsPassed.Set(float64(output.TransactionsPassed))
+	gaugeTransactionsFailed.Set(float64(output.TransactionsFailed))
 
 	for _, stat := range output.Stats {
 		method := stat.Method
