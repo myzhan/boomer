@@ -216,8 +216,9 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 		}
 		output.Stats = append(output.Stats, entryOutput)
 	}
+	// sort stats by type
 	sort.Slice(output.Stats, func(i, j int) bool {
-		return output.Stats[i].Name < output.Stats[j].Name
+		return output.Stats[i].Method < output.Stats[j].Method
 	})
 	return
 }
