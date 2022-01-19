@@ -8,12 +8,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/asaskevich/EventBus"
 )
-
-// Events is the global event bus instance.
-var Events = EventBus.New()
 
 var defaultBoomer = &Boomer{}
 
@@ -183,7 +178,7 @@ func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exc
 
 // Quit will send a quit message to the master.
 func (b *Boomer) Quit() {
-	Events.Publish("boomer:quit")
+	Events.Publish(EVENT_QUIT)
 	var ticker = time.NewTicker(3 * time.Second)
 
 	switch b.mode {
@@ -248,13 +243,13 @@ func Run(tasks ...*Task) {
 	quitByMe := false
 	quitChan := make(chan bool)
 
-	Events.SubscribeOnce("boomer:quit", func() {
+	Events.SubscribeOnce(EVENT_QUIT, func() {
 		if !quitByMe {
 			close(quitChan)
 		}
 	})
 
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
 	select {

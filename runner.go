@@ -202,7 +202,7 @@ func (r *runner) getTask() *Task {
 }
 
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
-	Events.Publish("boomer:spawn", spawnCount, spawnRate)
+	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
 
 	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
@@ -215,7 +215,7 @@ func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteF
 func (r *runner) stop() {
 	// publish the boomer stop event
 	// user's code can subscribe to this event and do thins like cleaning up
-	Events.Publish("boomer:stop")
+	Events.Publish(EVENT_STOP)
 
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
@@ -261,7 +261,7 @@ func (r *localRunner) run() {
 				data["user_count"] = r.numClients
 				r.outputOnEevent(data)
 			case <-r.shutdownChan:
-				Events.Publish("boomer:quit")
+				Events.Publish(EVENT_QUIT)
 				r.stop()
 				wg.Done()
 				r.outputOnStop()
@@ -385,7 +385,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.state = stateSpawning
 			r.onSpawnMessage(msg)
 		case "quit":
-			Events.Publish("boomer:quit")
+			Events.Publish(EVENT_QUIT)
 		}
 	case stateSpawning:
 		fallthrough
@@ -405,7 +405,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		case "quit":
 			r.stop()
 			log.Println("Recv quit message from master, all the goroutines are stopped")
-			Events.Publish("boomer:quit")
+			Events.Publish(EVENT_QUIT)
 			r.state = stateInit
 		}
 	case stateStopped:
@@ -414,7 +414,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.state = stateSpawning
 			r.onSpawnMessage(msg)
 		case "quit":
-			Events.Publish("boomer:quit")
+			Events.Publish(EVENT_QUIT)
 			r.state = stateInit
 		}
 	}
@@ -495,5 +495,5 @@ func (r *slaveRunner) run() {
 		}
 	}()
 
-	Events.Subscribe("boomer:quit", r.onQuiting)
+	Events.Subscribe(EVENT_QUIT, r.onQuiting)
 }

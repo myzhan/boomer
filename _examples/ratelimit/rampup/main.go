@@ -26,7 +26,7 @@ func waitForQuit() {
 	wg.Add(1)
 
 	go func() {
-		c := make(chan os.Signal)
+		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		<-c
 		globalBoomer.Quit()

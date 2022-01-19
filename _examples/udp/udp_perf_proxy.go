@@ -157,7 +157,7 @@ func deadend() {
 
 func main() {
 	boomer.Events.Subscribe("boome:spawn", startTest)
-	boomer.Events.Subscribe("boomer:stop", stopTest)
+	boomer.Events.Subscribe(EVENT_STOP, stopTest)
 
 	task := &boomer.Task{
 		Name:   "udproxy",

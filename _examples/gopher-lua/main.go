@@ -130,7 +130,7 @@ func waitForQuit() {
 
 	quitByMe := false
 	go func() {
-		c := make(chan os.Signal)
+		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		<-c
 		quitByMe = true
@@ -138,7 +138,7 @@ func waitForQuit() {
 		wg.Done()
 	}()
 
-	boomer.Events.Subscribe("boomer:quit", func() {
+	boomer.Events.Subscribe(EVENT_QUIT, func() {
 		if !quitByMe {
 			wg.Done()
 		}

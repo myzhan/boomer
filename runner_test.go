@@ -334,8 +334,8 @@ func TestStop(t *testing.T) {
 	handler := func() {
 		stopped = true
 	}
-	Events.Subscribe("boomer:stop", handler)
-	defer Events.Unsubscribe("boomer:stop", handler)
+	Events.Subscribe(EVENT_STOP, handler)
+	defer Events.Unsubscribe(EVENT_STOP, handler)
 
 	runner.stop()
 
@@ -360,8 +360,8 @@ func TestOnSpawnMessage(t *testing.T) {
 		workers = param1
 		spawnRate = param2
 	}
-	Events.Subscribe("boomer:spawn", callback)
-	defer Events.Unsubscribe("boomer:spawn", callback)
+	Events.Subscribe(EVENT_SPAWN, callback)
+	defer Events.Unsubscribe(EVENT_SPAWN, callback)
 
 	go func() {
 		// consumes clearStatsChannel
@@ -400,8 +400,8 @@ func TestOnQuitMessage(t *testing.T) {
 	receiver := func() {
 		quitMessages <- true
 	}
-	Events.Subscribe("boomer:quit", receiver)
-	defer Events.Unsubscribe("boomer:quit", receiver)
+	Events.Subscribe(EVENT_QUIT, receiver)
+	defer Events.Unsubscribe(EVENT_QUIT, receiver)
 	var ticker = time.NewTicker(20 * time.Millisecond)
 
 	runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
@@ -601,7 +601,7 @@ func TestGetReady(t *testing.T) {
 	rateLimiter := NewStableRateLimiter(100, time.Second)
 	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter)
 	defer r.shutdown()
-	defer Events.Unsubscribe("boomer:quit", r.onQuiting)
+	defer Events.Unsubscribe(EVENT_QUIT, r.onQuiting)
 
 	r.run()
 
