@@ -91,7 +91,7 @@ func TestLocalRunner(t *testing.T) {
 	runner := newLocalRunner(tasks, nil, 2, 2)
 	go runner.run()
 	time.Sleep(4 * time.Second)
-	runner.close()
+	runner.shutdown()
 }
 
 func TestSpawnWorkers(t *testing.T) {
@@ -105,7 +105,7 @@ func TestSpawnWorkers(t *testing.T) {
 	tasks := []*Task{taskA}
 
 	runner := newSlaveRunner("localhost", 5557, tasks, nil)
-	defer runner.close()
+	defer runner.shutdown()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
@@ -140,7 +140,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	}
 
 	runner := newSlaveRunner("localhost", 5557, tasks, nil)
-	defer runner.close()
+	defer runner.shutdown()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
@@ -214,7 +214,7 @@ func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
 	}
 
 	runner := newSlaveRunner("localhost", 5557, []*Task{task}, nil)
-	defer runner.close()
+	defer runner.shutdown()
 
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
@@ -281,7 +281,7 @@ func TestSpawnAndStop(t *testing.T) {
 	tasks := []*Task{taskA, taskB}
 	runner := newSlaveRunner("localhost", 5557, tasks, nil)
 	runner.state = stateSpawning
-	defer runner.close()
+	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
 	go func() {
@@ -351,7 +351,7 @@ func TestOnSpawnMessage(t *testing.T) {
 		},
 	}
 	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
-	defer runner.close()
+	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
 
@@ -392,7 +392,7 @@ func TestOnSpawnMessage(t *testing.T) {
 
 func TestOnQuitMessage(t *testing.T) {
 	runner := newSlaveRunner("localhost", 5557, nil, nil)
-	defer runner.close()
+	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, "test")
 	runner.state = stateInit
 
@@ -455,7 +455,7 @@ func TestOnMessage(t *testing.T) {
 	tasks := []*Task{taskA, taskB}
 
 	runner := newSlaveRunner("localhost", 5557, tasks, nil)
-	defer runner.close()
+	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
 
@@ -600,7 +600,7 @@ func TestGetReady(t *testing.T) {
 
 	rateLimiter := NewStableRateLimiter(100, time.Second)
 	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter)
-	defer r.close()
+	defer r.shutdown()
 	defer Events.Unsubscribe("boomer:quit", r.onQuiting)
 
 	r.run()

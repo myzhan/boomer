@@ -196,9 +196,9 @@ func (b *Boomer) Quit() {
 			log.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
 			break
 		}
-		b.slaveRunner.close()
+		b.slaveRunner.shutdown()
 	case StandaloneMode:
-		b.localRunner.close()
+		b.localRunner.shutdown()
 	}
 }
 

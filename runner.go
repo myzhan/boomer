@@ -45,8 +45,8 @@ type runner struct {
 	// close this channel will stop all running workers.
 	stopChan chan bool
 
-	// close this channel will stop all goroutines used in runner.
-	closeChan chan bool
+	// close this channel will stop all goroutines used in runner, including running workers.
+	shutdownChan chan bool
 
 	outputs []Output
 }
@@ -128,12 +128,16 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc 
 		case <-quit:
 			// quit spawning goroutine
 			return
+		case <-r.shutdownChan:
+			return
 		default:
 			atomic.AddInt32(&r.numClients, 1)
 			go func() {
 				for {
 					select {
 					case <-quit:
+						return
+					case <-r.shutdownChan:
 						return
 					default:
 						if r.rateLimitEnabled {
@@ -232,7 +236,7 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 	r.setTasks(tasks)
 	r.spawnRate = spawnRate
 	r.spawnCount = spawnCount
-	r.closeChan = make(chan bool)
+	r.shutdownChan = make(chan bool)
 
 	if rateLimiter != nil {
 		r.rateLimitEnabled = true
@@ -256,7 +260,7 @@ func (r *localRunner) run() {
 			case data := <-r.stats.messageToRunnerChan:
 				data["user_count"] = r.numClients
 				r.outputOnEevent(data)
-			case <-r.closeChan:
+			case <-r.shutdownChan:
 				Events.Publish("boomer:quit")
 				r.stop()
 				wg.Done()
@@ -274,11 +278,11 @@ func (r *localRunner) run() {
 	wg.Wait()
 }
 
-func (r *localRunner) close() {
+func (r *localRunner) shutdown() {
 	if r.stats != nil {
 		r.stats.close()
 	}
-	close(r.closeChan)
+	close(r.shutdownChan)
 }
 
 // SlaveRunner connects to the master, spawns goroutines and collects stats.
@@ -297,7 +301,7 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 	r.masterPort = masterPort
 	r.setTasks(tasks)
 	r.nodeID = getNodeID()
-	r.closeChan = make(chan bool)
+	r.shutdownChan = make(chan bool)
 
 	if rateLimiter != nil {
 		r.rateLimitEnabled = true
@@ -322,14 +326,14 @@ func (r *slaveRunner) onQuiting() {
 	}
 }
 
-func (r *slaveRunner) close() {
+func (r *slaveRunner) shutdown() {
 	if r.stats != nil {
 		r.stats.close()
 	}
 	if r.client != nil {
 		r.client.close()
 	}
-	close(r.closeChan)
+	close(r.shutdownChan)
 }
 
 func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
@@ -422,7 +426,7 @@ func (r *slaveRunner) startListener() {
 			select {
 			case msg := <-r.client.recvChannel():
 				r.onMessage(msg)
-			case <-r.closeChan:
+			case <-r.shutdownChan:
 				return
 			}
 		}
@@ -465,7 +469,7 @@ func (r *slaveRunner) run() {
 				data["user_classes_count"] = r.userClassesCountFromMaster
 				r.client.sendChannel() <- newGenericMessage("stats", data, r.nodeID)
 				r.outputOnEevent(data)
-			case <-r.closeChan:
+			case <-r.shutdownChan:
 				r.outputOnStop()
 				return
 			}
@@ -485,7 +489,7 @@ func (r *slaveRunner) run() {
 					"current_cpu_usage": CPUUsage,
 				}
 				r.client.sendChannel() <- newGenericMessage("heartbeat", data, r.nodeID)
-			case <-r.closeChan:
+			case <-r.shutdownChan:
 				return
 			}
 		}
