@@ -102,6 +102,9 @@ func TestConsoleOutput(t *testing.T) {
 		3: 40,
 	}
 
+	data["user_count"] = int32(10)
+	data["stats_total"] = stat
+
 	o.OnEvent(data)
 
 	o.OnStop()

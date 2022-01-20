@@ -94,7 +94,7 @@ func TestParseInvalidRampUpRate(t *testing.T) {
 		t.Error("Expected ErrParsingRampUpRate")
 	}
 
-	rateLimiter, err = NewRampUpRateLimiter(1, "200/1", time.Second)
+	_, err = NewRampUpRateLimiter(1, "200/1", time.Second)
 	if err == nil || err != ErrParsingRampUpRate {
 		t.Error("Expected ErrParsingRampUpRate")
 	}

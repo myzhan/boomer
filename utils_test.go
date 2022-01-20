@@ -5,10 +5,22 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestRound(t *testing.T) {
+func TestCastToInt64(t *testing.T) {
+	_, ok := castToInt64(int64(10))
+	assert.True(t, ok)
 
+	_, ok = castToInt64(uint64(10))
+	assert.True(t, ok)
+
+	_, ok = castToInt64(int32(10))
+	assert.False(t, ok)
+}
+
+func TestRound(t *testing.T) {
 	if int(round(float64(147.5002), .5, -1)) != 150 {
 		t.Error("147.5002 should be rounded to 150")
 	}
