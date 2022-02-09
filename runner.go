@@ -375,6 +375,8 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		return
 	}
 
+	handled := false
+
 	switch r.state {
 	case stateInit:
 		switch msg.Type {
@@ -382,8 +384,10 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.state = stateSpawning
 			r.stats.clearStatsChan <- true
 			r.onSpawnMessage(msg)
+			handled = true
 		case "quit":
-			Events.Publish(EVENT_QUIT)
+			Events.Publish("boomer:quit")
+			handled = true
 		}
 	case stateSpawning:
 		fallthrough
@@ -393,6 +397,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.state = stateSpawning
 			r.stop()
 			r.onSpawnMessage(msg)
+			handled = true
 		case "stop":
 			r.stop()
 			r.state = stateStopped
@@ -400,11 +405,13 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.client.sendChannel() <- newGenericMessage("client_stopped", nil, r.nodeID)
 			r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
 			r.state = stateInit
+			handled = true
 		case "quit":
 			r.stop()
 			log.Println("Recv quit message from master, all the goroutines are stopped")
 			Events.Publish(EVENT_QUIT)
 			r.state = stateInit
+			handled = true
 		}
 	case stateStopped:
 		switch msg.Type {
@@ -412,10 +419,18 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.state = stateSpawning
 			r.stats.clearStatsChan <- true
 			r.onSpawnMessage(msg)
+			handled = true
 		case "quit":
 			Events.Publish(EVENT_QUIT)
 			r.state = stateInit
+			handled = true
 		}
+	}
+
+	if !handled {
+		// Publish all other messages from master to allow users to subscribe to them.
+		// See: http://docs.locust.io/en/stable/running-distributed.html#communicating-across-nodes
+		Events.Publish(msg.Type, msg)
 	}
 }
 
