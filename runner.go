@@ -430,7 +430,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	if !handled {
 		// Publish all other messages from master to allow users to subscribe to them.
 		// See: http://docs.locust.io/en/stable/running-distributed.html#communicating-across-nodes
-		Events.Publish(msg.Type, msg)
+		Events.Publish(msg.Type, msg.Data)
 	}
 }
 

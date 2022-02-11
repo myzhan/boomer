@@ -273,3 +273,17 @@ func RecordSuccess(requestType, name string, responseTime int64, responseLength 
 func RecordFailure(requestType, name string, responseTime int64, exception string) {
 	defaultBoomer.RecordFailure(requestType, name, responseTime, exception)
 }
+
+// SendMessage sends a message to the master.
+// It's a convenience function to use the defaultBoomer.
+func (b *Boomer) SendMessage(msg string, data map[string]interface{}) {
+	switch b.mode {
+	case DistributedMode:
+		if b.slaveRunner != nil {
+			log.Printf("Sending msg `%s`", msg)
+			b.slaveRunner.client.sendChannel() <- newGenericMessage(msg, data, b.slaveRunner.nodeID)
+		} else {
+			log.Panicf("Attempting to send msg `%s` to Master before runner was created.", msg)
+		}
+	}
+}
