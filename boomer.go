@@ -280,7 +280,6 @@ func (b *Boomer) SendMessage(msg string, data map[string]interface{}) {
 	switch b.mode {
 	case DistributedMode:
 		if b.slaveRunner != nil {
-			log.Printf("Sending msg `%s`", msg)
 			b.slaveRunner.client.sendChannel() <- newGenericMessage(msg, data, b.slaveRunner.nodeID)
 		} else {
 			log.Panicf("Attempting to send msg `%s` to Master before runner was created.", msg)
