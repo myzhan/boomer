@@ -204,9 +204,7 @@ func (r *runner) getTask() *Task {
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
 
-	r.stats.clearStatsChan <- true
 	r.stopChan = make(chan bool)
-
 	r.numClients = 0
 
 	go r.spawnWorkers(spawnCount, r.stopChan, spawnCompleteFunc)
@@ -220,9 +218,6 @@ func (r *runner) stop() {
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
 	close(r.stopChan)
-	if r.rateLimitEnabled {
-		r.rateLimiter.Stop()
-	}
 }
 
 type localRunner struct {
@@ -282,6 +277,9 @@ func (r *localRunner) shutdown() {
 	if r.stats != nil {
 		r.stats.close()
 	}
+	if r.rateLimitEnabled {
+		r.rateLimiter.Stop()
+	}
 	close(r.shutdownChan)
 }
 
@@ -333,6 +331,9 @@ func (r *slaveRunner) shutdown() {
 	if r.client != nil {
 		r.client.close()
 	}
+	if r.rateLimitEnabled {
+		r.rateLimiter.Stop()
+	}
 	close(r.shutdownChan)
 }
 
@@ -363,10 +364,6 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
-
-	if r.rateLimitEnabled {
-		r.rateLimiter.Start()
-	}
 	r.startSpawning(workers, float64(workers), r.spawnComplete)
 }
 
@@ -383,6 +380,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		switch msg.Type {
 		case "spawn":
 			r.state = stateSpawning
+			r.stats.clearStatsChan <- true
 			r.onSpawnMessage(msg)
 		case "quit":
 			Events.Publish(EVENT_QUIT)
@@ -412,6 +410,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		switch msg.Type {
 		case "spawn":
 			r.state = stateSpawning
+			r.stats.clearStatsChan <- true
 			r.onSpawnMessage(msg)
 		case "quit":
 			Events.Publish(EVENT_QUIT)
@@ -452,6 +451,10 @@ func (r *slaveRunner) run() {
 
 	r.stats.start()
 	r.outputOnStart()
+
+	if r.rateLimitEnabled {
+		r.rateLimiter.Start()
+	}
 
 	// tell master, I'm ready
 	// locust allows workers to bypass version check by sending -1 as version
