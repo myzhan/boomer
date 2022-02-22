@@ -284,20 +284,6 @@ func TestSpawnAndStop(t *testing.T) {
 	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 
-	go func() {
-		var ticker = time.NewTicker(time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				t.Error("Timeout waiting for message sent by startSpawning()")
-				return
-			case <-runner.stats.clearStatsChan:
-				// just quit
-				return
-			}
-		}
-	}()
-
 	runner.startSpawning(10, float64(10), runner.spawnComplete)
 	// wait for spawning goroutines
 	time.Sleep(2 * time.Second)

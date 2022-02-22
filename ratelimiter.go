@@ -179,6 +179,9 @@ func (limiter *RampUpRateLimiter) Start() {
 	timerId := atomic.AddUint64(&limiter.timerId, 1)
 	limiter.quitChannel = make(chan bool)
 	quitChannel := limiter.quitChannel
+
+	atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
+	atomic.StoreInt64(&limiter.currentThreshold, limiter.nextThreshold)
 	// bucket updater
 	go func(myId uint64) {
 		for {
@@ -188,7 +191,7 @@ func (limiter *RampUpRateLimiter) Start() {
 			default:
 				time.Sleep(limiter.refillPeriod)
 				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
-				if !hasBeenStarted {
+				if hasBeenStarted {
 					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
 					return
 				}
@@ -202,7 +205,6 @@ func (limiter *RampUpRateLimiter) Start() {
 
 	// threshold updater
 	go func(myId uint64) {
-		atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
 		for {
 			select {
 			case <-quitChannel:
@@ -210,7 +212,7 @@ func (limiter *RampUpRateLimiter) Start() {
 			default:
 				time.Sleep(limiter.rampUpPeroid)
 				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
-				if !hasBeenStarted {
+				if hasBeenStarted {
 					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
 					return
 				}
