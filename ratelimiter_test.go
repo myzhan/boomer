@@ -20,6 +20,15 @@ func TestStableRateLimiter(t *testing.T) {
 	}
 }
 
+func TestStableRateLimiterStartAndStopManyTimes(t *testing.T) {
+	ratelimiter := NewStableRateLimiter(100, 5*time.Millisecond)
+	for i := 0; i < 500; i++ {
+		ratelimiter.Start()
+		time.Sleep(5 * time.Millisecond)
+		ratelimiter.Stop()
+	}
+}
+
 func TestRampUpRateLimiter(t *testing.T) {
 	rateLimiter, _ := NewRampUpRateLimiter(100, "10/200ms", 100*time.Millisecond)
 	rateLimiter.Start()
@@ -50,6 +59,15 @@ func TestRampUpRateLimiter(t *testing.T) {
 	blocked = rateLimiter.Acquire()
 	if !blocked {
 		t.Error("Should be blocked")
+	}
+}
+
+func TestRampUpRateLimiterStartAndStopManyTimes(t *testing.T) {
+	ratelimiter, _ := NewRampUpRateLimiter(100, "10/200ms", 100*time.Millisecond)
+	for i := 0; i < 500; i++ {
+		ratelimiter.Start()
+		time.Sleep(5 * time.Millisecond)
+		ratelimiter.Stop()
 	}
 }
 

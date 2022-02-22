@@ -38,6 +38,7 @@ type RateLimiter interface {
 type StableRateLimiter struct {
 	threshold        int64
 	currentThreshold int64
+	timerId          uint64
 	refillPeriod     time.Duration
 	broadcastChannel chan bool
 	quitChannel      chan bool
@@ -48,6 +49,7 @@ func NewStableRateLimiter(threshold int64, refillPeriod time.Duration) (rateLimi
 	rateLimiter = &StableRateLimiter{
 		threshold:        threshold,
 		currentThreshold: threshold,
+		timerId:          uint64(0),
 		refillPeriod:     refillPeriod,
 		broadcastChannel: make(chan bool),
 	}
@@ -56,21 +58,27 @@ func NewStableRateLimiter(threshold int64, refillPeriod time.Duration) (rateLimi
 
 // Start to refill the bucket periodically.
 func (limiter *StableRateLimiter) Start() {
+	timerId := atomic.AddUint64(&limiter.timerId, 1)
 	limiter.quitChannel = make(chan bool)
 	quitChannel := limiter.quitChannel
-	go func() {
+	go func(myId uint64) {
 		for {
 			select {
 			case <-quitChannel:
 				return
 			default:
-				atomic.StoreInt64(&limiter.currentThreshold, limiter.threshold)
 				time.Sleep(limiter.refillPeriod)
+				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
+				if hasBeenStarted {
+					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
+					return
+				}
+				atomic.StoreInt64(&limiter.currentThreshold, limiter.threshold)
 				close(limiter.broadcastChannel)
 				limiter.broadcastChannel = make(chan bool)
 			}
 		}
-	}()
+	}(timerId)
 }
 
 // Acquire a token from the bucket, returns true if the bucket is exhausted.
@@ -101,6 +109,7 @@ type RampUpRateLimiter struct {
 	maxThreshold     int64
 	nextThreshold    int64
 	currentThreshold int64
+	timerId          uint64
 	refillPeriod     time.Duration
 	rampUpRate       string
 	rampUpStep       int64
@@ -116,6 +125,7 @@ func NewRampUpRateLimiter(maxThreshold int64, rampUpRate string, refillPeriod ti
 		maxThreshold:     maxThreshold,
 		nextThreshold:    0,
 		currentThreshold: 0,
+		timerId:          uint64(0),
 		rampUpRate:       rampUpRate,
 		refillPeriod:     refillPeriod,
 		broadcastChannel: make(chan bool),
@@ -152,44 +162,63 @@ func (limiter *RampUpRateLimiter) parseRampUpRate(rampUpRate string) (rampUpStep
 	return rampUpStep, rampUpPeroid, nil
 }
 
+func (limiter *RampUpRateLimiter) getNextThreshold() int64 {
+	nextValue := limiter.nextThreshold + limiter.rampUpStep
+	if nextValue < 0 {
+		// int64 overflow
+		nextValue = int64(math.MaxInt64)
+	}
+	if nextValue > limiter.maxThreshold {
+		nextValue = limiter.maxThreshold
+	}
+	return nextValue
+}
+
 // Start to refill the bucket periodically.
 func (limiter *RampUpRateLimiter) Start() {
+	timerId := atomic.AddUint64(&limiter.timerId, 1)
 	limiter.quitChannel = make(chan bool)
 	quitChannel := limiter.quitChannel
 	// bucket updater
-	go func() {
+	go func(myId uint64) {
 		for {
 			select {
 			case <-quitChannel:
 				return
 			default:
-				atomic.StoreInt64(&limiter.currentThreshold, limiter.nextThreshold)
 				time.Sleep(limiter.refillPeriod)
+				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
+				if !hasBeenStarted {
+					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
+					return
+				}
+
+				atomic.StoreInt64(&limiter.currentThreshold, limiter.nextThreshold)
 				close(limiter.broadcastChannel)
 				limiter.broadcastChannel = make(chan bool)
 			}
 		}
-	}()
+	}(timerId)
+
 	// threshold updater
-	go func() {
+	go func(myId uint64) {
+		atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
 		for {
 			select {
 			case <-quitChannel:
 				return
 			default:
-				nextValue := limiter.nextThreshold + limiter.rampUpStep
-				if nextValue < 0 {
-					// int64 overflow
-					nextValue = int64(math.MaxInt64)
-				}
-				if nextValue > limiter.maxThreshold {
-					nextValue = limiter.maxThreshold
-				}
-				atomic.StoreInt64(&limiter.nextThreshold, nextValue)
 				time.Sleep(limiter.rampUpPeroid)
+				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
+				if !hasBeenStarted {
+					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
+					return
+				}
+
+				atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
 			}
 		}
-	}()
+	}(timerId)
 }
 
 // Acquire a token from the bucket, returns true if the bucket is exhausted.
