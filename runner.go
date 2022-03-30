@@ -483,6 +483,8 @@ func (r *slaveRunner) run() {
 				if r.state == stateInit || r.state == stateStopped {
 					continue
 				}
+				// Publish event to allow adding custom data to be sent to master
+				Events.Publish("boomer:report-to-master", &data)
 				data["user_count"] = r.numClients
 				data["user_classes_count"] = r.userClassesCountFromMaster
 				r.client.sendChannel() <- newGenericMessage("stats", data, r.nodeID)
