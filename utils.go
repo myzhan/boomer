@@ -135,13 +135,11 @@ func GetCurrentCPUUsage() float64 {
 		log.Printf("Fail to get CPU percent, %v\n", err)
 		return 0.0
 	}
-	return percent / float64(runtime.NumCPU())
+	return percent
 }
 
 func GetCurrentMemUsage() uint64 {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	// Convert from bytes to megabytes
-	mem := m.Alloc / 1024 / 1024
-	return mem
+	return m.Alloc
 }
