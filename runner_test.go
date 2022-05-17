@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -612,5 +613,44 @@ func TestGetReady(t *testing.T) {
 	userCount := m.Data["user_count"].(int64)
 	if userCount != int64(10) {
 		t.Error("User count mismatch, expect: 10, got:", userCount)
+	}
+}
+
+func TestFailEvent(t *testing.T) {
+	// Start up a tcp port so that the slave runner can connect to it.
+	ln, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Error("Error listening on port")
+	}
+
+	// Accept any connection but then force close it to force a failure.
+	go func() {
+		netConn, err := ln.Accept()
+		if err != nil {
+			t.Error(err)
+		}
+		err = netConn.Close()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+
+	runner := newSlaveRunner("localhost", ln.Addr().(*net.TCPAddr).Port, []*Task{}, nil)
+	runner.stopChan = make(chan bool)
+
+	var failed bool
+
+	err = Events.Subscribe("boomer:fail", func() {
+		failed = true
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	runner.run()
+	runner.stop()
+
+	if failed != true {
+		t.Error("Expected failed to be true, was", failed)
 	}
 }
