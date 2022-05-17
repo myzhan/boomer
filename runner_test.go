@@ -677,7 +677,7 @@ func TestConnectedEventSlave(t *testing.T) {
 
 	r.run()
 
-	if connected != true {
+	if !connected{
 		t.Error("Expected connected to be true, was", connected)
 	}
 }
