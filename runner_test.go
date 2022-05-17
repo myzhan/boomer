@@ -668,7 +668,7 @@ func TestConnectedEventSlave(t *testing.T) {
 	defer r.shutdown()
 
 	var connected bool
-	err := Events.Subscribe("boomer:connected", func() {
+	err := Events.Subscribe("boomer:started", func() {
 		connected = true
 	})
 	if err != nil {
@@ -678,6 +678,33 @@ func TestConnectedEventSlave(t *testing.T) {
 	r.run()
 
 	if connected != true {
+		t.Error("Expected connected to be true, was", connected)
+	}
+}
+
+
+func TestStartedLocalRunner(t *testing.T) {
+	taskA := &Task{
+		Weight: 10,
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+		Name: "TaskA",
+	}
+	tasks := []*Task{taskA}
+	runner := newLocalRunner(tasks, nil, 2, 2)
+	var connected bool
+	err := Events.Subscribe("boomer:started", func() {
+		connected = true
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	go runner.run()
+	time.Sleep(time.Second)
+	runner.shutdown()
+
+	if !connected{
 		t.Error("Expected connected to be true, was", connected)
 	}
 }

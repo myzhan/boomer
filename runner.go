@@ -246,6 +246,7 @@ func (r *localRunner) run() {
 	r.state = stateInit
 	r.stats.start()
 	r.outputOnStart()
+	Events.Publish(EVENT_STARTED)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -451,7 +452,7 @@ func (r *slaveRunner) run() {
 	r.startListener()
 
 	r.stats.start()
-	Events.Publish(EVENT_CONNECTED)
+	Events.Publish(EVENT_STARTED)
 	r.outputOnStart()
 
 	if r.rateLimitEnabled {
