@@ -654,3 +654,30 @@ func TestFailEvent(t *testing.T) {
 		t.Error("Expected failed to be true, was", failed)
 	}
 }
+
+func TestConnectedEventSlave(t *testing.T) {
+	masterHost := "127.0.0.1"
+	masterPort := 6558
+
+	server := newTestServer(masterHost, masterPort)
+	defer server.close()
+	server.start()
+
+	rateLimiter := NewStableRateLimiter(100, time.Second)
+	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter)
+	defer r.shutdown()
+
+	var connected bool
+	err := Events.Subscribe("boomer:connected", func() {
+		connected = true
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	r.run()
+
+	if connected != true {
+		t.Error("Expected connected to be true, was", connected)
+	}
+}

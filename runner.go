@@ -451,6 +451,7 @@ func (r *slaveRunner) run() {
 	r.startListener()
 
 	r.stats.start()
+	Events.Publish(EVENT_CONNECTED)
 	r.outputOnStart()
 
 	if r.rateLimitEnabled {

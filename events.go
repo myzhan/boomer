@@ -7,6 +7,7 @@ const (
 	EVENT_STOP  = "boomer:stop"
 	EVENT_QUIT  = "boomer:quit"
 	EVENT_FAIL = "boomer:fail"
+	EVENT_CONNECTED = "boomer:connected"
 )
 
 // Events is the global event bus instance.
