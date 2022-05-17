@@ -3,10 +3,10 @@ package boomer
 import "github.com/asaskevich/EventBus"
 
 const (
-	EVENT_SPAWN = "boomer:spawn"
-	EVENT_STOP  = "boomer:stop"
-	EVENT_QUIT  = "boomer:quit"
-	EVENT_FAIL = "boomer:fail"
+	EVENT_SPAWN   = "boomer:spawn"
+	EVENT_STOP    = "boomer:stop"
+	EVENT_QUIT    = "boomer:quit"
+	EVENT_FAIL    = "boomer:fail"
 	EVENT_STARTED = "boomer:started"
 )
 
