@@ -205,15 +205,18 @@ func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteF
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
 
 	r.stopChan = make(chan bool)
-	r.numClients = 0
+
+	//r.numClients = 0
 
 	go r.spawnWorkers(spawnCount, r.stopChan, spawnCompleteFunc)
 }
 
 func (r *runner) stop() {
 	// publish the boomer stop event
-	// user's code can subscribe to this event and do thins like cleaning up
+	// user's code can subscribe to this event and do things like cleaning up
 	Events.Publish(EVENT_STOP)
+
+	r.numClients = 0
 
 	// stop previous goroutines without blocking
 	// those goroutines will exit when r.safeRun returns
@@ -316,6 +319,7 @@ func (r *slaveRunner) spawnComplete() {
 	data["user_classes_count"] = r.userClassesCountFromMaster
 	r.client.sendChannel() <- newGenericMessage("spawning_complete", data, r.nodeID)
 	r.state = stateRunning
+	// fmt.Printf("SPAWN COMPLETE: %v\n", data)
 }
 
 func (r *slaveRunner) onQuiting() {
@@ -343,7 +347,7 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 
 	// Save the original field and send it back to master in spawnComplete message.
 	r.userClassesCountFromMaster = make(map[string]int64)
-	amount := 0
+	amount := int(r.numClients)
 	for class, num := range userClassesCountMap {
 		c, ok := class.(string)
 		n, ok2 := castToInt64(num)
@@ -352,7 +356,7 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 			continue
 		}
 		r.userClassesCountFromMaster[c] = n
-		amount = amount + int(n)
+		amount = int(n) - amount
 	}
 	return amount
 }
@@ -362,6 +366,7 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 // master and workers use the same locustfile. Before we find a better way to deal with this,
 // boomer sums up the total amout of users in spawn message and uses task weight to spawn goroutines like before.
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
+	fmt.Printf("SPAWN_MESSAGE_RECEIVED: %v\n", msg.Data["user_classes_count"])
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
 	r.startSpawning(workers, float64(workers), r.spawnComplete)
@@ -395,7 +400,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		switch msg.Type {
 		case "spawn":
 			r.state = stateSpawning
-			r.stop()
+			//r.stop()
 			r.onSpawnMessage(msg)
 			handled = true
 		case "stop":
