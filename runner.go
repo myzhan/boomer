@@ -319,7 +319,6 @@ func (r *slaveRunner) spawnComplete() {
 	data["user_classes_count"] = r.userClassesCountFromMaster
 	r.client.sendChannel() <- newGenericMessage("spawning_complete", data, r.nodeID)
 	r.state = stateRunning
-	// fmt.Printf("SPAWN COMPLETE: %v\n", data)
 }
 
 func (r *slaveRunner) onQuiting() {
@@ -366,7 +365,6 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 // master and workers use the same locustfile. Before we find a better way to deal with this,
 // boomer sums up the total amout of users in spawn message and uses task weight to spawn goroutines like before.
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
-	fmt.Printf("SPAWN_MESSAGE_RECEIVED: %v\n", msg.Data["user_classes_count"])
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
 	r.startSpawning(workers, float64(workers), r.spawnComplete)
