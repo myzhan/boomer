@@ -206,8 +206,6 @@ func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteF
 
 	r.stopChan = make(chan bool)
 
-	//r.numClients = 0
-
 	go r.spawnWorkers(spawnCount, r.stopChan, spawnCompleteFunc)
 }
 
@@ -389,7 +387,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.onSpawnMessage(msg)
 			handled = true
 		case "quit":
-			Events.Publish("boomer:quit")
+			Events.Publish(EVENT_QUIT)
 			handled = true
 		}
 	case stateSpawning:
@@ -398,7 +396,6 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		switch msg.Type {
 		case "spawn":
 			r.state = stateSpawning
-			//r.stop()
 			r.onSpawnMessage(msg)
 			handled = true
 		case "stop":
@@ -487,7 +484,7 @@ func (r *slaveRunner) run() {
 					continue
 				}
 				// Publish event to allow adding custom data to be sent to master
-				Events.Publish("boomer:report-to-master", &data)
+				Events.Publish(EVENT_REPORT, &data)
 				data["user_count"] = r.numClients
 				data["user_classes_count"] = r.userClassesCountFromMaster
 				r.client.sendChannel() <- newGenericMessage("stats", data, r.nodeID)
