@@ -1,6 +1,9 @@
 package boomer
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestWeighingTaskSetWithSingleTask(t *testing.T) {
 	ts := NewWeighingTaskSet()
@@ -89,4 +92,43 @@ func TestWeighingTaskSetGetTaskWithThreeTasks(t *testing.T) {
 	if ts.GetTask(5).Name != "C" {
 		t.Error("Expecting C, but got ", ts.GetTask(5).Name)
 	}
+}
+
+func TestSmoothRoundRobinTaskSetRun(t *testing.T) {
+	ts := NewSmoothRoundRobinTaskSet()
+	results := []string{}
+	taskA := &Task{
+		Name:   "A",
+		Weight: 5,
+		Fn: func() {
+			results = append(results, "A")
+		},
+	}
+	taskB := &Task{
+		Name:   "B",
+		Weight: 1,
+		Fn: func() {
+			results = append(results, "B")
+		},
+	}
+	taskC := &Task{
+		Name:   "C",
+		Weight: 1,
+		Fn: func() {
+			results = append(results, "C")
+		},
+	}
+	ts.AddTask(taskA)
+	ts.AddTask(taskB)
+	ts.AddTask(taskC)
+
+	for i := 0; i < 7; i++ {
+		ts.Run()
+	}
+
+	expected := []string{"A", "A", "B", "A", "C", "A", "A"}
+	if !reflect.DeepEqual(results, expected) {
+		t.Errorf("Expecting %v, but got %v\n", expected, results)
+	}
+
 }
