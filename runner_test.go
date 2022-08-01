@@ -349,16 +349,6 @@ func TestOnSpawnMessage(t *testing.T) {
 	Events.Subscribe(EVENT_SPAWN, callback)
 	defer Events.Unsubscribe(EVENT_SPAWN, callback)
 
-	go func() {
-		// consumes clearStatsChannel
-		for {
-			select {
-			case <-runner.stats.clearStatsChan:
-				return
-			}
-		}
-	}()
-
 	runner.onSpawnMessage(newGenericMessage("spawn", map[string]interface{}{
 		"user_classes_count": map[interface{}]interface{}{
 			"Dummy":  int64(10),
@@ -448,15 +438,12 @@ func TestOnMessage(t *testing.T) {
 	go func() {
 		// consumes clearStatsChannel
 		count := 0
-		for {
-			select {
-			case <-runner.stats.clearStatsChan:
-				// receive two spawn message from master
-				if count >= 2 {
-					return
-				}
-				count++
+		for range runner.stats.clearStatsChan {
+			// receive two spawn message from master
+			if count >= 2 {
+				return
 			}
+			count++
 		}
 	}()
 
