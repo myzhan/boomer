@@ -75,15 +75,15 @@ func main() {
 		Fn:     worker,
 	}
 
-	boomer.Events.Subscribe(EVENT_SPAWN, func(workers int, spawnRate float64) {
+	boomer.Events.Subscribe(boomer.EVENT_SPAWN, func(workers int, spawnRate float64) {
 		stopChannel = make(chan bool)
 	})
 
-	boomer.Events.Subscribe(EVENT_STOP, func() {
+	boomer.Events.Subscribe(boomer.EVENT_STOP, func() {
 		close(stopChannel)
 	})
 
-	boomer.Events.Subscribe(EVENT_QUIT, func() {
+	boomer.Events.Subscribe(boomer.EVENT_QUIT, func() {
 		close(stopChannel)
 		time.Sleep(time.Second)
 	})

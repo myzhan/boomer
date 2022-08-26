@@ -45,7 +45,7 @@ func waitForQuit() {
 		wg.Done()
 	}()
 
-	boomer.Events.Subscribe(EVENT_QUIT, func() {
+	boomer.Events.Subscribe(boomer.EVENT_QUIT, func() {
 		if !quitByMe {
 			wg.Done()
 		}
