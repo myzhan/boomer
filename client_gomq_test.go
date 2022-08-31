@@ -153,6 +153,12 @@ func (s *testServer) recv() {
 					if err2 != nil {
 						log.Println("Msgpack decode fail:", err)
 					} else {
+						// Send ack message
+						data := map[string]interface{}{
+							"index": 1,
+						}
+						clientId := clientReadyMessage.NodeID
+						s.toClient <- newGenericMessage("ack", data, clientId)
 						s.fromClient <- clientReadyMessage
 					}
 				} else {

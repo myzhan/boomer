@@ -290,6 +290,7 @@ type slaveRunner struct {
 	nodeID     string
 	masterHost string
 	masterPort int
+	waitForAck sync.WaitGroup
 	client     client
 }
 
@@ -298,6 +299,7 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 	r.masterHost = masterHost
 	r.masterPort = masterPort
 	r.setTasks(tasks)
+	r.waitForAck = sync.WaitGroup{}
 	r.nodeID = getNodeID()
 	r.shutdownChan = make(chan bool)
 
@@ -367,6 +369,11 @@ func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 	r.startSpawning(workers, float64(workers), r.spawnComplete)
 }
 
+func (r *slaveRunner) onAckMessage(msg *genericMessage) {
+	r.waitForAck.Done()
+	Events.Publish(EVENT_CONNECTED)
+}
+
 // Runner acts as a state machine.
 func (r *slaveRunner) onMessage(msgInterface message) {
 	msg, ok := msgInterface.(*genericMessage)
@@ -378,6 +385,8 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	switch r.state {
 	case stateInit:
 		switch msg.Type {
+		case "ack":
+			r.onAckMessage(msg)
 		case "spawn":
 			r.state = stateSpawning
 			r.stats.clearStatsChan <- true
@@ -459,6 +468,12 @@ func (r *slaveRunner) run() {
 	// tell master, I'm ready
 	// locust allows workers to bypass version check by sending -1 as version
 	r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
+
+	// wait for the ack message
+	r.waitForAck.Add(1)
+	if waitTimeout(&r.waitForAck, 5*time.Second) {
+		log.Println("Timeout waiting for ack message from master, you may use a locust version before 2.10.0 or have a network issue.")
+	}
 
 	// report to master
 	go func() {

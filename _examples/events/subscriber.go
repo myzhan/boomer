@@ -20,6 +20,10 @@ func foo() {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
+	boomer.Events.Subscribe(boomer.EVENT_CONNECTED, func() {
+		log.Println("The master sends an ack message")
+	})
+
 	boomer.Events.Subscribe(boomer.EVENT_SPAWN, func(workers int, spawnRate float64) {
 		log.Println("The master asks me to spawn", workers, "goroutines with a spawn rate of", spawnRate, "per second.")
 	})
