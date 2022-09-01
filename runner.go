@@ -419,6 +419,8 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.state = stateStopped
 			log.Println("Recv stop message from master, all the goroutines are stopped")
 			r.client.sendChannel() <- newGenericMessage("client_stopped", nil, r.nodeID)
+
+			r.waitForAck.Add(1)
 			r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
 			r.state = stateInit
 		case "quit":
@@ -477,12 +479,13 @@ func (r *slaveRunner) run() {
 		r.rateLimiter.Start()
 	}
 
+	// wait for the ack message
+	r.waitForAck.Add(1)
+
 	// tell master, I'm ready
 	// locust allows workers to bypass version check by sending -1 as version
 	r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
 
-	// wait for the ack message
-	r.waitForAck.Add(1)
 	if waitTimeout(&r.waitForAck, 5*time.Second) {
 		log.Println("Timeout waiting for ack message from master, you may use a locust version before 2.10.0 or have a network issue.")
 	}
