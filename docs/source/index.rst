@@ -14,6 +14,7 @@ Boomer Documentation
     installation
     quickstart
     running-mode
+    ratelimiter
     custom-output
 
 

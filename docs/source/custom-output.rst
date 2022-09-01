@@ -1,7 +1,7 @@
 Custom output
 =============
 
-You can write you own output to deal with the test result.
+You can write your own output to deal with the test result.
 
 .. code-block:: go
 

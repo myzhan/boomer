@@ -42,7 +42,7 @@ Here is an example for pushing output to Prometheus Pushgateway.
    }
 
 
-.. literalinclude:: ../../examples/standalone/standalone.go
+.. literalinclude:: ../../_examples/standalone/standalone.go
    :language: go
    :linenos:
    :emphasize-lines: 33

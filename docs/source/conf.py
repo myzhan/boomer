@@ -18,7 +18,7 @@ import os
 # -- Project information -----------------------------------------------------
 
 project = 'Boomer'
-copyright = '2019, myzhan'
+copyright = '2022, myzhan'
 author = 'myzhan'
 
 
