@@ -287,11 +287,12 @@ func (r *localRunner) shutdown() {
 type slaveRunner struct {
 	runner
 
-	nodeID     string
-	masterHost string
-	masterPort int
-	waitForAck sync.WaitGroup
-	client     client
+	nodeID                     string
+	masterHost                 string
+	masterPort                 int
+	waitForAck                 sync.WaitGroup
+	lastReceivedSpawnTimestamp int64
+	client                     client
 }
 
 func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter) (r *slaveRunner) {
@@ -364,6 +365,17 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 // master and workers use the same locustfile. Before we find a better way to deal with this,
 // boomer sums up the total amout of users in spawn message and uses task weight to spawn goroutines like before.
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
+	if timeStamp, ok := msg.Data["timestamp"]; ok {
+		if timeStampInt64, ok := castToInt64(timeStamp); ok {
+			if timeStampInt64 <= r.lastReceivedSpawnTimestamp {
+				log.Println("Discard spawn message with older or equal timestamp than timestamp of previous spawn message")
+				return
+			} else {
+				r.lastReceivedSpawnTimestamp = timeStampInt64
+			}
+		}
+	}
+
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
 	r.startSpawning(workers, float64(workers), r.spawnComplete)
