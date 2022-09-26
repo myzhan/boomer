@@ -22,7 +22,7 @@ The goczmq dependency
 ---------------------
 
 Locust uses the zeromq protocol, so boomer depends on a zeromq client. Boomer uses
-`gomq <https://github.com/zeromq/gomq>`_ by default, which is a pure Go implementation.
+`gomq <https://github.com/myzhan/gomq>`_ by default, which is a pure Go implementation.
 
 Because of the instability of gomq, you can switch to `goczmq <https://github.com/zeromq/goczmq>`_.
 

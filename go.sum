@@ -71,6 +71,10 @@ github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742/go.mod h1:bx2lN
 github.com/modern-go/reflect2 v1.0.1/go.mod h1:bx2lNnkwVCuqBIxFjflWJWanXIb3RllmbCylyMrvgv0=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
+github.com/myzhan/gomq v0.0.0-20220926014711-4eea0d4a1e75 h1:bzEwvuO0LYXUHgpOnO6S6f70oxC5x3QQ4PQwWGSE+2A=
+github.com/myzhan/gomq v0.0.0-20220926014711-4eea0d4a1e75/go.mod h1:hLGyy3ZMq1KVGxDM54SdHMBl08IyiKex9KWjslj0qyQ=
+github.com/myzhan/gomq/zmtp v0.0.0-20220926014711-4eea0d4a1e75 h1:yVyx8Vc/WCldQjQWQx8FXQSwKDawpEJCeAZIBXPSAk0=
+github.com/myzhan/gomq/zmtp v0.0.0-20220926014711-4eea0d4a1e75/go.mod h1:+nAGtxfeMKPOBqMEAAozdV5x38YsnxJr5WDerNKtznQ=
 github.com/olekukonko/tablewriter v0.0.5 h1:P2Ga83D34wi1o9J6Wh1mRuqd4mF/x/lgBS7N7AbDhec=
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
