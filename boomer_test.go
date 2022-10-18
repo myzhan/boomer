@@ -88,12 +88,12 @@ func TestEnableCPUProfile(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
 	b.EnableCPUProfile("cpu.prof", time.Second)
 
-	if b.cpuProfile != "cpu.prof" {
+	if b.cpuProfileFile != "cpu.prof" {
 		t.Error("cpuProfile should be cpu.prof")
 	}
 
 	if b.cpuProfileDuration != time.Second {
-		t.Error("cpuProfileDuration should 1 second")
+		t.Error("cpuProfileDuration should be 1 second")
 	}
 }
 
@@ -101,12 +101,12 @@ func TestEnableMemoryProfile(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
 	b.EnableMemoryProfile("mem.prof", time.Second)
 
-	if b.memoryProfile != "mem.prof" {
+	if b.memoryProfileFile != "mem.prof" {
 		t.Error("memoryProfile should be mem.prof")
 	}
 
 	if b.memoryProfileDuration != time.Second {
-		t.Error("memoryProfileDuration should 1 second")
+		t.Error("memoryProfileDuration should be 1 second")
 	}
 }
 

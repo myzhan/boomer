@@ -35,10 +35,10 @@ type Boomer struct {
 	spawnCount  int
 	spawnRate   float64
 
-	cpuProfile         string
+	cpuProfileFile     string
 	cpuProfileDuration time.Duration
 
-	memoryProfile         string
+	memoryProfileFile     string
 	memoryProfileDuration time.Duration
 
 	outputs []Output
@@ -86,27 +86,27 @@ func (b *Boomer) AddOutput(o Output) {
 }
 
 // EnableCPUProfile will start cpu profiling after run.
-func (b *Boomer) EnableCPUProfile(cpuProfile string, duration time.Duration) {
-	b.cpuProfile = cpuProfile
+func (b *Boomer) EnableCPUProfile(cpuProfileFile string, duration time.Duration) {
+	b.cpuProfileFile = cpuProfileFile
 	b.cpuProfileDuration = duration
 }
 
 // EnableMemoryProfile will start memory profiling after run.
-func (b *Boomer) EnableMemoryProfile(memoryProfile string, duration time.Duration) {
-	b.memoryProfile = memoryProfile
+func (b *Boomer) EnableMemoryProfile(memoryProfileFile string, duration time.Duration) {
+	b.memoryProfileFile = memoryProfileFile
 	b.memoryProfileDuration = duration
 }
 
 // Run accepts a slice of Task and connects to the locust master.
 func (b *Boomer) Run(tasks ...*Task) {
-	if b.cpuProfile != "" {
-		err := StartCPUProfile(b.cpuProfile, b.cpuProfileDuration)
+	if b.cpuProfileFile != "" {
+		err := StartCPUProfile(b.cpuProfileFile, b.cpuProfileDuration)
 		if err != nil {
 			log.Printf("Error starting cpu profiling, %v", err)
 		}
 	}
-	if b.memoryProfile != "" {
-		err := StartMemoryProfile(b.memoryProfile, b.memoryProfileDuration)
+	if b.memoryProfileFile != "" {
+		err := StartMemoryProfile(b.memoryProfileFile, b.memoryProfileDuration)
 		if err != nil {
 			log.Printf("Error starting memory profiling, %v", err)
 		}
@@ -235,8 +235,8 @@ func Run(tasks ...*Task) {
 	defaultBoomer.SetRateLimiter(rateLimiter)
 	defaultBoomer.masterHost = masterHost
 	defaultBoomer.masterPort = masterPort
-	defaultBoomer.EnableMemoryProfile(memoryProfile, memoryProfileDuration)
-	defaultBoomer.EnableCPUProfile(cpuProfile, cpuProfileDuration)
+	defaultBoomer.EnableMemoryProfile(memoryProfileFile, memoryProfileDuration)
+	defaultBoomer.EnableCPUProfile(cpuProfileFile, cpuProfileDuration)
 
 	defaultBoomer.Run(tasks...)
 

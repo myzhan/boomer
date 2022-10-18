@@ -17,9 +17,9 @@ var masterPort int
 var maxRPS int64
 var requestIncreaseRate string
 var runTasks string
-var memoryProfile string
+var memoryProfileFile string
 var memoryProfileDuration time.Duration
-var cpuProfile string
+var cpuProfileFile string
 var cpuProfileDuration time.Duration
 
 var successRetiredWarning = &sync.Once{}
@@ -82,8 +82,8 @@ func init() {
 	flag.StringVar(&runTasks, "run-tasks", "", "Run tasks without connecting to the master, multiply tasks is separated by comma. Usually, it's for debug purpose.")
 	flag.StringVar(&masterHost, "master-host", "127.0.0.1", "Host or IP address of locust master for distributed load testing.")
 	flag.IntVar(&masterPort, "master-port", 5557, "The port to connect to that is used by the locust master for distributed load testing.")
-	flag.StringVar(&memoryProfile, "mem-profile", "", "Enable memory profiling.")
+	flag.StringVar(&memoryProfileFile, "mem-profile", "", "Enable memory profiling.")
 	flag.DurationVar(&memoryProfileDuration, "mem-profile-duration", 30*time.Second, "Memory profile duration.")
-	flag.StringVar(&cpuProfile, "cpu-profile", "", "Enable CPU profiling.")
+	flag.StringVar(&cpuProfileFile, "cpu-profile", "", "Enable CPU profiling.")
 	flag.DurationVar(&cpuProfileDuration, "cpu-profile-duration", 30*time.Second, "CPU profile duration.")
 }
