@@ -354,6 +354,7 @@ func TestOnSpawnMessage(t *testing.T) {
 			"Dummy":  int64(10),
 			"Dummy2": int64(10),
 		},
+		"timestamp": 1,
 	}, runner.nodeID))
 
 	if workers != 20 {

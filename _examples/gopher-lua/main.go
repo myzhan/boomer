@@ -183,7 +183,7 @@ func main() {
 	globalBoomer.Run(task)
 
 	waitForQuit()
-	log.Println("shut down")
+	log.Println("shutdown")
 }
 
 func init() {

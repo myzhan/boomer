@@ -283,6 +283,12 @@ func (r *localRunner) shutdown() {
 	close(r.shutdownChan)
 }
 
+func (r *localRunner) sendCustomMessage(messageType string, data interface{}) {
+	// Running in standalone mode, sending message to self
+	msg := newCustomMessage(messageType, data, "local")
+	Events.Publish(messageType, msg)
+}
+
 // SlaveRunner connects to the master, spawns goroutines and collects stats.
 type slaveRunner struct {
 	runner
@@ -381,6 +387,14 @@ func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 	r.startSpawning(workers, float64(workers), r.spawnComplete)
 }
 
+// TODO: consider to add register_message instead of publishing any unknown type as custom_message.
+func (r *slaveRunner) onCustomMessage(msg *CustomMessage) {
+	if msg == nil {
+		return
+	}
+	Events.Publish(msg.Type, msg)
+}
+
 func (r *slaveRunner) onAckMessage(msg *genericMessage) {
 	r.waitForAck.Done()
 	Events.Publish(EVENT_CONNECTED)
@@ -401,32 +415,45 @@ func (r *slaveRunner) sendClientReadyAndWaitForAck() {
 
 // Runner acts as a state machine.
 func (r *slaveRunner) onMessage(msgInterface message) {
-	msg, ok := msgInterface.(*genericMessage)
-	if !ok {
-		log.Println("Receive unknown type of meesage from master.")
-		return
+	var msgType string
+	var customMsg *CustomMessage
+	var genericMsg *genericMessage
+
+	genericMsg, ok := msgInterface.(*genericMessage)
+	if ok {
+		msgType = genericMsg.Type
+	} else {
+		customMsg, ok = msgInterface.(*CustomMessage)
+		if !ok {
+			log.Println("Receive unknown type of message from master.")
+			return
+		} else {
+			msgType = customMsg.Type
+		}
 	}
 
 	switch r.state {
 	case stateInit:
-		switch msg.Type {
+		switch msgType {
 		case "ack":
-			r.onAckMessage(msg)
+			r.onAckMessage(genericMsg)
 		case "spawn":
 			r.state = stateSpawning
 			r.stats.clearStatsChan <- true
-			r.onSpawnMessage(msg)
+			r.onSpawnMessage(genericMsg)
 		case "quit":
 			Events.Publish(EVENT_QUIT)
+		default:
+			r.onCustomMessage(customMsg)
 		}
 	case stateSpawning:
 		fallthrough
 	case stateRunning:
-		switch msg.Type {
+		switch msgType {
 		case "spawn":
 			r.state = stateSpawning
 			r.stop()
-			r.onSpawnMessage(msg)
+			r.onSpawnMessage(genericMsg)
 		case "stop":
 			r.stop()
 			r.state = stateStopped
@@ -439,18 +466,27 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			log.Println("Recv quit message from master, all the goroutines are stopped")
 			Events.Publish(EVENT_QUIT)
 			r.state = stateInit
+		default:
+			r.onCustomMessage(customMsg)
 		}
 	case stateStopped:
-		switch msg.Type {
+		switch msgType {
 		case "spawn":
 			r.state = stateSpawning
 			r.stats.clearStatsChan <- true
-			r.onSpawnMessage(msg)
+			r.onSpawnMessage(genericMsg)
 		case "quit":
 			Events.Publish(EVENT_QUIT)
 			r.state = stateInit
+		default:
+			r.onCustomMessage(customMsg)
 		}
 	}
+}
+
+func (r *slaveRunner) sendCustomMessage(messageType string, data interface{}) {
+	msg := newCustomMessage(messageType, data, r.nodeID)
+	r.client.sendChannel() <- msg
 }
 
 func (r *slaveRunner) startListener() {

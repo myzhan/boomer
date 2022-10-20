@@ -54,5 +54,5 @@ func main() {
 	globalBoomer.Run(task1)
 
 	waitForQuit()
-	log.Println("shut down")
+	log.Println("shutdown")
 }

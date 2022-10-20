@@ -80,16 +80,28 @@ func (c *gomqSocketClient) recv() {
 				log.Printf("Error reading: %v\n", err)
 				continue
 			}
-			decodedMsg, err := newGenericMessageFromBytes(body)
-			if err != nil {
-				log.Printf("Msgpack decode fail: %v\n", err)
+
+			decodedGenericMsg, err := newGenericMessageFromBytes(body)
+			if err == nil {
+				if decodedGenericMsg.NodeID != c.identity {
+					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedGenericMsg.Type, decodedGenericMsg.NodeID, c.identity)
+				} else {
+					c.fromMaster <- decodedGenericMsg
+				}
 				continue
 			}
-			if decodedMsg.NodeID != c.identity {
-				log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedMsg.Type, decodedMsg.NodeID, c.identity)
+
+			decodedCustomMsg, err := newCustomMessageFromBytes(body)
+			if err == nil {
+				if decodedCustomMsg.NodeID != c.identity {
+					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedCustomMsg.Type, decodedCustomMsg.NodeID, c.identity)
+				} else {
+					c.fromMaster <- decodedCustomMsg
+				}
 				continue
 			}
-			c.fromMaster <- decodedMsg
+
+			log.Printf("Msgpack decode fail: %v\n", err)
 		}
 	}
 }
@@ -106,7 +118,7 @@ func (c *gomqSocketClient) send() {
 		case msg := <-c.toMaster:
 			c.sendMessage(msg)
 
-			// We may send genericMessage or clientReadyMessage to master.
+			// If we send a genericMessage and the message type is quit, we need to disconnect.
 			m, ok := msg.(*genericMessage)
 			if ok {
 				if m.Type == "quit" {

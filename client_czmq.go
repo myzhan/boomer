@@ -78,16 +78,28 @@ func (c *czmqSocketClient) recv() {
 				log.Printf("Error reading: %v\n", err)
 				continue
 			}
-			decodedMsg, err := newGenericMessageFromBytes(msg)
-			if err != nil {
-				log.Printf("Msgpack decode fail: %v\n", err)
+
+			decodedGenericMsg, err := newGenericMessageFromBytes(msg)
+			if err == nil {
+				if decodedGenericMsg.NodeID != c.identity {
+					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedGenericMsg.Type, decodedGenericMsg.NodeID, c.identity)
+				} else {
+					c.fromMaster <- decodedGenericMsg
+				}
 				continue
 			}
-			if decodedMsg.NodeID != c.identity {
-				log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedMsg.Type, decodedMsg.NodeID, c.identity)
+
+			decodedCustomMsg, err := newCustomMessageFromBytes(msg)
+			if err == nil {
+				if decodedCustomMsg.NodeID != c.identity {
+					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedCustomMsg.Type, decodedCustomMsg.NodeID, c.identity)
+				} else {
+					c.fromMaster <- decodedCustomMsg
+				}
 				continue
 			}
-			c.fromMaster <- decodedMsg
+
+			log.Printf("Msgpack decode fail: %v\n", err)
 		}
 	}
 }
@@ -103,6 +115,8 @@ func (c *czmqSocketClient) send() {
 			return
 		case msg := <-c.toMaster:
 			c.sendMessage(msg)
+
+			// If we send a genericMessage and the message type is quit, we need to disconnect.
 			m, ok := msg.(*genericMessage)
 			if ok {
 				if m.Type == "quit" {

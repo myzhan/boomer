@@ -69,3 +69,32 @@ func newClientReadyMessageFromBytes(raw []byte) (newMsg *clientReadyMessage, err
 	err = dec.Decode(newMsg)
 	return newMsg, err
 }
+
+type CustomMessage struct {
+	Type   string      `codec:"type"`
+	Data   interface{} `codec:"data"`
+	NodeID string      `codec:"node_id"`
+}
+
+func newCustomMessage(t string, data interface{}, nodeID string) (msg *CustomMessage) {
+	return &CustomMessage{
+		Type:   t,
+		Data:   data,
+		NodeID: nodeID,
+	}
+}
+
+func (m *CustomMessage) serialize() (out []byte, err error) {
+	mh.StructToArray = true
+	enc := codec.NewEncoderBytes(&out, &mh)
+	err = enc.Encode(m)
+	return out, err
+}
+
+func newCustomMessageFromBytes(raw []byte) (newMsg *CustomMessage, err error) {
+	mh.StructToArray = true
+	dec := codec.NewDecoderBytes(raw, &mh)
+	newMsg = &CustomMessage{}
+	err = dec.Decode(newMsg)
+	return newMsg, err
+}

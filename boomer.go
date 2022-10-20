@@ -176,6 +176,18 @@ func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exc
 	}
 }
 
+func (b *Boomer) SendCustomMessage(messageType string, data interface{}) {
+	if b.localRunner == nil && b.slaveRunner == nil {
+		return
+	}
+	switch b.mode {
+	case DistributedMode:
+		b.slaveRunner.sendCustomMessage(messageType, data)
+	case StandaloneMode:
+		b.localRunner.sendCustomMessage(messageType, data)
+	}
+}
+
 // Quit will send a quit message to the master.
 func (b *Boomer) Quit() {
 	Events.Publish(EVENT_QUIT)
@@ -259,7 +271,7 @@ func Run(tasks ...*Task) {
 	case <-quitChan:
 	}
 
-	log.Println("shut down")
+	log.Println("shutdown")
 }
 
 // RecordSuccess reports a success.
