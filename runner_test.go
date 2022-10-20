@@ -1,7 +1,6 @@
 package boomer
 
 import (
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -87,11 +86,31 @@ func TestLocalRunner(t *testing.T) {
 		},
 		Name: "TaskA",
 	}
-	tasks := []*Task{taskA}
-	runner := newLocalRunner(tasks, nil, 2, 2)
+	runner := newLocalRunner([]*Task{taskA}, nil, 2, 1)
+
 	go runner.run()
-	time.Sleep(4 * time.Second)
-	runner.shutdown()
+	defer runner.shutdown()
+
+	// wait for spawning
+	time.Sleep(2100 * time.Millisecond)
+	currentClients := atomic.LoadInt32(&runner.numClients)
+	assert.Equal(t, int32(2), currentClients)
+}
+
+func TestLocalRunnerSendCustomMessage(t *testing.T) {
+	Events.SubscribeOnce("TestLocalRunnerSendCustomMessage", func(customMessage *CustomMessage) {
+		assert.Equal(t, "local", customMessage.NodeID)
+		assert.Equal(t, "helloworld", customMessage.Data)
+	})
+	taskA := &Task{
+		Weight: 10,
+		Fn: func() {
+			time.Sleep(time.Second)
+		},
+		Name: "TaskA",
+	}
+	runner := newLocalRunner([]*Task{taskA}, nil, 2, 2)
+	runner.sendCustomMessage("TestLocalRunnerSendCustomMessage", "helloworld")
 }
 
 func TestSpawnWorkers(t *testing.T) {
@@ -102,168 +121,84 @@ func TestSpawnWorkers(t *testing.T) {
 		},
 		Name: "TaskA",
 	}
-	tasks := []*Task{taskA}
 
-	runner := newSlaveRunner("localhost", 5557, tasks, nil)
-	defer runner.shutdown()
-
+	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
 	runner.client = newClient("localhost", 5557, runner.nodeID)
+	defer runner.shutdown()
 
 	go runner.spawnWorkers(10, runner.stopChan, runner.spawnComplete)
 	time.Sleep(10 * time.Millisecond)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
-	if currentClients != 10 {
-		t.Error("Unexpected count", currentClients)
-	}
+	assert.Equal(t, int32(10), currentClients)
 }
 
 func TestSpawnWorkersWithManyTasks(t *testing.T) {
-	var lock sync.Mutex
-	taskCalls := map[string]int{}
+	oneTaskCalls := int64(0)
+	tenTaskCalls := int64(0)
+	hundredTaskCalls := int64(0)
 
-	createTask := func(name string, weight int) *Task {
-		return &Task{
-			Name:   name,
-			Weight: weight,
-			Fn: func() {
-				lock.Lock()
-				taskCalls[name]++
-				lock.Unlock()
-			},
-		}
-	}
-	tasks := []*Task{
-		createTask("one hundred", 100),
-		createTask("ten", 10),
-		createTask("one", 1),
+	oneTask := &Task{
+		Name:   "one",
+		Weight: 1,
+		Fn: func() {
+			atomic.AddInt64(&oneTaskCalls, 1)
+		},
 	}
 
-	runner := newSlaveRunner("localhost", 5557, tasks, nil)
-	defer runner.shutdown()
+	tenTask := &Task{
+		Name:   "ten",
+		Weight: 10,
+		Fn: func() {
+			atomic.AddInt64(&tenTaskCalls, 1)
+		},
+	}
 
+	hundredTask := &Task{
+		Name:   "hundred",
+		Weight: 100,
+		Fn: func() {
+			atomic.AddInt64(&hundredTaskCalls, 1)
+		},
+	}
+
+	runner := newSlaveRunner("localhost", 5557, []*Task{oneTask, tenTask, hundredTask}, nil)
 	runner.client = newClient("localhost", 5557, runner.nodeID)
+	defer runner.shutdown()
 
 	const numToSpawn int = 30
 
 	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
-
 	assert.Equal(t, numToSpawn, int(currentClients))
-	lock.Lock()
-	hundreds := taskCalls["one hundred"]
-	tens := taskCalls["ten"]
-	ones := taskCalls["one"]
-	lock.Unlock()
 
-	total := hundreds + tens + ones
-	t.Logf("total tasks run: %d\n", total)
+	oneTaskActualCalls := atomic.LoadInt64(&oneTaskCalls)
+	tenTaskActualCalls := atomic.LoadInt64(&tenTaskCalls)
+	hundredTaskActualCalls := atomic.LoadInt64(&hundredTaskCalls)
+	totalCalls := oneTaskActualCalls + tenTaskActualCalls + hundredTaskActualCalls
 
-	assert.True(t, total > 111)
-
-	assert.True(t, ones > 1)
-	actPercentage := float64(ones) / float64(total)
+	assert.True(t, totalCalls > 111)
+	assert.True(t, oneTaskActualCalls > 1)
+	actPercentage := float64(oneTaskActualCalls) / float64(totalCalls)
 	expectedPercentage := 1.0 / 111.0
 	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of ones task: exp %v, act %v", expectedPercentage, actPercentage)
+		t.Errorf("Unexpected percentage of one task: exp %v, act %v", expectedPercentage, actPercentage)
 	}
 
-	assert.True(t, tens > 10)
-	actPercentage = float64(tens) / float64(total)
+	assert.True(t, tenTaskActualCalls > 10)
+	actPercentage = float64(tenTaskActualCalls) / float64(totalCalls)
 	expectedPercentage = 10.0 / 111.0
 	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of tens task: exp %v, act %v", expectedPercentage, actPercentage)
+		t.Errorf("Unexpected percentage of ten task: exp %v, act %v", expectedPercentage, actPercentage)
 	}
 
-	assert.True(t, hundreds > 100)
-	actPercentage = float64(hundreds) / float64(total)
+	assert.True(t, hundredTaskActualCalls > 100)
+	actPercentage = float64(hundredTaskActualCalls) / float64(totalCalls)
 	expectedPercentage = 100.0 / 111.0
 	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of hundreds task: exp %v, act %v", expectedPercentage, actPercentage)
-	}
-}
-
-func TestSpawnWorkersWithManyTasksInWeighingTaskSet(t *testing.T) {
-	var lock sync.Mutex
-	taskCalls := map[string]int{}
-
-	createTask := func(name string, weight int) *Task {
-		return &Task{
-			Name:   name,
-			Weight: weight,
-			Fn: func() {
-				lock.Lock()
-				taskCalls[name]++
-				lock.Unlock()
-			},
-		}
-	}
-
-	wts := NewWeighingTaskSet()
-
-	wts.AddTask(createTask(`one thousand`, 1000))
-	wts.AddTask(createTask(`one hundred`, 100))
-	wts.AddTask(createTask(`ten`, 10))
-	wts.AddTask(createTask(`one`, 1))
-
-	task := &Task{
-		Name: "TaskSetWrapperTask",
-		Fn:   wts.Run,
-	}
-
-	runner := newSlaveRunner("localhost", 5557, []*Task{task}, nil)
-	defer runner.shutdown()
-
-	runner.client = newClient("localhost", 5557, runner.nodeID)
-
-	const numToSpawn int = 30
-
-	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
-	time.Sleep(2 * time.Second)
-
-	currentClients := atomic.LoadInt32(&runner.numClients)
-
-	assert.Equal(t, numToSpawn, int(currentClients))
-	lock.Lock()
-	thousands := taskCalls["one thousand"]
-	hundreds := taskCalls["one hundred"]
-	tens := taskCalls["ten"]
-	ones := taskCalls["one"]
-	lock.Unlock()
-
-	total := hundreds + tens + ones + thousands
-	t.Logf("total tasks run: %d\n", total)
-
-	assert.True(t, total > 1111)
-
-	assert.True(t, ones > 1)
-	actPercentage := float64(ones) / float64(total)
-	expectedPercentage := 1.0 / 1111.0
-	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of ones task: exp %v, act %v", expectedPercentage, actPercentage)
-	}
-
-	assert.True(t, tens > 10)
-	actPercentage = float64(tens) / float64(total)
-	expectedPercentage = 10.0 / 1111.0
-	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of tens task: exp %v, act %v", expectedPercentage, actPercentage)
-	}
-
-	assert.True(t, hundreds > 100)
-	actPercentage = float64(hundreds) / float64(total)
-	expectedPercentage = 100.0 / 1111.0
-	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of hundreds task: exp %v, act %v", expectedPercentage, actPercentage)
-	}
-
-	assert.True(t, thousands > 1000)
-	actPercentage = float64(thousands) / float64(total)
-	expectedPercentage = 1000.0 / 1111.0
-	if actPercentage > 2*expectedPercentage || actPercentage < 0.5*expectedPercentage {
-		t.Errorf("Unexpected percentage of thousands task: exp %v, act %v", expectedPercentage, actPercentage)
+		t.Errorf("Unexpected percentage of hundred task: exp %v, act %v", expectedPercentage, actPercentage)
 	}
 }
 
@@ -278,32 +213,27 @@ func TestSpawnAndStop(t *testing.T) {
 			time.Sleep(2 * time.Second)
 		},
 	}
-	tasks := []*Task{taskA, taskB}
-	runner := newSlaveRunner("localhost", 5557, tasks, nil)
+
+	runner := newSlaveRunner("localhost", 5557, []*Task{taskA, taskB}, nil)
 	runner.state = stateSpawning
-	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
+	defer runner.shutdown()
 
 	runner.startSpawning(10, float64(10), runner.spawnComplete)
 	// wait for spawning goroutines
 	time.Sleep(2 * time.Second)
-	if runner.numClients != 10 {
-		t.Error("Number of goroutines mismatches, expected: 10, current count", runner.numClients)
-	}
+	assert.Equal(t, int32(10), runner.numClients)
 
 	msg := <-runner.client.sendChannel()
 	m := msg.(*genericMessage)
-	if m.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawning completed, got", m.Type)
-	}
-	runner.stop()
+	assert.Equal(t, "spawning_complete", m.Type)
 
+	runner.stop()
 	runner.onQuiting()
+
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "quit" {
-		t.Error("Runner should send quit message on quitting, got", m.Type)
-	}
+	assert.Equal(t, "quit", m.Type)
 }
 
 func TestStop(t *testing.T) {
@@ -312,8 +242,8 @@ func TestStop(t *testing.T) {
 			time.Sleep(time.Second)
 		},
 	}
-	tasks := []*Task{taskA}
-	runner := newSlaveRunner("localhost", 5557, tasks, nil)
+
+	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
 	runner.stopChan = make(chan bool)
 
 	stopped := false
@@ -325,9 +255,7 @@ func TestStop(t *testing.T) {
 
 	runner.stop()
 
-	if stopped != true {
-		t.Error("Expected stopped to be true, was", stopped)
-	}
+	assert.True(t, stopped)
 }
 
 func TestOnSpawnMessage(t *testing.T) {
@@ -337,9 +265,9 @@ func TestOnSpawnMessage(t *testing.T) {
 		},
 	}
 	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
-	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
+	defer runner.shutdown()
 
 	workers, spawnRate := 0, float64(0)
 	callback := func(param1 int, param2 float64) {
@@ -357,21 +285,17 @@ func TestOnSpawnMessage(t *testing.T) {
 		"timestamp": 1,
 	}, runner.nodeID))
 
-	if workers != 20 {
-		t.Error("workers should be overwrote by callback function, expected: 20, was:", workers)
-	}
-	if spawnRate != 20 {
-		t.Error("spawnRate should be overwrote by callback function, expected: 20, was:", spawnRate)
-	}
+	assert.Equal(t, 20, workers)
+	assert.Equal(t, float64(20), spawnRate)
 
 	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 }
 
 func TestOnQuitMessage(t *testing.T) {
 	runner := newSlaveRunner("localhost", 5557, nil, nil)
-	defer runner.shutdown()
 	runner.client = newClient("localhost", 5557, "test")
 	runner.state = stateInit
+	defer runner.shutdown()
 
 	quitMessages := make(chan bool, 10)
 	receiver := func() {
@@ -413,9 +337,8 @@ func TestOnQuitMessage(t *testing.T) {
 		t.Error("Runner should fire boomer:quit message when it receives a quit message from the master.")
 		break
 	}
-	if runner.state != stateInit {
-		t.Error("Runner's state should be stateInit")
-	}
+
+	assert.Equal(t, stateInit, runner.state)
 }
 
 func TestOnMessage(t *testing.T) {
@@ -429,12 +352,11 @@ func TestOnMessage(t *testing.T) {
 			time.Sleep(2 * time.Second)
 		},
 	}
-	tasks := []*Task{taskA, taskB}
 
-	runner := newSlaveRunner("localhost", 5557, tasks, nil)
-	defer runner.shutdown()
+	runner := newSlaveRunner("localhost", 5557, []*Task{taskA, taskB}, nil)
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	runner.state = stateInit
+	defer runner.shutdown()
 
 	go func() {
 		// consumes clearStatsChannel
@@ -458,23 +380,16 @@ func TestOnMessage(t *testing.T) {
 
 	msg := <-runner.client.sendChannel()
 	m := msg.(*genericMessage)
-	if m.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
-	}
+	assert.Equal(t, "spawning", m.Type)
 
 	// spawn complete and running
 	time.Sleep(2 * time.Second)
-	if runner.state != stateRunning {
-		t.Error("State of runner is not running after spawn, got", runner.state)
-	}
-	if runner.numClients != 10 {
-		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
-	}
+	assert.Equal(t, stateRunning, runner.state)
+	assert.Equal(t, int32(10), runner.numClients)
+
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawn completed, got", m.Type)
-	}
+	assert.Equal(t, "spawning_complete", m.Type)
 
 	// increase goroutines while running
 	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
@@ -486,38 +401,27 @@ func TestOnMessage(t *testing.T) {
 
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
-	}
+	assert.Equal(t, "spawning", m.Type)
 
 	time.Sleep(2 * time.Second)
-	if runner.state != stateRunning {
-		t.Error("State of runner is not running after spawn, got", runner.state)
-	}
-	if runner.numClients != 20 {
-		t.Error("Number of goroutines mismatches, expected: 20, current count:", runner.numClients)
-	}
+	assert.Equal(t, stateRunning, runner.state)
+	assert.Equal(t, int32(20), runner.numClients)
+
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawn completed, got", m.Type)
-	}
+	assert.Equal(t, "spawning_complete", m.Type)
 
 	// stop all the workers
 	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
-	if runner.state != stateInit {
-		t.Error("State of runner is not init, got", runner.state)
-	}
+	assert.Equal(t, stateInit, runner.state)
+
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", m.Type)
-	}
+	assert.Equal(t, "client_stopped", m.Type)
+
 	msg = <-runner.client.sendChannel()
 	crm := msg.(*clientReadyMessage)
-	if crm.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", m.Type)
-	}
+	assert.Equal(t, "client_ready", crm.Type)
 
 	// spawn again
 	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
@@ -529,39 +433,28 @@ func TestOnMessage(t *testing.T) {
 
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "spawning" {
-		t.Error("Runner should send spawning message when starting spawn, got", m.Type)
-	}
+	assert.Equal(t, "spawning", m.Type)
 
 	// spawn complete and running
 	time.Sleep(2 * time.Second)
-	if runner.state != stateRunning {
-		t.Error("State of runner is not running after spawn, got", runner.state)
-	}
-	if runner.numClients != 10 {
-		t.Error("Number of goroutines mismatches, expected: 10, current count:", runner.numClients)
-	}
+	assert.Equal(t, stateRunning, runner.state)
+	assert.Equal(t, int32(10), runner.numClients)
+
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "spawning_complete" {
-		t.Error("Runner should send spawning_complete message when spawn completed, got", m.Type)
-	}
+	assert.Equal(t, "spawning_complete", m.Type)
 
 	// stop all the workers
 	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
-	if runner.state != stateInit {
-		t.Error("State of runner is not init, got", runner.state)
-	}
+	assert.Equal(t, stateInit, runner.state)
+
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
-	if m.Type != "client_stopped" {
-		t.Error("Runner should send client_stopped message, got", m.Type)
-	}
+	assert.Equal(t, "client_stopped", m.Type)
+
 	msg = <-runner.client.sendChannel()
 	crm = msg.(*clientReadyMessage)
-	if crm.Type != "client_ready" {
-		t.Error("Runner should send client_ready message, got", m.Type)
-	}
+	assert.Equal(t, "client_ready", crm.Type)
 }
 
 func TestGetReady(t *testing.T) {
@@ -569,8 +462,8 @@ func TestGetReady(t *testing.T) {
 	masterPort := 6557
 
 	server := newTestServer(masterHost, masterPort)
-	defer server.close()
 	server.start()
+	defer server.close()
 
 	rateLimiter := NewStableRateLimiter(100, time.Second)
 	r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter)
@@ -593,12 +486,8 @@ func TestGetReady(t *testing.T) {
 
 	msg := <-server.fromClient
 	m := msg.(*genericMessage)
-	if m.Type != "stats" {
-		t.Error("Runner should send stats message to server.")
-	}
+	assert.Equal(t, "stats", m.Type)
 
 	userCount := m.Data["user_count"].(int64)
-	if userCount != int64(10) {
-		t.Error("User count mismatch, expect: 10, got:", userCount)
-	}
+	assert.Equal(t, int64(10), userCount)
 }
