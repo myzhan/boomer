@@ -169,7 +169,7 @@ func TestSpawnWorkersWithManyTasks(t *testing.T) {
 	const numToSpawn int = 30
 
 	runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	currentClients := atomic.LoadInt32(&runner.numClients)
 	assert.Equal(t, numToSpawn, int(currentClients))
