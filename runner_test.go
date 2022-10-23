@@ -218,7 +218,7 @@ func TestSpawnAndStop(t *testing.T) {
 	runner.state = stateSpawning
 	runner.client = newClient("localhost", 5557, runner.nodeID)
 	defer runner.shutdown()
-
+	runner.initSpawning()
 	runner.startSpawning(10, float64(10), runner.spawnComplete)
 	// wait for spawning goroutines
 	time.Sleep(2 * time.Second)
@@ -234,6 +234,7 @@ func TestSpawnAndStop(t *testing.T) {
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
 	assert.Equal(t, "quit", m.Type)
+	assert.Equal(t, runner.numClients, int32(0))
 }
 
 func TestStop(t *testing.T) {
@@ -244,8 +245,7 @@ func TestStop(t *testing.T) {
 	}
 
 	runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
-	runner.stopChan = make(chan bool)
-
+	runner.initSpawning()
 	stopped := false
 	handler := func() {
 		stopped = true
@@ -414,6 +414,7 @@ func TestOnMessage(t *testing.T) {
 	// stop all the workers
 	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	assert.Equal(t, stateInit, runner.state)
+	assert.Equal(t, runner.numClients, int32(0))
 
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
@@ -444,9 +445,31 @@ func TestOnMessage(t *testing.T) {
 	m = msg.(*genericMessage)
 	assert.Equal(t, "spawning_complete", m.Type)
 
+	// decrease goroutines while running
+	runner.onMessage(newGenericMessage("spawn", map[string]interface{}{
+		"user_classes_count": map[interface{}]interface{}{
+			"Dummy":  int64(3),
+			"Dummy2": int64(2),
+		},
+	}, runner.nodeID))
+
+	msg = <-runner.client.sendChannel()
+	m = msg.(*genericMessage)
+	assert.Equal(t, "spawning", m.Type)
+
+	// spawn complete and running
+	time.Sleep(2 * time.Second)
+	assert.Equal(t, stateRunning, runner.state)
+	assert.Equal(t, int32(5), runner.numClients)
+
+	msg = <-runner.client.sendChannel()
+	m = msg.(*genericMessage)
+	assert.Equal(t, "spawning_complete", m.Type)
+
 	// stop all the workers
 	runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	assert.Equal(t, stateInit, runner.state)
+	assert.Equal(t, runner.numClients, int32(0))
 
 	msg = <-runner.client.sendChannel()
 	m = msg.(*genericMessage)
