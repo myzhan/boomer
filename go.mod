@@ -6,7 +6,6 @@ require (
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/google/uuid v1.3.0
-	github.com/influxdata/influxdb-client-go/v2 v2.12.1
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/myzhan/gomq v0.0.0-20220926014711-4eea0d4a1e75
 	github.com/myzhan/gomq/zmtp v0.0.0-20220926014711-4eea0d4a1e75
