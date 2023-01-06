@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/olekukonko/tablewriter"
@@ -443,12 +442,12 @@ func (o *InfluxOutput) OnEvent(data map[string]interface{}) {
 	errorsCh := o.influx.Errors()
 	go func() {
 		for err := range errorsCh {
-			fmt.Printf("could not push to influxdb error: %s\n\n", err.Error())
+			log.Println("could not push to influxdb error: %s\n\n", err.Error())
 		}
 	}()
 	output, err := convertData(data)
 	if err != nil {
-		log.Println(fmt.Sprintf("convert data error: %v", err))
+		log.Println(fmt.Sprintf("convert data error: %s", err))
 		return
 	}
 
@@ -458,8 +457,6 @@ func (o *InfluxOutput) OnEvent(data map[string]interface{}) {
 		point := influxdb2.NewPoint(
 			method+name,
 			map[string]string{
-				// unique run_id
-				"run_id":     uuid.New().String(),
 				"user_count": string(output.UserCount),
 				"total_rps":  strconv.FormatInt(output.TotalRPS, 10),
 			},
