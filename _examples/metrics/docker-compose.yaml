@@ -1,0 +1,44 @@
+version: '3.8'
+services:
+
+  locust:
+    depends_on:
+      - influxdb
+    build:
+      context: .
+      dockerfile: ./locust/Dockerfile
+    ports:
+      - "8089:8089"
+      - "5557:5557"
+    command:
+      [
+        "--master","-H","http://0.0.0.0:8089",
+        "--headless","--expect-workers","1",
+        "--stop-timeout","30",
+        "--run-time","60s",
+        "--spawn-rate","100",
+        "--users","200"
+      ]  
+    networks:
+      - locust_net
+
+  influxdb:
+    image: influxdb:latest
+    volumes:
+      - ./influxdb_data:/var/lib/influxdb2
+    ports:
+      - "8086:8086"
+    expose:
+      - 8086
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=my-user
+      - DOCKER_INFLUXDB_INIT_PASSWORD=my-password
+      - DOCKER_INFLUXDB_INIT_ORG=my-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=my-bucket
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-auth-token
+    networks:
+      - locust_net
+
+networks:
+  locust_net:
