@@ -297,6 +297,7 @@ type slaveRunner struct {
 	masterHost                 string
 	masterPort                 int
 	waitForAck                 sync.WaitGroup
+	ackReceived                int32
 	lastReceivedSpawnTimestamp int64
 	client                     client
 }
@@ -396,6 +397,11 @@ func (r *slaveRunner) onCustomMessage(msg *CustomMessage) {
 }
 
 func (r *slaveRunner) onAckMessage(msg *genericMessage) {
+	// Maybe we should add a state for waiting?
+	if !atomic.CompareAndSwapInt32(&r.ackReceived, 0, 1) {
+		log.Println("Receive duplicate ack message, ignored")
+		return
+	}
 	r.waitForAck.Done()
 	Events.Publish(EVENT_CONNECTED)
 }
@@ -403,6 +409,8 @@ func (r *slaveRunner) onAckMessage(msg *genericMessage) {
 func (r *slaveRunner) sendClientReadyAndWaitForAck() {
 	r.waitForAck = sync.WaitGroup{}
 	r.waitForAck.Add(1)
+
+	atomic.StoreInt32(&r.ackReceived, 0)
 	// locust allows workers to bypass version check by sending -1 as version
 	r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
 

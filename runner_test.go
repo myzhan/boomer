@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -339,6 +340,20 @@ func TestOnQuitMessage(t *testing.T) {
 	}
 
 	assert.Equal(t, stateInit, runner.state)
+}
+
+func TestOnAckMessage(t *testing.T) {
+	eventCount := 0
+	Events.Subscribe(EVENT_CONNECTED, func() {
+		eventCount++
+	})
+	runner := newSlaveRunner("localhost", 5557, []*Task{}, nil)
+	runner.waitForAck = sync.WaitGroup{}
+	runner.waitForAck.Add(1)
+
+	runner.onAckMessage(nil)
+	runner.onAckMessage(nil)
+	assert.Equal(t, 1, eventCount)
 }
 
 func TestOnMessage(t *testing.T) {
