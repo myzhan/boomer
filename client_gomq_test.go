@@ -1,3 +1,4 @@
+//go:build !goczmq
 // +build !goczmq
 
 package boomer
@@ -185,7 +186,7 @@ func TestPingPong(t *testing.T) {
 	server := newTestServer(masterHost, masterPort)
 	defer server.close()
 
-	log.Println(fmt.Sprintf("Starting to serve on %s:%d", masterHost, masterPort))
+	log.Printf("Starting to serve on %s:%d\n", masterHost, masterPort)
 	server.start()
 
 	time.Sleep(20 * time.Millisecond)

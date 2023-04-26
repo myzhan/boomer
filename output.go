@@ -119,7 +119,7 @@ func (o *ConsoleOutput) OnStop() {
 func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 	output, err := convertData(data)
 	if err != nil {
-		log.Println(fmt.Sprintf("convert data error: %v", err))
+		log.Printf("convert data error: %v\n", err)
 		return
 	}
 
@@ -178,10 +178,7 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 	}
 
 	// convert stats in total
-	statsTotal, ok := data["stats_total"].(interface{})
-	if !ok {
-		return nil, fmt.Errorf("stats_total is not interface{}")
-	}
+	statsTotal := data["stats_total"]
 	entryTotalOutput, err := deserializeStatsEntry(statsTotal)
 	if err != nil {
 		return nil, err
@@ -377,7 +374,7 @@ func (o *PrometheusPusherOutput) OnStop() {
 func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 	output, err := convertData(data)
 	if err != nil {
-		log.Println(fmt.Sprintf("convert data error: %v", err))
+		log.Printf("convert data error: %v\n", err)
 		return
 	}
 
@@ -405,6 +402,6 @@ func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 	}
 
 	if err := o.pusher.Push(); err != nil {
-		log.Println(fmt.Sprintf("Could not push to Pushgateway: error: %v", err))
+		log.Printf("Could not push to Pushgateway: error: %v\n", err)
 	}
 }
