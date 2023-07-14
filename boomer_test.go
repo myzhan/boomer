@@ -91,7 +91,7 @@ func TestStandaloneRun(t *testing.T) {
 
 	assert.Equal(t, int64(10), count)
 	assert.FileExists(t, "cpu.pprof")
-	_ = os.Remove("cou.pprof")
+	_ = os.Remove("cpu.pprof")
 
 	assert.FileExists(t, "mem.pprof")
 	_ = os.Remove("mem.pprof")
