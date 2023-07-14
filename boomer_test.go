@@ -10,67 +10,42 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewBoomer(t *testing.T) {
 	b := NewBoomer("0.0.0.0", 1234)
-
-	if b.masterHost != "0.0.0.0" {
-		t.Error("masterHost should be 0.0.0.0")
-	}
-
-	if b.masterPort != 1234 {
-		t.Error("masterPort should be 1234")
-	}
-
-	if b.mode != DistributedMode {
-		t.Error("mode should be DistributedMode")
-	}
+	assert.Equal(t, "0.0.0.0", b.masterHost)
+	assert.Equal(t, 1234, b.masterPort)
+	assert.Equal(t, DistributedMode, b.mode)
 }
 
 func TestNewStandaloneBoomer(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
-
-	if b.spawnCount != 100 {
-		t.Error("spawnCount should be 100")
-	}
-
-	if b.spawnRate != 10 {
-		t.Error("spawnRate should be 10")
-	}
-
-	if b.mode != StandaloneMode {
-		t.Error("mode should be StandaloneMode")
-	}
+	assert.Equal(t, 100, b.spawnCount)
+	assert.Equal(t, float64(10), b.spawnRate)
+	assert.Equal(t, StandaloneMode, b.mode)
 }
 
 func TestSetRateLimiter(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
 	limiter, _ := NewRampUpRateLimiter(10, "10/1s", time.Second)
 	b.SetRateLimiter(limiter)
-
-	if b.rateLimiter == nil {
-		t.Error("b.rateLimiter should not be nil")
-	}
+	assert.NotNil(t, b.rateLimiter)
 }
 
 func TestSetMode(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
 
 	b.SetMode(DistributedMode)
-	if b.mode != DistributedMode {
-		t.Error("mode should be DistributedMode")
-	}
+	assert.Equal(t, DistributedMode, b.mode)
 
 	b.SetMode(StandaloneMode)
-	if b.mode != StandaloneMode {
-		t.Error("mode should be StandaloneMode")
-	}
+	assert.Equal(t, StandaloneMode, b.mode)
 
 	b.SetMode(3)
-	if b.mode != StandaloneMode {
-		t.Error("mode should be StandaloneMode")
-	}
+	assert.Equal(t, StandaloneMode, b.mode)
 }
 
 func TestAddOutput(t *testing.T) {
@@ -78,35 +53,21 @@ func TestAddOutput(t *testing.T) {
 	b.AddOutput(NewConsoleOutput())
 	b.AddOutput(NewConsoleOutput())
 
-	if len(b.outputs) != 2 {
-		t.Error("length of outputs should be 2")
-	}
+	assert.Len(t, b.outputs, 2)
 }
 
 func TestEnableCPUProfile(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
 	b.EnableCPUProfile("cpu.prof", time.Second)
-
-	if b.cpuProfileFile != "cpu.prof" {
-		t.Error("cpuProfile should be cpu.prof")
-	}
-
-	if b.cpuProfileDuration != time.Second {
-		t.Error("cpuProfileDuration should be 1 second")
-	}
+	assert.Equal(t, "cpu.prof", b.cpuProfileFile)
+	assert.Equal(t, time.Second, b.cpuProfileDuration)
 }
 
 func TestEnableMemoryProfile(t *testing.T) {
 	b := NewStandaloneBoomer(100, 10)
 	b.EnableMemoryProfile("mem.prof", time.Second)
-
-	if b.memoryProfileFile != "mem.prof" {
-		t.Error("memoryProfile should be mem.prof")
-	}
-
-	if b.memoryProfileDuration != time.Second {
-		t.Error("memoryProfileDuration should be 1 second")
-	}
+	assert.Equal(t, "mem.prof", b.memoryProfileFile)
+	assert.Equal(t, time.Second, b.memoryProfileDuration)
 }
 
 func TestStandaloneRun(t *testing.T) {
@@ -128,21 +89,12 @@ func TestStandaloneRun(t *testing.T) {
 
 	b.Quit()
 
-	if count != 10 {
-		t.Error("count is", count, "expected: 10")
-	}
+	assert.Equal(t, int64(10), count)
+	assert.FileExists(t, "cpu.pprof")
+	_ = os.Remove("cou.pprof")
 
-	if _, err := os.Stat("cpu.pprof"); os.IsNotExist(err) {
-		t.Error("File cpu.pprof is not generated")
-	} else {
-		os.Remove("cpu.pprof")
-	}
-
-	if _, err := os.Stat("mem.pprof"); os.IsNotExist(err) {
-		t.Error("File mem.pprof is not generated")
-	} else {
-		os.Remove("mem.pprof")
-	}
+	assert.FileExists(t, "mem.pprof")
+	_ = os.Remove("mem.pprof")
 }
 
 func TestDistributedRun(t *testing.T) {
@@ -181,9 +133,7 @@ func TestDistributedRun(t *testing.T) {
 
 	b.Quit()
 
-	if count != 10 {
-		t.Error("count is", count, "expected: 10")
-	}
+	assert.Equal(t, int64(10), count)
 }
 
 func TestRunTasksForTest(t *testing.T) {
@@ -204,68 +154,30 @@ func TestRunTasksForTest(t *testing.T) {
 
 	runTasksForTest(taskA, taskWithoutName)
 
-	if count != 1 {
-		t.Error("count is", count, "expected: 1")
-	}
-
-	runTasks = ""
-}
-
-func TestRunTasksWithBoomerReport(t *testing.T) {
-	taskA := &Task{
-		Name: "report",
-		Fn: func() {
-			// it should not panic.
-			RecordSuccess("http", "foo", int64(1), int64(10))
-			RecordFailure("udp", "bar", int64(1), "udp error")
-		},
-	}
-	runTasks = "report"
-
-	runTasksForTest(taskA)
-
+	assert.Equal(t, 1, count)
 	runTasks = ""
 }
 
 func TestCreateRatelimiter(t *testing.T) {
 	rateLimiter, _ := createRateLimiter(100, "-1")
-	if stableRateLimiter, ok := rateLimiter.(*StableRateLimiter); !ok {
-		t.Error("Expected stableRateLimiter")
-	} else {
-		if stableRateLimiter.threshold != 100 {
-			t.Error("threshold should be equals to math.MaxInt64, was", stableRateLimiter.threshold)
-		}
-	}
+	assert.IsType(t, &StableRateLimiter{}, rateLimiter)
+	stableRateLimiter, _ := rateLimiter.(*StableRateLimiter)
+	assert.EqualValues(t, 100, stableRateLimiter.threshold)
 
 	rateLimiter, _ = createRateLimiter(0, "1")
-	if rampUpRateLimiter, ok := rateLimiter.(*RampUpRateLimiter); !ok {
-		t.Error("Expected rampUpRateLimiter")
-	} else {
-		if rampUpRateLimiter.maxThreshold != math.MaxInt64 {
-			t.Error("maxThreshold should be equals to math.MaxInt64, was", rampUpRateLimiter.maxThreshold)
-		}
-		if rampUpRateLimiter.rampUpRate != "1" {
-			t.Error("rampUpRate should be equals to \"1\", was", rampUpRateLimiter.rampUpRate)
-		}
-	}
+	assert.IsType(t, &RampUpRateLimiter{}, rateLimiter)
+	rampUpRateLimiter, _ := rateLimiter.(*RampUpRateLimiter)
+	assert.EqualValues(t, math.MaxInt64, rampUpRateLimiter.maxThreshold)
+	assert.Equal(t, math.MaxInt64, math.MaxInt64)
+	assert.Equal(t, "1", rampUpRateLimiter.rampUpRate)
 
 	rateLimiter, _ = createRateLimiter(10, "2/2s")
-	if rampUpRateLimiter, ok := rateLimiter.(*RampUpRateLimiter); !ok {
-		t.Error("Expected rampUpRateLimiter")
-	} else {
-		if rampUpRateLimiter.maxThreshold != 10 {
-			t.Error("maxThreshold should be equals to 10, was", rampUpRateLimiter.maxThreshold)
-		}
-		if rampUpRateLimiter.rampUpRate != "2/2s" {
-			t.Error("rampUpRate should be equals to \"2/2s\", was", rampUpRateLimiter.rampUpRate)
-		}
-		if rampUpRateLimiter.rampUpStep != 2 {
-			t.Error("rampUpStep should be equals to 2, was", rampUpRateLimiter.rampUpStep)
-		}
-		if rampUpRateLimiter.rampUpPeroid != 2*time.Second {
-			t.Error("rampUpPeroid should be equals to 2 seconds, was", rampUpRateLimiter.rampUpPeroid)
-		}
-	}
+	assert.IsType(t, &RampUpRateLimiter{}, rateLimiter)
+	rampUpRateLimiter, _ = rateLimiter.(*RampUpRateLimiter)
+	assert.EqualValues(t, 10, rampUpRateLimiter.maxThreshold)
+	assert.Equal(t, "2/2s", rampUpRateLimiter.rampUpRate)
+	assert.EqualValues(t, 2, rampUpRateLimiter.rampUpStep)
+	assert.Equal(t, 2*time.Second, rampUpRateLimiter.rampUpPeroid)
 }
 
 func TestRun(t *testing.T) {
@@ -306,12 +218,14 @@ func TestRun(t *testing.T) {
 
 	defaultBoomer.Quit()
 
-	if count != 10 {
-		t.Error("count is", count, "expected: 10")
-	}
+	assert.Equal(t, int64(10), count)
 }
 
 func TestRecordSuccess(t *testing.T) {
+	// called before runner instance created
+	RecordSuccess("http", "foo", int64(1), int64(10))
+
+	// distribute mode
 	masterHost := "127.0.0.1"
 	masterPort := 5557
 	defaultBoomer = NewBoomer(masterHost, masterPort)
@@ -319,16 +233,26 @@ func TestRecordSuccess(t *testing.T) {
 	RecordSuccess("http", "foo", int64(1), int64(10))
 
 	requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
-	if requestSuccessMsg.requestType != "http" {
-		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
-	}
-	if requestSuccessMsg.responseTime != int64(1) {
-		t.Error("Expected: 1, got:", requestSuccessMsg.responseTime)
-	}
-	defaultBoomer = nil
+	assert.Equal(t, "http", requestSuccessMsg.requestType)
+	assert.Equal(t, int64(1), requestSuccessMsg.responseTime)
+
+	// standalone mode
+	defaultBoomer = NewStandaloneBoomer(1, 1)
+	defaultBoomer.localRunner = newLocalRunner(nil, nil, 1, 1)
+	RecordSuccess("http", "foo", int64(1), int64(10))
+
+	requestSuccessMsg = <-defaultBoomer.localRunner.stats.requestSuccessChan
+	assert.Equal(t, "http", requestSuccessMsg.requestType)
+	assert.Equal(t, int64(1), requestSuccessMsg.responseTime)
+
+	defaultBoomer = &Boomer{}
 }
 
 func TestRecordFailure(t *testing.T) {
+	// called before runner instance created
+	RecordFailure("udp", "bar", int64(2), "udp error")
+
+	// distribute mode
 	masterHost := "127.0.0.1"
 	masterPort := 5557
 	defaultBoomer = NewBoomer(masterHost, masterPort)
@@ -336,14 +260,19 @@ func TestRecordFailure(t *testing.T) {
 	RecordFailure("udp", "bar", int64(2), "udp error")
 
 	requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan
-	if requestFailureMsg.requestType != "udp" {
-		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
-	}
-	if requestFailureMsg.responseTime != int64(2) {
-		t.Error("Expected: 2, got:", requestFailureMsg.responseTime)
-	}
-	if requestFailureMsg.error != "udp error" {
-		t.Error("Expected: udp error, got:", requestFailureMsg.error)
-	}
-	defaultBoomer = nil
+	assert.Equal(t, "udp", requestFailureMsg.requestType)
+	assert.Equal(t, int64(2), requestFailureMsg.responseTime)
+	assert.Equal(t, "udp error", requestFailureMsg.error)
+
+	// standalone mode
+	defaultBoomer = NewStandaloneBoomer(1, 1)
+	defaultBoomer.localRunner = newLocalRunner(nil, nil, 1, 1)
+	RecordFailure("udp", "bar", int64(2), "udp error")
+
+	requestFailureMsg = <-defaultBoomer.localRunner.stats.requestFailureChan
+	assert.Equal(t, "udp", requestFailureMsg.requestType)
+	assert.Equal(t, int64(2), requestFailureMsg.responseTime)
+	assert.Equal(t, "udp error", requestFailureMsg.error)
+
+	defaultBoomer = &Boomer{}
 }
