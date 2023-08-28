@@ -10,11 +10,11 @@ import (
 	"net"
 	"runtime/debug"
 	"strings"
-	"testing"
-	"time"
 
 	"github.com/myzhan/gomq"
 	"github.com/myzhan/gomq/zmtp"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 // Router is a gomq interface used for router sockets.
@@ -178,37 +178,33 @@ func (s *testServer) start() {
 	go s.bind()
 }
 
-func TestPingPong(t *testing.T) {
-	masterHost := "0.0.0.0"
-	rand.Seed(Now())
-	masterPort := rand.Intn(1000) + 10240
+var _ = Describe("Test gomq client", func() {
 
-	server := newTestServer(masterHost, masterPort)
-	defer server.close()
+	It("test ping pong", func() {
+		masterHost := "0.0.0.0"
+		rand.Seed(Now())
+		masterPort := rand.Intn(1000) + 10240
 
-	log.Printf("Starting to serve on %s:%d\n", masterHost, masterPort)
-	server.start()
+		server := newTestServer(masterHost, masterPort)
+		defer server.close()
 
-	time.Sleep(20 * time.Millisecond)
+		log.Printf("Starting to serve on %s:%d\n", masterHost, masterPort)
+		server.start()
 
-	// start client
-	client := newClient(masterHost, masterPort, "testing ping pong")
-	client.connect()
-	defer client.close()
+		// start client
+		client := newClient(masterHost, masterPort, "testing ping pong")
+		client.connect()
+		defer client.close()
 
-	time.Sleep(20 * time.Millisecond)
+		client.sendChannel() <- newGenericMessage("ping", nil, "testing ping pong")
+		var msg *genericMessage
+		Eventually(server.fromClient).Should(Receive(&msg))
+		Expect(msg.Type).To(Equal("ping"))
+		Expect(msg.NodeID).To(Equal("testing ping pong"))
 
-	client.sendChannel() <- newGenericMessage("ping", nil, "testing ping pong")
-	msg := <-server.fromClient
-	m := msg.(*genericMessage)
-	if m.Type != "ping" || m.NodeID != "testing ping pong" {
-		t.Error("server doesn't recv ping message")
-	}
-
-	server.toClient <- newGenericMessage("pong", nil, "testing ping pong")
-	msg = <-client.recvChannel()
-	m = msg.(*genericMessage)
-	if m.Type != "pong" || m.NodeID != "testing ping pong" {
-		t.Error("client doesn't recv pong message")
-	}
-}
+		server.toClient <- newGenericMessage("pong", nil, "testing ping pong")
+		Eventually(client.recvChannel()).Should(Receive(&msg))
+		Expect(msg.Type).To(Equal("pong"))
+		Expect(msg.NodeID).To(Equal("testing ping pong"))
+	})
+})

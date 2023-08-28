@@ -1,38 +1,33 @@
 package boomer
 
 import (
-	"testing"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestEncodeAndDecode(t *testing.T) {
+var _ = Describe("Test message", func() {
 
-	data := make(map[string]interface{})
-	data["a"] = 1
-	data["b"] = "hello"
-	msg := newGenericMessage("test", data, "nodeID")
+	It("test encode and decode", func() {
+		data := make(map[string]interface{})
+		data["a"] = 1
+		data["b"] = "hello"
+		msg := newGenericMessage("test", data, "nodeID")
 
-	encoded, err := msg.serialize()
-	if err != nil {
-		t.Error(err)
-	}
-	decoded, err := newGenericMessageFromBytes(encoded)
-	if err != nil {
-		t.Error(err)
-	}
+		encoded, err := msg.serialize()
+		Expect(err).NotTo(HaveOccurred())
 
-	if msg.Type != decoded.Type {
-		t.Error("message type mismatched.")
-	}
-	if msg.NodeID != decoded.NodeID {
-		t.Error("message type mismatched.")
-	}
+		decoded, err := newGenericMessageFromBytes(encoded)
+		Expect(err).NotTo(HaveOccurred())
 
-	decodedA := decoded.Data["a"]
-	decodedAInt := decodedA.(int64)
-	decodedB := decoded.Data["b"]
-	decodedBArray := decodedB.([]uint8)
+		Expect(msg.Type).To(Equal(decoded.Type))
+		Expect(msg.NodeID).To(Equal(decoded.NodeID))
 
-	if msg.Data["a"] != int(decodedAInt) || msg.Data["b"] != string(decodedBArray) {
-		t.Error("message data mismatched.", msg.Data, decoded.Data)
-	}
-}
+		decodedA := decoded.Data["a"]
+		decodedAInt := decodedA.(int64)
+		decodedB := decoded.Data["b"]
+		decodedBArray := decodedB.([]uint8)
+
+		Expect(msg.Data["a"]).To(BeEquivalentTo(decodedAInt))
+		Expect(msg.Data["b"]).To(BeEquivalentTo(decodedBArray))
+	})
+})

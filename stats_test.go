@@ -3,115 +3,16 @@ package boomer
 import (
 	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
-
-func TestLogRequest(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.logRequest("http", "success", 2, 30)
-	newStats.logRequest("http", "success", 3, 40)
-	newStats.logRequest("http", "success", 2, 40)
-	newStats.logRequest("http", "success", 1, 20)
-	entry := newStats.get("success", "http")
-
-	if entry.NumRequests != 4 {
-		t.Error("numRequests is wrong, expected: 4, got:", entry.NumRequests)
-	}
-	if entry.MinResponseTime != 1 {
-		t.Error("minResponseTime is wrong, expected: 1, got:", entry.MinResponseTime)
-	}
-	if entry.MaxResponseTime != 3 {
-		t.Error("maxResponseTime is wrong, expected: 3, got:", entry.MaxResponseTime)
-	}
-	if entry.TotalResponseTime != 8 {
-		t.Error("totalResponseTime is wrong, expected: 8, got:", entry.TotalResponseTime)
-	}
-	if entry.TotalContentLength != 130 {
-		t.Error("totalContentLength is wrong, expected: 130, got:", entry.TotalContentLength)
-	}
-
-	// check newStats.total
-	if newStats.total.NumRequests != 4 {
-		t.Error("newStats.total.numRequests is wrong, expected: 4, got:", newStats.total.NumRequests)
-	}
-	if newStats.total.MinResponseTime != 1 {
-		t.Error("newStats.total.minResponseTime is wrong, expected: 1, got:", newStats.total.MinResponseTime)
-	}
-	if newStats.total.MaxResponseTime != 3 {
-		t.Error("newStats.total.maxResponseTime is wrong, expected: 3, got:", newStats.total.MaxResponseTime)
-	}
-	if newStats.total.TotalResponseTime != 8 {
-		t.Error("newStats.total.totalResponseTime is wrong, expected: 8, got:", newStats.total.TotalResponseTime)
-	}
-	if newStats.total.TotalContentLength != 130 {
-		t.Error("newStats.total.totalContentLength is wrong, expected: 130, got:", newStats.total.TotalContentLength)
-	}
-}
 
 func BenchmarkLogRequest(b *testing.B) {
 	newStats := newRequestStats()
 	for i := 0; i < b.N; i++ {
 		newStats.logRequest("http", "success", 2, 30)
 	}
-}
-
-func TestRoundedResponseTime(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.logRequest("http", "success", 147, 1)
-	newStats.logRequest("http", "success", 3432, 1)
-	newStats.logRequest("http", "success", 58760, 1)
-	entry := newStats.get("success", "http")
-	responseTimes := entry.ResponseTimes
-
-	if len(responseTimes) != 3 {
-		t.Error("len(responseTimes) is wrong, expected: 3, got:", len(responseTimes))
-	}
-
-	if val, ok := responseTimes[150]; !ok || val != 1 {
-		t.Error("Rounded response time should be", 150)
-	}
-
-	if val, ok := responseTimes[3400]; !ok || val != 1 {
-		t.Error("Rounded response time should be", 3400)
-	}
-
-	if val, ok := responseTimes[59000]; !ok || val != 1 {
-		t.Error("Rounded response time should be", 59000)
-	}
-}
-
-func TestLogError(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.logError("http", "failure", "500 error")
-	newStats.logError("http", "failure", "400 error")
-	newStats.logError("http", "failure", "400 error")
-	entry := newStats.get("failure", "http")
-
-	if entry.NumFailures != 3 {
-		t.Error("numFailures is wrong, expected: 3, got:", entry.NumFailures)
-	}
-
-	if newStats.total.NumFailures != 3 {
-		t.Error("newStats.total.numFailures is wrong, expected: 3, got:", newStats.total.NumFailures)
-	}
-
-	// md5("httpfailure500 error") = 547c38e4e4742c1c581f9e2809ba4f55
-	err500 := newStats.errors["547c38e4e4742c1c581f9e2809ba4f55"]
-	if err500.error != "500 error" {
-		t.Error("Error message is wrong, expected: 500 error, got:", err500.error)
-	}
-	if err500.occurrences != 1 {
-		t.Error("Error occurrences is wrong, expected: 1, got:", err500.occurrences)
-	}
-
-	// md5("httpfailure400 error") = f391c310401ad8e10e929f2ee1a614e4
-	err400 := newStats.errors["f391c310401ad8e10e929f2ee1a614e4"]
-	if err400.error != "400 error" {
-		t.Error("Error message is wrong, expected: 400 error, got:", err400.error)
-	}
-	if err400.occurrences != 2 {
-		t.Error("Error occurrences is wrong, expected: 2, got:", err400.occurrences)
-	}
-
 }
 
 func BenchmarkLogError(b *testing.B) {
@@ -123,128 +24,142 @@ func BenchmarkLogError(b *testing.B) {
 	}
 }
 
-func TestClearAll(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.logRequest("http", "success", 1, 20)
-	newStats.clearAll()
+var _ = Describe("Test states", func() {
 
-	if newStats.total.NumRequests != 0 {
-		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.NumRequests)
-	}
-}
+	It("test log request", func() {
+		newStats := newRequestStats()
+		newStats.logRequest("http", "success", 2, 30)
+		newStats.logRequest("http", "success", 3, 40)
+		newStats.logRequest("http", "success", 2, 40)
+		newStats.logRequest("http", "success", 1, 20)
+		entry := newStats.get("success", "http")
 
-func TestClearAllByChannel(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.start()
-	defer newStats.close()
-	newStats.logRequest("http", "success", 1, 20)
-	newStats.clearStatsChan <- true
+		Expect(entry.NumRequests).To(BeEquivalentTo(4))
+		Expect(entry.MinResponseTime).To(BeEquivalentTo(1))
+		Expect(entry.MaxResponseTime).To(BeEquivalentTo(3))
+		Expect(entry.TotalResponseTime).To(BeEquivalentTo(8))
+		Expect(entry.TotalContentLength).To(BeEquivalentTo(130))
 
-	if newStats.total.NumRequests != 0 {
-		t.Error("After clearAll(), newStats.total.numRequests is wrong, expected: 0, got:", newStats.total.NumRequests)
-	}
-}
+		Expect(newStats.total.NumRequests).To(BeEquivalentTo(4))
+		Expect(newStats.total.MinResponseTime).To(BeEquivalentTo(1))
+		Expect(newStats.total.MaxResponseTime).To(BeEquivalentTo(3))
+		Expect(newStats.total.TotalResponseTime).To(BeEquivalentTo(8))
+		Expect(newStats.total.TotalContentLength).To(BeEquivalentTo(130))
+	})
 
-func TestSerializeStats(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.logRequest("http", "success", 1, 20)
+	It("test rounded response time", func() {
+		newStats := newRequestStats()
+		newStats.logRequest("http", "success", 147, 1)
+		newStats.logRequest("http", "success", 3432, 1)
+		newStats.logRequest("http", "success", 58760, 1)
+		entry := newStats.get("success", "http")
+		responseTimes := entry.ResponseTimes
 
-	serialized := newStats.serializeStats()
-	if len(serialized) != 1 {
-		t.Error("The length of serialized results is wrong, expected: 1, got:", len(serialized))
-		return
-	}
+		Expect(responseTimes).To(HaveLen(3))
+		Expect(responseTimes).To(HaveKeyWithValue(int64(150), int64(1)))
+		Expect(responseTimes).To(HaveKeyWithValue(int64(3400), int64(1)))
+		Expect(responseTimes).To(HaveKeyWithValue(int64(59000), int64(1)))
+	})
 
-	first := serialized[0]
-	entry, err := deserializeStatsEntry(first)
-	if err != nil {
-		t.Fail()
-	}
+	It("test log error", func() {
+		newStats := newRequestStats()
+		newStats.logError("http", "failure", "500 error")
+		newStats.logError("http", "failure", "400 error")
+		newStats.logError("http", "failure", "400 error")
+		entry := newStats.get("failure", "http")
 
-	if entry.Name != "success" {
-		t.Error("The name is wrong, expected:", "success", "got:", entry.Name)
-	}
-	if entry.Method != "http" {
-		t.Error("The method is wrong, expected:", "http", "got:", entry.Method)
-	}
-	if entry.NumRequests != int64(1) {
-		t.Error("The num_requests is wrong, expected:", 1, "got:", entry.NumRequests)
-	}
-	if entry.NumFailures != int64(0) {
-		t.Error("The num_failures is wrong, expected:", 0, "got:", entry.NumFailures)
-	}
-}
+		Expect(entry.NumFailures).To(BeEquivalentTo(3))
+		Expect(newStats.total.NumFailures).To(BeEquivalentTo(3))
 
-func TestSerializeErrors(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.logError("http", "failure", "500 error")
-	newStats.logError("http", "failure", "400 error")
-	newStats.logError("http", "failure", "400 error")
-	serialized := newStats.serializeErrors()
+		// md5("httpfailure500 error") = 547c38e4e4742c1c581f9e2809ba4f55
+		err500 := newStats.errors["547c38e4e4742c1c581f9e2809ba4f55"]
+		Expect(err500.error).To(Equal("500 error"))
+		Expect(err500.occurrences).To(BeEquivalentTo(1))
 
-	if len(serialized) != 2 {
-		t.Error("The length of serialized results is wrong, expected: 2, got:", len(serialized))
-		return
-	}
+		err400 := newStats.errors["f391c310401ad8e10e929f2ee1a614e4"]
+		Expect(err400.error).To(Equal("400 error"))
+		Expect(err400.occurrences).To(BeEquivalentTo(2))
+	})
 
-	for key, value := range serialized {
-		if key == "f391c310401ad8e10e929f2ee1a614e4" {
-			err := value["error"].(string)
-			if err != "400 error" {
-				t.Error("expected: 400 error, got:", err)
-			}
-			occurrences := value["occurrences"].(int64)
-			if occurrences != int64(2) {
-				t.Error("expected: 2, got:", occurrences)
-			}
+	It("test clear all", func() {
+		newStats := newRequestStats()
+		newStats.logRequest("http", "success", 1, 20)
+		newStats.clearAll()
+		Expect(newStats.total.NumRequests).To(BeEquivalentTo(0))
+	})
+
+	It("test clear all by channel", func() {
+		newStats := newRequestStats()
+		newStats.start()
+		defer newStats.close()
+		newStats.logRequest("http", "success", 1, 20)
+		newStats.clearStatsChan <- true
+		Expect(newStats.total.NumRequests).To(BeEquivalentTo(0))
+	})
+
+	It("test serialize stats", func() {
+		newStats := newRequestStats()
+		newStats.logRequest("http", "success", 1, 20)
+
+		serialized := newStats.serializeStats()
+		Expect(serialized).To(HaveLen(1))
+
+		first := serialized[0]
+		entry, err := deserializeStatsEntry(first)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(entry.Name).To(Equal("success"))
+		Expect(entry.Method).To(Equal("http"))
+		Expect(entry.NumRequests).To(BeEquivalentTo(1))
+		Expect(entry.NumFailures).To(BeEquivalentTo(0))
+	})
+
+	It("test serialize errors", func() {
+		newStats := newRequestStats()
+		newStats.logError("http", "failure", "500 error")
+		newStats.logError("http", "failure", "400 error")
+		newStats.logError("http", "failure", "400 error")
+		serialized := newStats.serializeErrors()
+
+		Expect(serialized).To(HaveLen(2))
+		Expect(serialized).To(HaveKeyWithValue("f391c310401ad8e10e929f2ee1a614e4", map[string]interface{}{
+			"error":       "400 error",
+			"occurrences": int64(2),
+			"name":        "failure",
+			"method":      "http",
+		}))
+	})
+
+	It("test collect report data", func() {
+		newStats := newRequestStats()
+		newStats.logRequest("http", "success", 2, 30)
+		newStats.logError("http", "failure", "500 error")
+		result := newStats.collectReportData()
+
+		Expect(result).To(HaveKey("stats"))
+		Expect(result).To(HaveKey("stats_total"))
+		Expect(result).To(HaveKey("errors"))
+	})
+
+	It("test stats start", func() {
+		newStats := newRequestStats()
+		newStats.start()
+		defer newStats.close()
+
+		newStats.requestSuccessChan <- &requestSuccess{
+			requestType:    "http",
+			name:           "success",
+			responseTime:   2,
+			responseLength: 30,
 		}
-	}
-}
 
-func TestCollectReportData(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.logRequest("http", "success", 2, 30)
-	newStats.logError("http", "failure", "500 error")
-	result := newStats.collectReportData()
-
-	if _, ok := result["stats"]; !ok {
-		t.Error("Key stats not found")
-	}
-	if _, ok := result["stats_total"]; !ok {
-		t.Error("Key stats not found")
-	}
-	if _, ok := result["errors"]; !ok {
-		t.Error("Key stats not found")
-	}
-}
-
-func TestStatsStart(t *testing.T) {
-	newStats := newRequestStats()
-	newStats.start()
-	defer newStats.close()
-
-	newStats.requestSuccessChan <- &requestSuccess{
-		requestType:    "http",
-		name:           "success",
-		responseTime:   2,
-		responseLength: 30,
-	}
-
-	newStats.requestFailureChan <- &requestFailure{
-		requestType:  "http",
-		name:         "failure",
-		responseTime: 1,
-		error:        "500 error",
-	}
-
-	var ticker = time.NewTicker(slaveReportInterval + 500*time.Millisecond)
-	for {
-		select {
-		case <-ticker.C:
-			t.Error("Timeout waiting for stats reports to runner")
-		case <-newStats.messageToRunnerChan:
-			goto end
+		newStats.requestFailureChan <- &requestFailure{
+			requestType:  "http",
+			name:         "failure",
+			responseTime: 1,
+			error:        "500 error",
 		}
-	}
-end:
-}
+
+		Eventually(newStats.messageToRunnerChan, slaveReportInterval+500*time.Millisecond).Should(Receive())
+	})
+})

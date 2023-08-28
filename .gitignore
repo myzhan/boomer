@@ -14,5 +14,7 @@ coverage.txt
 mem.pprof
 cpu.pprof
 
+cover.out
+
 # sphinx build
 docs/build

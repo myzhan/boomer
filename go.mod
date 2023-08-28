@@ -8,11 +8,14 @@ require (
 	github.com/myzhan/gomq v0.0.0-20220926014711-4eea0d4a1e75
 	github.com/myzhan/gomq/zmtp v0.0.0-20220926014711-4eea0d4a1e75
 	github.com/olekukonko/tablewriter v0.0.5
+	github.com/onsi/ginkgo/v2 v2.11.0
+	github.com/onsi/gomega v1.27.10
 	github.com/prometheus/client_golang v1.14.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.6.1
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/ugorji/go/codec v1.2.8
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	github.com/zeromq/goczmq v0.0.0-20190906225145-a7546843a315
+	golang.org/x/sys v0.11.0 // indirect
 )

@@ -1,56 +1,43 @@
 package boomer
 
 import (
-	"testing"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestConvertResponseTime(t *testing.T) {
-	convertedFloat := convertResponseTime(float64(1.234))
-	convertedInt64 := convertResponseTime(int64(2))
-	if convertedFloat != 1 {
-		t.Error("Failed to convert responseTime from float64")
-	}
-	if convertedInt64 != 2 {
-		t.Error("Failed to convert responseTime from int64")
-	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("It should panic")
-		}
-	}()
-	// It should panic
-	convertResponseTime(1)
-}
+var _ = Describe("Test legacy", func() {
 
-func TestInitEvents(t *testing.T) {
-	initLegacyEventHandlers()
-	defer Events.Unsubscribe("request_success", legacySuccessHandler)
-	defer Events.Unsubscribe("request_failure", legacyFailureHandler)
+	It("test convert response time", func() {
+		convertedFloat := convertResponseTime(float64(1.234))
+		Expect(convertedFloat).To(BeEquivalentTo(1))
+		convertedInt64 := convertResponseTime(int64(2))
+		Expect(convertedInt64).To(BeEquivalentTo(2))
 
-	masterHost := "127.0.0.1"
-	masterPort := 5557
-	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
+		Expect(func() {
+			convertResponseTime(1)
+		}).Should(Panic())
+	})
 
-	Events.Publish("request_success", "http", "foo", int64(1), int64(10))
-	Events.Publish("request_failure", "udp", "bar", int64(2), "udp error")
+	It("test init events", func() {
+		initLegacyEventHandlers()
+		defer Events.Unsubscribe("request_success", legacySuccessHandler)
+		defer Events.Unsubscribe("request_failure", legacyFailureHandler)
 
-	requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
-	if requestSuccessMsg.requestType != "http" {
-		t.Error("Expected: http, got:", requestSuccessMsg.requestType)
-	}
-	if requestSuccessMsg.responseTime != int64(1) {
-		t.Error("Expected: 1, got:", requestSuccessMsg.responseTime)
-	}
+		masterHost := "127.0.0.1"
+		masterPort := 5557
+		defaultBoomer = NewBoomer(masterHost, masterPort)
+		defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
 
-	requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan
-	if requestFailureMsg.requestType != "udp" {
-		t.Error("Expected: udp, got:", requestFailureMsg.requestType)
-	}
-	if requestFailureMsg.responseTime != int64(2) {
-		t.Error("Expected: 2, got:", requestFailureMsg.responseTime)
-	}
-	if requestFailureMsg.error != "udp error" {
-		t.Error("Expected: udp error, got:", requestFailureMsg.error)
-	}
-}
+		Events.Publish("request_success", "http", "foo", int64(1), int64(10))
+		Events.Publish("request_failure", "udp", "bar", int64(2), "udp error")
+
+		requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
+		Expect(requestSuccessMsg.requestType).To(Equal("http"))
+		Expect(requestSuccessMsg.responseTime).To(BeEquivalentTo(1))
+
+		requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan
+		Expect(requestFailureMsg.requestType).To(Equal("udp"))
+		Expect(requestFailureMsg.responseTime).To(BeEquivalentTo(2))
+		Expect(requestFailureMsg.error).To(Equal("udp error"))
+	})
+})

@@ -8,271 +8,275 @@ import (
 	"os"
 	"runtime"
 	"sync/atomic"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestNewBoomer(t *testing.T) {
-	b := NewBoomer("0.0.0.0", 1234)
-	assert.Equal(t, "0.0.0.0", b.masterHost)
-	assert.Equal(t, 1234, b.masterPort)
-	assert.Equal(t, DistributedMode, b.mode)
-}
+var _ = Describe("Test Boomer", func() {
 
-func TestNewStandaloneBoomer(t *testing.T) {
-	b := NewStandaloneBoomer(100, 10)
-	assert.Equal(t, 100, b.spawnCount)
-	assert.Equal(t, float64(10), b.spawnRate)
-	assert.Equal(t, StandaloneMode, b.mode)
-}
+	It("test new instance", func() {
+		b := NewBoomer("0.0.0.0", 1234)
+		Expect(b.masterHost).To(Equal("0.0.0.0"))
+		Expect(b.masterPort).To(Equal(1234))
+		Expect(b.mode).To(Equal(DistributedMode))
+	})
 
-func TestSetRateLimiter(t *testing.T) {
-	b := NewStandaloneBoomer(100, 10)
-	limiter, _ := NewRampUpRateLimiter(10, "10/1s", time.Second)
-	b.SetRateLimiter(limiter)
-	assert.NotNil(t, b.rateLimiter)
-}
+	It("test new standalone instance", func() {
+		b := NewStandaloneBoomer(100, 10)
+		Expect(b.spawnCount).To(Equal(100))
+		Expect(b.spawnRate).To(BeEquivalentTo(10))
+		Expect(b.mode).To(Equal(StandaloneMode))
+	})
 
-func TestSetMode(t *testing.T) {
-	b := NewStandaloneBoomer(100, 10)
+	It("test set ratelimiter", func() {
+		b := NewStandaloneBoomer(100, 10)
+		limiter, _ := NewRampUpRateLimiter(10, "10/1s", time.Second)
+		b.SetRateLimiter(limiter)
+		Expect(b.rateLimiter).NotTo(BeNil())
+	})
 
-	b.SetMode(DistributedMode)
-	assert.Equal(t, DistributedMode, b.mode)
+	It("test set mode", func() {
+		b := NewStandaloneBoomer(100, 10)
+		b.SetMode(DistributedMode)
+		Expect(b.mode).To(Equal(DistributedMode))
 
-	b.SetMode(StandaloneMode)
-	assert.Equal(t, StandaloneMode, b.mode)
+		b.SetMode(StandaloneMode)
+		Expect(b.mode).To(Equal(StandaloneMode))
 
-	b.SetMode(3)
-	assert.Equal(t, StandaloneMode, b.mode)
-}
+		b.SetMode(3)
+		Expect(b.mode).To(Equal(StandaloneMode))
+	})
 
-func TestAddOutput(t *testing.T) {
-	b := NewStandaloneBoomer(100, 10)
-	b.AddOutput(NewConsoleOutput())
-	b.AddOutput(NewConsoleOutput())
+	It("test add output", func() {
+		b := NewStandaloneBoomer(100, 10)
+		b.AddOutput(NewConsoleOutput())
+		b.AddOutput(NewConsoleOutput())
+		Expect(b.outputs).To(HaveLen(2))
+	})
 
-	assert.Len(t, b.outputs, 2)
-}
+	It("test enable CPU profile", func() {
+		b := NewStandaloneBoomer(100, 10)
+		b.EnableCPUProfile("cpu.prof", time.Second)
+		Expect(b.cpuProfileFile).To(Equal("cpu.prof"))
+		Expect(b.cpuProfileDuration).To(Equal(time.Second))
+	})
 
-func TestEnableCPUProfile(t *testing.T) {
-	b := NewStandaloneBoomer(100, 10)
-	b.EnableCPUProfile("cpu.prof", time.Second)
-	assert.Equal(t, "cpu.prof", b.cpuProfileFile)
-	assert.Equal(t, time.Second, b.cpuProfileDuration)
-}
+	It("test enable memory profile", func() {
+		b := NewStandaloneBoomer(100, 10)
+		b.EnableMemoryProfile("mem.prof", time.Second)
+		Expect(b.memoryProfileFile).To(Equal("mem.prof"))
+		Expect(b.memoryProfileDuration).To(Equal(time.Second))
+	})
 
-func TestEnableMemoryProfile(t *testing.T) {
-	b := NewStandaloneBoomer(100, 10)
-	b.EnableMemoryProfile("mem.prof", time.Second)
-	assert.Equal(t, "mem.prof", b.memoryProfileFile)
-	assert.Equal(t, time.Second, b.memoryProfileDuration)
-}
+	It("test standalone run", func() {
+		b := NewStandaloneBoomer(10, 10)
+		b.EnableCPUProfile("cpu.pprof", 2*time.Second)
+		b.EnableMemoryProfile("mem.pprof", 2*time.Second)
 
-func TestStandaloneRun(t *testing.T) {
-	b := NewStandaloneBoomer(10, 10)
-	b.EnableCPUProfile("cpu.pprof", 2*time.Second)
-	b.EnableMemoryProfile("mem.pprof", 2*time.Second)
+		count := int64(0)
+		taskA := &Task{
+			Name: "increaseCount",
+			Fn: func() {
+				atomic.AddInt64(&count, 1)
+				runtime.Goexit()
+			},
+		}
 
-	count := int64(0)
-	taskA := &Task{
-		Name: "increaseCount",
-		Fn: func() {
-			atomic.AddInt64(&count, 1)
-			runtime.Goexit()
-		},
-	}
-	go b.Run(taskA)
+		go b.Run(taskA)
+		defer b.Quit()
+		defer os.Remove("cpu.pprof")
+		defer os.Remove("mem.pprof")
 
-	time.Sleep(5 * time.Second)
+		Eventually(func() int64 { return atomic.LoadInt64(&count) }).Should(BeEquivalentTo(10))
+		Eventually(func() string { return "cpu.pprof" }).Should(BeAnExistingFile())
+		Eventually(func() string { return "mem.pprof" }).Should(BeAnExistingFile())
+	})
 
-	b.Quit()
+	It("test distributed run", func() {
+		masterHost := "0.0.0.0"
+		rand.Seed(Now())
+		masterPort := rand.Intn(1000) + 10240
 
-	assert.Equal(t, int64(10), count)
-	assert.FileExists(t, "cpu.pprof")
-	_ = os.Remove("cpu.pprof")
+		server := newTestServer(masterHost, masterPort)
+		server.start()
+		defer server.close()
 
-	assert.FileExists(t, "mem.pprof")
-	_ = os.Remove("mem.pprof")
-}
+		b := NewBoomer(masterHost, masterPort)
 
-func TestDistributedRun(t *testing.T) {
-	masterHost := "0.0.0.0"
-	rand.Seed(Now())
-	masterPort := rand.Intn(1000) + 10240
+		count := int64(0)
+		taskA := &Task{
+			Name: "increaseCount",
+			Fn: func() {
+				atomic.AddInt64(&count, 1)
+				runtime.Goexit()
+			},
+		}
+		b.Run(taskA)
+		defer b.Quit()
 
-	server := newTestServer(masterHost, masterPort)
-	defer server.close()
+		server.toClient <- newGenericMessage("spawn", map[string]interface{}{
+			"user_classes_count": map[interface{}]interface{}{
+				"Dummy":  int64(5),
+				"Dummy2": int64(5),
+			},
+		}, b.slaveRunner.nodeID)
 
-	log.Printf("Starting to serve on %s:%d\n", masterHost, masterPort)
-	server.start()
+		time.Sleep(4 * time.Second)
+		Expect(count).To(BeEquivalentTo(10))
+	})
 
-	time.Sleep(20 * time.Millisecond)
+	It("test run tasks for test", func() {
+		defer func() {
+			runTasks = ""
+		}()
 
-	b := NewBoomer(masterHost, masterPort)
+		count := 0
+		taskA := &Task{
+			Name: "increaseCount",
+			Fn: func() {
+				count++
+			},
+		}
+		taskWithoutName := &Task{
+			Name: "",
+			Fn: func() {
+				count++
+			},
+		}
+		runTasks = "increaseCount,foobar"
 
-	count := int64(0)
-	taskA := &Task{
-		Name: "increaseCount",
-		Fn: func() {
-			atomic.AddInt64(&count, 1)
-			runtime.Goexit()
-		},
-	}
-	b.Run(taskA)
+		runTasksForTest(taskA, taskWithoutName)
 
-	server.toClient <- newGenericMessage("spawn", map[string]interface{}{
-		"user_classes_count": map[interface{}]interface{}{
-			"Dummy":  int64(5),
-			"Dummy2": int64(5),
-		},
-	}, b.slaveRunner.nodeID)
+		Expect(count).To(Equal(1))
+	})
 
-	time.Sleep(4 * time.Second)
+	It("test create ratelimiter", func() {
+		rateLimiter, err := createRateLimiter(100, "-1")
+		Expect(rateLimiter).To(BeAssignableToTypeOf(&StableRateLimiter{}))
+		Expect(err).ShouldNot(HaveOccurred())
 
-	b.Quit()
+		stableRateLimiter, _ := rateLimiter.(*StableRateLimiter)
+		Expect(stableRateLimiter.threshold).To(BeEquivalentTo(100))
 
-	assert.Equal(t, int64(10), count)
-}
+		rateLimiter, err = createRateLimiter(0, "1")
+		Expect(rateLimiter).To(BeAssignableToTypeOf(&RampUpRateLimiter{}))
+		Expect(err).ShouldNot(HaveOccurred())
 
-func TestRunTasksForTest(t *testing.T) {
-	count := 0
-	taskA := &Task{
-		Name: "increaseCount",
-		Fn: func() {
-			count++
-		},
-	}
-	taskWithoutName := &Task{
-		Name: "",
-		Fn: func() {
-			count++
-		},
-	}
-	runTasks = "increaseCount,foobar"
+		rampUpRateLimiter, _ := rateLimiter.(*RampUpRateLimiter)
+		Expect(rampUpRateLimiter.maxThreshold).To(BeEquivalentTo(math.MaxInt64))
+		Expect(rampUpRateLimiter.rampUpRate).To(Equal("1"))
 
-	runTasksForTest(taskA, taskWithoutName)
+		rateLimiter, err = createRateLimiter(10, "2/2s")
+		Expect(rateLimiter).To(BeAssignableToTypeOf(&RampUpRateLimiter{}))
+		Expect(err).ShouldNot(HaveOccurred())
 
-	assert.Equal(t, 1, count)
-	runTasks = ""
-}
+		rampUpRateLimiter, _ = rateLimiter.(*RampUpRateLimiter)
+		Expect(rampUpRateLimiter.maxThreshold).To(BeEquivalentTo(10))
+		Expect(rampUpRateLimiter.rampUpRate).To(Equal("2/2s"))
+		Expect(rampUpRateLimiter.rampUpStep).To(BeEquivalentTo(2))
+		Expect(rampUpRateLimiter.rampUpPeroid).To(BeEquivalentTo(2 * time.Second))
+	})
 
-func TestCreateRatelimiter(t *testing.T) {
-	rateLimiter, _ := createRateLimiter(100, "-1")
-	assert.IsType(t, &StableRateLimiter{}, rateLimiter)
-	stableRateLimiter, _ := rateLimiter.(*StableRateLimiter)
-	assert.EqualValues(t, 100, stableRateLimiter.threshold)
+	It("test run", func() {
+		flag.Parse()
 
-	rateLimiter, _ = createRateLimiter(0, "1")
-	assert.IsType(t, &RampUpRateLimiter{}, rateLimiter)
-	rampUpRateLimiter, _ := rateLimiter.(*RampUpRateLimiter)
-	assert.EqualValues(t, math.MaxInt64, rampUpRateLimiter.maxThreshold)
-	assert.Equal(t, math.MaxInt64, math.MaxInt64)
-	assert.Equal(t, "1", rampUpRateLimiter.rampUpRate)
+		masterHost = "0.0.0.0"
+		rand.Seed(Now())
+		masterPort = rand.Intn(1000) + 10240
 
-	rateLimiter, _ = createRateLimiter(10, "2/2s")
-	assert.IsType(t, &RampUpRateLimiter{}, rateLimiter)
-	rampUpRateLimiter, _ = rateLimiter.(*RampUpRateLimiter)
-	assert.EqualValues(t, 10, rampUpRateLimiter.maxThreshold)
-	assert.Equal(t, "2/2s", rampUpRateLimiter.rampUpRate)
-	assert.EqualValues(t, 2, rampUpRateLimiter.rampUpStep)
-	assert.Equal(t, 2*time.Second, rampUpRateLimiter.rampUpPeroid)
-}
+		server := newTestServer(masterHost, masterPort)
 
-func TestRun(t *testing.T) {
-	flag.Parse()
+		log.Printf("Starting to serve on %s:%d\n", masterHost, masterPort)
+		server.start()
+		defer server.close()
 
-	masterHost = "0.0.0.0"
-	rand.Seed(Now())
-	masterPort = rand.Intn(1000) + 10240
+		count := int64(0)
+		taskA := &Task{
+			Name: "increaseCount",
+			Fn: func() {
+				atomic.AddInt64(&count, 1)
+				runtime.Goexit()
+			},
+		}
 
-	server := newTestServer(masterHost, masterPort)
-	defer server.close()
+		go Run(taskA)
+		time.Sleep(20 * time.Millisecond)
 
-	log.Printf("Starting to serve on %s:%d\n", masterHost, masterPort)
-	server.start()
+		server.toClient <- newGenericMessage("spawn", map[string]interface{}{
+			"user_classes_count": map[interface{}]interface{}{
+				"Dummy":  int64(5),
+				"Dummy2": int64(5),
+			},
+		}, defaultBoomer.slaveRunner.nodeID)
 
-	time.Sleep(20 * time.Millisecond)
+		time.Sleep(4 * time.Second)
 
-	count := int64(0)
-	taskA := &Task{
-		Name: "increaseCount",
-		Fn: func() {
-			atomic.AddInt64(&count, 1)
-			runtime.Goexit()
-		},
-	}
+		defaultBoomer.Quit()
 
-	go Run(taskA)
-	time.Sleep(20 * time.Millisecond)
+		Expect(count).To(BeEquivalentTo(10))
+	})
 
-	server.toClient <- newGenericMessage("spawn", map[string]interface{}{
-		"user_classes_count": map[interface{}]interface{}{
-			"Dummy":  int64(5),
-			"Dummy2": int64(5),
-		},
-	}, defaultBoomer.slaveRunner.nodeID)
+	It("test record success", func() {
+		defer func() {
+			defaultBoomer = &Boomer{}
+		}()
 
-	time.Sleep(4 * time.Second)
+		// called before runner instance created
+		RecordSuccess("http", "foo", int64(1), int64(10))
 
-	defaultBoomer.Quit()
+		// distribute mode
+		masterHost := "127.0.0.1"
+		masterPort := 5557
+		defaultBoomer = NewBoomer(masterHost, masterPort)
+		defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
+		RecordSuccess("http", "foo", int64(1), int64(10))
 
-	assert.Equal(t, int64(10), count)
-}
+		var requestSuccessMsg *requestSuccess
+		Expect(defaultBoomer.slaveRunner.stats.requestSuccessChan).Should(Receive(&requestSuccessMsg))
+		Expect(requestSuccessMsg.requestType).To(Equal("http"))
+		Expect(requestSuccessMsg.responseTime).To(BeEquivalentTo(1))
 
-func TestRecordSuccess(t *testing.T) {
-	// called before runner instance created
-	RecordSuccess("http", "foo", int64(1), int64(10))
+		// standalone mode
+		defaultBoomer = NewStandaloneBoomer(1, 1)
+		defaultBoomer.localRunner = newLocalRunner(nil, nil, 1, 1)
+		RecordSuccess("http", "foo", int64(1), int64(10))
 
-	// distribute mode
-	masterHost := "127.0.0.1"
-	masterPort := 5557
-	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
-	RecordSuccess("http", "foo", int64(1), int64(10))
+		Expect(defaultBoomer.localRunner.stats.requestSuccessChan).Should(Receive(&requestSuccessMsg))
+		Expect(requestSuccessMsg.requestType).To(Equal("http"))
+		Expect(requestSuccessMsg.responseTime).To(BeEquivalentTo(1))
+	})
 
-	requestSuccessMsg := <-defaultBoomer.slaveRunner.stats.requestSuccessChan
-	assert.Equal(t, "http", requestSuccessMsg.requestType)
-	assert.Equal(t, int64(1), requestSuccessMsg.responseTime)
+	It("test record failure", func() {
+		defer func() {
+			defaultBoomer = &Boomer{}
+		}()
 
-	// standalone mode
-	defaultBoomer = NewStandaloneBoomer(1, 1)
-	defaultBoomer.localRunner = newLocalRunner(nil, nil, 1, 1)
-	RecordSuccess("http", "foo", int64(1), int64(10))
+		// called before runner instance created
+		RecordFailure("udp", "bar", int64(2), "udp error")
 
-	requestSuccessMsg = <-defaultBoomer.localRunner.stats.requestSuccessChan
-	assert.Equal(t, "http", requestSuccessMsg.requestType)
-	assert.Equal(t, int64(1), requestSuccessMsg.responseTime)
+		// distribute mode
+		masterHost := "127.0.0.1"
+		masterPort := 5557
+		defaultBoomer = NewBoomer(masterHost, masterPort)
+		defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
+		RecordFailure("udp", "bar", int64(2), "udp error")
 
-	defaultBoomer = &Boomer{}
-}
+		var requestFailureMsg *requestFailure
+		Expect(defaultBoomer.slaveRunner.stats.requestFailureChan).To(Receive(&requestFailureMsg))
+		Expect(requestFailureMsg.requestType).To(Equal("udp"))
+		Expect(requestFailureMsg.responseTime).To(BeEquivalentTo(2))
+		Expect(requestFailureMsg.error).To(Equal("udp error"))
 
-func TestRecordFailure(t *testing.T) {
-	// called before runner instance created
-	RecordFailure("udp", "bar", int64(2), "udp error")
+		// standalone mode
+		defaultBoomer = NewStandaloneBoomer(1, 1)
+		defaultBoomer.localRunner = newLocalRunner(nil, nil, 1, 1)
+		RecordFailure("udp", "bar", int64(2), "udp error")
 
-	// distribute mode
-	masterHost := "127.0.0.1"
-	masterPort := 5557
-	defaultBoomer = NewBoomer(masterHost, masterPort)
-	defaultBoomer.slaveRunner = newSlaveRunner(masterHost, masterPort, nil, nil)
-	RecordFailure("udp", "bar", int64(2), "udp error")
-
-	requestFailureMsg := <-defaultBoomer.slaveRunner.stats.requestFailureChan
-	assert.Equal(t, "udp", requestFailureMsg.requestType)
-	assert.Equal(t, int64(2), requestFailureMsg.responseTime)
-	assert.Equal(t, "udp error", requestFailureMsg.error)
-
-	// standalone mode
-	defaultBoomer = NewStandaloneBoomer(1, 1)
-	defaultBoomer.localRunner = newLocalRunner(nil, nil, 1, 1)
-	RecordFailure("udp", "bar", int64(2), "udp error")
-
-	requestFailureMsg = <-defaultBoomer.localRunner.stats.requestFailureChan
-	assert.Equal(t, "udp", requestFailureMsg.requestType)
-	assert.Equal(t, int64(2), requestFailureMsg.responseTime)
-	assert.Equal(t, "udp error", requestFailureMsg.error)
-
-	defaultBoomer = &Boomer{}
-}
+		Expect(defaultBoomer.localRunner.stats.requestFailureChan).To(Receive(&requestFailureMsg))
+		Expect(requestFailureMsg.requestType).To(Equal("udp"))
+		Expect(requestFailureMsg.responseTime).To(BeEquivalentTo(2))
+		Expect(requestFailureMsg.error).To(Equal("udp error"))
+	})
+})
