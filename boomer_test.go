@@ -2,14 +2,13 @@ package boomer
 
 import (
 	"flag"
-	"log"
 	"math"
-	"math/rand"
 	"os"
 	"runtime"
 	"sync/atomic"
 	"time"
 
+	"github.com/myzhan/gomq/zmtp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -95,13 +94,8 @@ var _ = Describe("Test Boomer", func() {
 	})
 
 	It("test distributed run", func() {
-		masterHost := "0.0.0.0"
-		rand.Seed(Now())
-		masterPort := rand.Intn(1000) + 10240
-
-		server := newTestServer(masterHost, masterPort)
-		server.start()
-		defer server.close()
+		masterHost := "mock:0.0.0.0"
+		masterPort := 10240
 
 		b := NewBoomer(masterHost, masterPort)
 
@@ -116,15 +110,21 @@ var _ = Describe("Test Boomer", func() {
 		b.Run(taskA)
 		defer b.Quit()
 
-		server.toClient <- newGenericMessage("spawn", map[string]interface{}{
+		serverMessage := newGenericMessage("spawn", map[string]interface{}{
 			"user_classes_count": map[interface{}]interface{}{
 				"Dummy":  int64(5),
 				"Dummy2": int64(5),
 			},
 		}, b.slaveRunner.nodeID)
+		serverMessageInBytes, _ := serverMessage.serialize()
+		serverZmtpMessage := &zmtp.Message{
+			MessageType: zmtp.UserMessage,
+			Body:        [][]byte{serverMessageInBytes},
+		}
+		MockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
 
 		time.Sleep(4 * time.Second)
-		Expect(count).To(BeEquivalentTo(10))
+		Expect(count).Should(BeEquivalentTo(10))
 	})
 
 	It("test run tasks for test", func() {
@@ -181,17 +181,8 @@ var _ = Describe("Test Boomer", func() {
 
 	It("test run", func() {
 		flag.Parse()
-
-		masterHost = "0.0.0.0"
-		rand.Seed(Now())
-		masterPort = rand.Intn(1000) + 10240
-
-		server := newTestServer(masterHost, masterPort)
-
-		log.Printf("Starting to serve on %s:%d\n", masterHost, masterPort)
-		server.start()
-		defer server.close()
-
+		masterHost = "mock:0.0.0.0"
+		masterPort = 1234
 		count := int64(0)
 		taskA := &Task{
 			Name: "increaseCount",
@@ -202,19 +193,23 @@ var _ = Describe("Test Boomer", func() {
 		}
 
 		go Run(taskA)
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
+		defer defaultBoomer.Quit()
 
-		server.toClient <- newGenericMessage("spawn", map[string]interface{}{
+		serverMessage := newGenericMessage("spawn", map[string]interface{}{
 			"user_classes_count": map[interface{}]interface{}{
 				"Dummy":  int64(5),
 				"Dummy2": int64(5),
 			},
 		}, defaultBoomer.slaveRunner.nodeID)
+		serverMessageInBytes, _ := serverMessage.serialize()
+		serverZmtpMessage := &zmtp.Message{
+			MessageType: zmtp.UserMessage,
+			Body:        [][]byte{serverMessageInBytes},
+		}
+		MockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
 
 		time.Sleep(4 * time.Second)
-
-		defaultBoomer.Quit()
-
 		Expect(count).To(BeEquivalentTo(10))
 	})
 

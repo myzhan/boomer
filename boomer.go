@@ -115,12 +115,14 @@ func (b *Boomer) Run(tasks ...*Task) {
 	switch b.mode {
 	case DistributedMode:
 		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter)
+		println("new slave runner")
 		for _, o := range b.outputs {
 			b.slaveRunner.addOutput(o)
 		}
 		b.slaveRunner.run()
 	case StandaloneMode:
 		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.spawnCount, b.spawnRate)
+		println("new local runner")
 		for _, o := range b.outputs {
 			b.localRunner.addOutput(o)
 		}

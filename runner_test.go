@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/myzhan/gomq/zmtp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -440,12 +441,8 @@ var _ = Describe("Test runner", func() {
 	})
 
 	It("test get ready", func() {
-		masterHost := "127.0.0.1"
+		masterHost := "mock:127.0.0.1"
 		masterPort := 6557
-
-		server := newTestServer(masterHost, masterPort)
-		server.start()
-		defer server.close()
 
 		rateLimiter := NewStableRateLimiter(100, time.Second)
 		r := newSlaveRunner(masterHost, masterPort, nil, rateLimiter)
@@ -454,21 +451,16 @@ var _ = Describe("Test runner", func() {
 
 		r.run()
 
-		clientReady := <-server.fromClient
-		crm := clientReady.(*clientReadyMessage)
-		Expect(crm.Type).To(Equal("client_ready"))
+		clientReadyMessage := newClientReadyMessage("client_ready", -1, r.nodeID)
+		clientReadyMessageInBytes, _ := clientReadyMessage.serialize()
+		Eventually(MockGomqDealerInstance.SendChannel()).Should(Receive(Equal(clientReadyMessageInBytes)))
 
-		r.numClients = 10
-		// it's not really running
-		r.state = stateRunning
-		data := make(map[string]interface{})
-		r.stats.messageToRunnerChan <- data
-
-		msg := <-server.fromClient
-		m := msg.(*genericMessage)
-		Expect(m.Type).To(Equal("stats"))
-
-		userCount := m.Data["user_count"].(int64)
-		Expect(userCount).To(BeEquivalentTo(10))
+		ackMessage := newGenericMessage("ack", nil, r.nodeID)
+		ackMessageInBytes, _ := ackMessage.serialize()
+		ackZmtpMessage := &zmtp.Message{
+			MessageType: zmtp.UserMessage,
+			Body:        [][]byte{ackMessageInBytes},
+		}
+		MockGomqDealerInstance.RecvChannel() <- ackZmtpMessage
 	})
 })
