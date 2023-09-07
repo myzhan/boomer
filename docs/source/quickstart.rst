@@ -67,7 +67,7 @@ Because task1 is named foo and tasks2 is named bar, you can run them without con
 
 .. code-block:: console
 
-    $ go run --run-tasks foo,bar
+    $ go run your-code.go --run-tasks foo,bar
 
 In this case, task1 and task2 will be run for one time with no output.
 
@@ -79,7 +79,7 @@ Build
 
 .. code-block:: console
 
-    $ go build -o you-code you-code.go
+    $ go build -o your-code your-code.go
 
 
 Run
@@ -95,15 +95,15 @@ So far, dummy.py is necessary when starting a master, because locust needs such 
 
 Don't worry, dummy.py has nothing to do with your test.
 
-2. Start you test program.
+2. Start your test program.
 
 .. code-block:: console
 
-    $ chmod +x ./you-code && ./you-code
+    $ chmod +x ./your-code && ./your-code
 
 .. note::
 
-    To see all available options type: ``you-code --help``
+    To see all available options type: ``your-code --help``
 
 
 Open up Locust's web interface
