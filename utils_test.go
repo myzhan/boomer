@@ -54,7 +54,7 @@ var _ = Describe("Test utils", func() {
 
 		err := StartMemoryProfile("mem.pprof", 2*time.Second)
 		Expect(err).NotTo(HaveOccurred())
-		Eventually("mem.pprof", 3*time.Second).Should(BeAnExistingFile())
+		Eventually("mem.pprof").WithTimeout(3 * time.Second).Should(BeAnExistingFile())
 	})
 
 	It("test start CPU profile", func() {
@@ -64,6 +64,6 @@ var _ = Describe("Test utils", func() {
 
 		err := StartCPUProfile("cpu.pprof", 2*time.Second)
 		Expect(err).NotTo(HaveOccurred())
-		Eventually("cpu.pprof", 3*time.Second).Should(BeAnExistingFile())
+		Eventually("cpu.pprof").WithTimeout(3 * time.Second).Should(BeAnExistingFile())
 	})
 })

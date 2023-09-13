@@ -160,6 +160,6 @@ var _ = Describe("Test states", func() {
 			error:        "500 error",
 		}
 
-		Eventually(newStats.messageToRunnerChan, slaveReportInterval+500*time.Millisecond).Should(Receive())
+		Eventually(newStats.messageToRunnerChan).WithTimeout(slaveReportInterval + 500*time.Millisecond).Should(Receive())
 	})
 })
