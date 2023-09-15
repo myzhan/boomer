@@ -80,11 +80,10 @@ func getAvgContentLength(numRequests int64, totalContentLength int64) (avgConten
 	return avgContentLength
 }
 
-func getCurrentRps(numRequests int64, numReqsPerSecond map[int64]int64) (currentRps int64) {
+func getCurrentRps(numRequests int64) (currentRps int64) {
 	currentRps = int64(0)
-	numReqsPerSecondLength := int64(len(numReqsPerSecond))
-	if numReqsPerSecondLength != 0 {
-		currentRps = numRequests / numReqsPerSecondLength
+	if numRequests != 0 {
+		currentRps = numRequests / int64(slaveReportInterval.Seconds())
 	}
 	return currentRps
 }
@@ -187,7 +186,7 @@ func convertData(data map[string]interface{}) (output *dataOutput, err error) {
 	output = &dataOutput{
 		UserCount:      userCount,
 		TotalStats:     entryTotalOutput,
-		TotalRPS:       getCurrentRps(entryTotalOutput.NumRequests, entryTotalOutput.NumReqsPerSec),
+		TotalRPS:       getCurrentRps(entryTotalOutput.NumRequests),
 		TotalFailRatio: getTotalFailRatio(entryTotalOutput.NumRequests, entryTotalOutput.NumFailures),
 		Stats:          make([]*statsEntryOutput, 0, len(stats)),
 	}
@@ -219,7 +218,7 @@ func deserializeStatsEntry(stat interface{}) (entryOutput *statsEntryOutput, err
 		medianResponseTime: getMedianResponseTime(numRequests, entry.ResponseTimes),
 		avgResponseTime:    getAvgResponseTime(numRequests, entry.TotalResponseTime),
 		avgContentLength:   getAvgContentLength(numRequests, entry.TotalContentLength),
-		currentRps:         getCurrentRps(numRequests, entry.NumReqsPerSec),
+		currentRps:         getCurrentRps(numRequests),
 		currentFailPerSec:  getCurrentFailPerSec(entry.NumFailures, entry.NumFailPerSec),
 	}
 	return
