@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -41,9 +42,9 @@ type runner struct {
 	numClients int32
 	spawnRate  float64
 
-	// all running workers(goroutines) will select on this channel.
-	// close this channel will stop all running workers.
-	stopChan chan bool
+	// Cancellation method for all running workers(goroutines)
+	cancelFuncs []context.CancelFunc
+	mu          sync.Mutex
 
 	// close this channel will stop all goroutines used in runner, including running workers.
 	shutdownChan chan bool
@@ -120,22 +121,19 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc func()) {
-	log.Println("Spawning", spawnCount, "clients immediately")
-
-	for i := 1; i <= spawnCount; i++ {
+// addWorkers start the goroutines and add it to cancelFuncs
+func (r *runner) addWorkers(gapCount int) {
+	for i := 0; i < gapCount; i++ {
 		select {
-		case <-quit:
-			// quit spawning goroutine
-			return
 		case <-r.shutdownChan:
 			return
 		default:
-			atomic.AddInt32(&r.numClients, 1)
-			go func() {
+			ctx, cancel := context.WithCancel(context.TODO())
+			r.cancelFuncs = append(r.cancelFuncs, cancel)
+			go func(ctx context.Context) {
 				for {
 					select {
-					case <-quit:
+					case <-ctx.Done():
 						return
 					case <-r.shutdownChan:
 						return
@@ -152,9 +150,44 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc 
 						}
 					}
 				}
-			}()
+			}(ctx)
 		}
 	}
+}
+
+// reduceWorkers Stop the goroutines and remove it from the cancelFuncs
+func (r *runner) reduceWorkers(gapCount int) {
+	if gapCount == 0 {
+		return
+	}
+	num := len(r.cancelFuncs) - gapCount
+	for _, cancelFunc := range r.cancelFuncs[num:] {
+		cancelFunc()
+	}
+
+	r.cancelFuncs = r.cancelFuncs[:num]
+
+}
+
+func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
+	// Avoid changing the number of clients simultaneously
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	log.Println("The total number of clients required is ", spawnCount)
+
+	var gapCount int
+	if spawnCount > int(r.numClients) {
+		gapCount = spawnCount - int(r.numClients)
+		log.Printf("The current number of clients is %v, %v clients will be added\n", r.numClients, gapCount)
+		r.addWorkers(gapCount)
+	} else {
+		gapCount = int(r.numClients) - spawnCount
+		log.Printf("The current number of clients is %v, %v clients will be removed\n", r.numClients, gapCount)
+		r.reduceWorkers(gapCount)
+	}
+
+	r.numClients = int32(spawnCount)
 
 	if spawnCompleteFunc != nil {
 		spawnCompleteFunc()
@@ -204,10 +237,7 @@ func (r *runner) getTask() *Task {
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
 
-	r.stopChan = make(chan bool)
-	r.numClients = 0
-
-	go r.spawnWorkers(spawnCount, r.stopChan, spawnCompleteFunc)
+	go r.spawnWorkers(spawnCount, spawnCompleteFunc)
 }
 
 func (r *runner) stop() {
@@ -215,9 +245,7 @@ func (r *runner) stop() {
 	// user's code can subscribe to this event and do thins like cleaning up
 	Events.Publish(EVENT_STOP)
 
-	// stop previous goroutines without blocking
-	// those goroutines will exit when r.safeRun returns
-	close(r.stopChan)
+	go r.spawnWorkers(0, nil)
 }
 
 type localRunner struct {
@@ -460,7 +488,6 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		switch msgType {
 		case "spawn":
 			r.state = stateSpawning
-			r.stop()
 			r.onSpawnMessage(genericMsg)
 		case "stop":
 			r.stop()
