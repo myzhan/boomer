@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -31,6 +30,7 @@ type runner struct {
 
 	tasks           []*Task
 	totalTaskWeight int
+	runTask         []*Task // goroutine execute tasks according to the list
 
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
@@ -131,6 +131,7 @@ func (r *runner) addWorkers(gapCount int) {
 			ctx, cancel := context.WithCancel(context.TODO())
 			r.cancelFuncs = append(r.cancelFuncs, cancel)
 			go func(ctx context.Context) {
+				index := 0
 				for {
 					select {
 					case <-ctx.Done():
@@ -141,12 +142,20 @@ func (r *runner) addWorkers(gapCount int) {
 						if r.rateLimitEnabled {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
-								task := r.getTask()
+								task := r.getTask(index)
 								r.safeRun(task.Fn)
+								index++
+								if index == r.totalTaskWeight {
+									index = 0
+								}
 							}
 						} else {
-							task := r.getTask()
+							task := r.getTask(index)
 							r.safeRun(task.Fn)
+							index++
+							if index == r.totalTaskWeight {
+								index = 0
+							}
 						}
 					}
 				}
@@ -195,43 +204,40 @@ func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
 }
 
 // setTasks will set the runner's task list AND the total task weight
-// which is used to get a random task later
+// which is used to get a task later
 func (r *runner) setTasks(t []*Task) {
 	r.tasks = t
+	if len(r.tasks) == 1 {
+		r.totalTaskWeight = 1
+		r.runTask = t
+		return
+	}
 
 	weightSum := 0
 	for _, task := range r.tasks {
+		if task.Weight <= 0 { //Ensure that user input values are legal
+			task.Weight = 1
+		}
 		weightSum += task.Weight
 	}
 	r.totalTaskWeight = weightSum
-}
 
-func (r *runner) getTask() *Task {
-	tasksCount := len(r.tasks)
-	if tasksCount == 1 {
-		// Fast path
-		return r.tasks[0]
-	}
-
-	rs := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	totalWeight := r.totalTaskWeight
-	if totalWeight <= 0 {
-		// If all the tasks have not weights defined, they have the same chance to run
-		randNum := rs.Intn(tasksCount)
-		return r.tasks[randNum]
-	}
-
-	randNum := rs.Intn(totalWeight)
-	runningSum := 0
-	for _, task := range r.tasks {
-		runningSum += task.Weight
-		if runningSum > randNum {
-			return task
+	r.runTask = make([]*Task, r.totalTaskWeight)
+	index := 0
+	for weightSum > 0 { //Assign task order according to weight
+		for _, task := range r.tasks {
+			if task.Weight > 0 {
+				r.runTask[index] = task
+				index++
+				task.Weight--
+				weightSum--
+			}
 		}
 	}
+}
 
-	return nil
+func (r *runner) getTask(index int) *Task {
+	return r.runTask[index]
 }
 
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
