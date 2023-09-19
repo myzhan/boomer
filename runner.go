@@ -44,7 +44,6 @@ type runner struct {
 
 	// Cancellation method for all running workers(goroutines)
 	cancelFuncs []context.CancelFunc
-	mu          sync.Mutex
 
 	// close this channel will stop all goroutines used in runner, including running workers.
 	shutdownChan chan bool
@@ -179,10 +178,6 @@ func (r *runner) reduceWorkers(gapCount int) {
 }
 
 func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
-	// Avoid changing the number of clients simultaneously
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	log.Println("The total number of clients required is ", spawnCount)
 
 	var gapCount int
@@ -199,7 +194,7 @@ func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
 	r.numClients = int32(spawnCount)
 
 	if spawnCompleteFunc != nil {
-		spawnCompleteFunc()
+		go spawnCompleteFunc() //For faster time
 	}
 }
 
@@ -243,7 +238,7 @@ func (r *runner) getTask(index int) *Task {
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
 
-	go r.spawnWorkers(spawnCount, spawnCompleteFunc)
+	r.spawnWorkers(spawnCount, spawnCompleteFunc)
 }
 
 func (r *runner) stop() {
@@ -251,7 +246,8 @@ func (r *runner) stop() {
 	// user's code can subscribe to this event and do thins like cleaning up
 	Events.Publish(EVENT_STOP)
 
-	go r.spawnWorkers(0, nil)
+	r.reduceWorkers(int(r.numClients)) //Stop all goroutines
+	r.numClients = 0
 }
 
 type localRunner struct {
