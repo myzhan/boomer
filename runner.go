@@ -374,6 +374,8 @@ func (r *slaveRunner) shutdown() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Stop()
 	}
+	r.cancelFuncs = nil
+	r.numClients = 0
 	close(r.shutdownChan)
 }
 
