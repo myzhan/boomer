@@ -135,7 +135,8 @@ func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 	currentTime := time.Now()
 	o.logger.Println(fmt.Sprintf("Current time: %s, Users: %d, Total RPS: %d, Total Fail Ratio: %.1f%%",
 		currentTime.Format("2006/01/02 15:04:05"), output.UserCount, output.TotalRPS, output.TotalFailRatio*100))
-	table := tablewriter.NewWriter(o.logger.Writer())
+	noPrefixLogger := log.New(o.logger.Writer(), "", 0)
+	table := tablewriter.NewWriter(noPrefixLogger.Writer())
 	table.SetHeader([]string{"Type", "Name", "# requests", "# fails", "Median", "Average", "Min", "Max", "Content Size", "# reqs/sec", "# fails/sec"})
 
 	for _, stat := range output.Stats {
