@@ -42,6 +42,8 @@ type Boomer struct {
 	memoryProfileDuration time.Duration
 
 	outputs []Output
+
+	logger *log.Logger
 }
 
 // NewBoomer returns a new Boomer.
@@ -50,6 +52,7 @@ func NewBoomer(masterHost string, masterPort int) *Boomer {
 		masterHost: masterHost,
 		masterPort: masterPort,
 		mode:       DistributedMode,
+		logger:     log.Default(),
 	}
 }
 
@@ -59,7 +62,24 @@ func NewStandaloneBoomer(spawnCount int, spawnRate float64) *Boomer {
 		spawnCount: spawnCount,
 		spawnRate:  spawnRate,
 		mode:       StandaloneMode,
+		logger:     log.Default(),
 	}
+}
+
+// WithLogger allows user to use their own logger.
+// If the logger is nil, it will not take effect.
+func (b *Boomer) WithLogger(logger *log.Logger) *Boomer {
+	if logger == nil {
+		return b
+	}
+	b.logger = logger
+	if b.slaveRunner != nil {
+		b.slaveRunner.setLogger(logger)
+	}
+	if b.localRunner != nil {
+		b.localRunner.setLogger(logger)
+	}
+	return b
 }
 
 // SetRateLimiter allows user to use their own rate limiter.
@@ -76,7 +96,7 @@ func (b *Boomer) SetMode(mode Mode) {
 	case StandaloneMode:
 		b.mode = StandaloneMode
 	default:
-		log.Println("Invalid mode, ignored!")
+		b.logger.Println("Invalid mode, ignored!")
 	}
 }
 
@@ -102,33 +122,35 @@ func (b *Boomer) Run(tasks ...*Task) {
 	if b.cpuProfileFile != "" {
 		err := StartCPUProfile(b.cpuProfileFile, b.cpuProfileDuration)
 		if err != nil {
-			log.Printf("Error starting cpu profiling, %v", err)
+			b.logger.Printf("Error starting cpu profiling, %v", err)
 		}
 	}
 	if b.memoryProfileFile != "" {
 		err := StartMemoryProfile(b.memoryProfileFile, b.memoryProfileDuration)
 		if err != nil {
-			log.Printf("Error starting memory profiling, %v", err)
+			b.logger.Printf("Error starting memory profiling, %v", err)
 		}
 	}
 
 	switch b.mode {
 	case DistributedMode:
 		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter)
-		println("new slave runner")
+		b.slaveRunner.setLogger(b.logger)
+		b.logger.Println("new slave runner")
 		for _, o := range b.outputs {
 			b.slaveRunner.addOutput(o)
 		}
 		b.slaveRunner.run()
 	case StandaloneMode:
 		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.spawnCount, b.spawnRate)
-		println("new local runner")
+		b.localRunner.setLogger(b.logger)
+		b.logger.Println("new local runner")
 		for _, o := range b.outputs {
 			b.localRunner.addOutput(o)
 		}
 		b.localRunner.run()
 	default:
-		log.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")
+		b.logger.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")
 	}
 }
 
@@ -202,7 +224,7 @@ func (b *Boomer) Quit() {
 		case <-b.slaveRunner.client.disconnectedChannel():
 			break
 		case <-ticker.C:
-			log.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
+			b.logger.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
 			break
 		}
 		b.slaveRunner.shutdown()

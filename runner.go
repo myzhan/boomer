@@ -49,6 +49,14 @@ type runner struct {
 	shutdownChan chan bool
 
 	outputs []Output
+
+	logger *log.Logger
+}
+
+func (r *runner) setLogger(logger *log.Logger) {
+	if logger != nil {
+		r.logger = logger
+	}
 }
 
 // safeRun runs fn and recovers from unexpected panics.
@@ -178,7 +186,7 @@ func (r *runner) reduceWorkers(gapCount int) {
 }
 
 func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
-	log.Println("The total number of clients required is ", spawnCount)
+	r.logger.Println("The total number of clients required is ", spawnCount)
 
 	var gapCount int
 	if spawnCount > int(r.numClients) {
@@ -407,7 +415,7 @@ func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 	if timeStamp, ok := msg.Data["timestamp"]; ok {
 		if timeStampInt64, ok := castToInt64(timeStamp); ok {
 			if timeStampInt64 <= r.lastReceivedSpawnTimestamp {
-				log.Println("Discard spawn message with older or equal timestamp than timestamp of previous spawn message")
+				r.logger.Println("Discard spawn message with older or equal timestamp than timestamp of previous spawn message")
 				return
 			} else {
 				r.lastReceivedSpawnTimestamp = timeStampInt64
@@ -431,7 +439,7 @@ func (r *slaveRunner) onCustomMessage(msg *CustomMessage) {
 func (r *slaveRunner) onAckMessage(msg *genericMessage) {
 	// Maybe we should add a state for waiting?
 	if !atomic.CompareAndSwapInt32(&r.ackReceived, 0, 1) {
-		log.Println("Receive duplicate ack message, ignored")
+		r.logger.Println("Receive duplicate ack message, ignored")
 		return
 	}
 	r.waitForAck.Done()
@@ -448,7 +456,7 @@ func (r *slaveRunner) sendClientReadyAndWaitForAck() {
 
 	go func() {
 		if waitTimeout(&r.waitForAck, 5*time.Second) {
-			log.Println("Timeout waiting for ack message from master, you may use a locust version before 2.10.0 or have a network issue.")
+			r.logger.Println("Timeout waiting for ack message from master, you may use a locust version before 2.10.0 or have a network issue.")
 		}
 	}()
 }
@@ -465,7 +473,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	} else {
 		customMsg, ok = msgInterface.(*CustomMessage)
 		if !ok {
-			log.Println("Receive unknown type of message from master.")
+			r.logger.Println("Receive unknown type of message from master.")
 			return
 		} else {
 			msgType = customMsg.Type
@@ -496,13 +504,13 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		case "stop":
 			r.stop()
 			r.state = stateStopped
-			log.Println("Recv stop message from master, all the goroutines are stopped")
+			r.logger.Println("Recv stop message from master, all the goroutines are stopped")
 			r.client.sendChannel() <- newGenericMessage("client_stopped", nil, r.nodeID)
 			r.sendClientReadyAndWaitForAck()
 			r.state = stateInit
 		case "quit":
 			r.stop()
-			log.Println("Recv quit message from master, all the goroutines are stopped")
+			r.logger.Println("Recv quit message from master, all the goroutines are stopped")
 			Events.Publish(EVENT_QUIT)
 			r.state = stateInit
 		default:
@@ -548,9 +556,9 @@ func (r *slaveRunner) run() {
 	err := r.client.connect()
 	if err != nil {
 		if strings.Contains(err.Error(), "Socket type DEALER is not compatible with PULL") {
-			log.Println("Newer version of locust changes ZMQ socket to DEALER and ROUTER, you should update your locust version.")
+			r.logger.Println("Newer version of locust changes ZMQ socket to DEALER and ROUTER, you should update your locust version.")
 		} else {
-			log.Printf("Failed to connect to master(%s:%d) with error %v\n", r.masterHost, r.masterPort, err)
+			r.logger.Printf("Failed to connect to master(%s:%d) with error %v\n", r.masterHost, r.masterPort, err)
 		}
 		return
 	}
