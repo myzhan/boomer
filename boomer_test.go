@@ -50,8 +50,8 @@ var _ = Describe("Test Boomer", func() {
 
 	It("test add output", func() {
 		b := NewStandaloneBoomer(100, 10)
-		b.AddOutput(NewConsoleOutput())
-		b.AddOutput(NewConsoleOutput())
+		b.AddOutput(NewConsoleOutput(nil))
+		b.AddOutput(NewConsoleOutput(nil))
 		Expect(b.outputs).To(HaveLen(2))
 	})
 

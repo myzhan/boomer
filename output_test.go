@@ -62,7 +62,7 @@ var _ = Describe("test output", func() {
 	})
 
 	It("test console output", func() {
-		o := NewConsoleOutput()
+		o := NewConsoleOutput(nil)
 		o.OnStart()
 
 		data := map[string]interface{}{}
