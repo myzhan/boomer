@@ -1,9 +1,9 @@
 package boomer
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -30,6 +30,7 @@ type runner struct {
 
 	tasks           []*Task
 	totalTaskWeight int
+	runTask         []*Task // goroutine execute tasks according to the list
 
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
@@ -41,9 +42,8 @@ type runner struct {
 	numClients int32
 	spawnRate  float64
 
-	// all running workers(goroutines) will select on this channel.
-	// close this channel will stop all running workers.
-	stopChan chan bool
+	// Cancellation method for all running workers(goroutines)
+	cancelFuncs []context.CancelFunc
 
 	// close this channel will stop all goroutines used in runner, including running workers.
 	shutdownChan chan bool
@@ -120,22 +120,20 @@ func (r *runner) outputOnStop() {
 	wg.Wait()
 }
 
-func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc func()) {
-	log.Println("Spawning", spawnCount, "clients immediately")
-
-	for i := 1; i <= spawnCount; i++ {
+// addWorkers start the goroutines and add it to cancelFuncs
+func (r *runner) addWorkers(gapCount int) {
+	for i := 0; i < gapCount; i++ {
 		select {
-		case <-quit:
-			// quit spawning goroutine
-			return
 		case <-r.shutdownChan:
 			return
 		default:
-			atomic.AddInt32(&r.numClients, 1)
-			go func() {
+			ctx, cancel := context.WithCancel(context.TODO())
+			r.cancelFuncs = append(r.cancelFuncs, cancel)
+			go func(ctx context.Context) {
+				index := 0
 				for {
 					select {
-					case <-quit:
+					case <-ctx.Done():
 						return
 					case <-r.shutdownChan:
 						return
@@ -143,71 +141,104 @@ func (r *runner) spawnWorkers(spawnCount int, quit chan bool, spawnCompleteFunc 
 						if r.rateLimitEnabled {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
-								task := r.getTask()
+								task := r.getTask(index)
 								r.safeRun(task.Fn)
+								index++
+								if index == r.totalTaskWeight {
+									index = 0
+								}
 							}
 						} else {
-							task := r.getTask()
+							task := r.getTask(index)
 							r.safeRun(task.Fn)
+							index++
+							if index == r.totalTaskWeight {
+								index = 0
+							}
 						}
 					}
 				}
-			}()
+			}(ctx)
 		}
 	}
+}
+
+// reduceWorkers Stop the goroutines and remove it from the cancelFuncs
+func (r *runner) reduceWorkers(gapCount int) {
+	if gapCount == 0 {
+		return
+	}
+	num := len(r.cancelFuncs) - gapCount
+	for _, cancelFunc := range r.cancelFuncs[num:] {
+		cancelFunc()
+	}
+
+	r.cancelFuncs = r.cancelFuncs[:num]
+
+}
+
+func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
+	log.Println("The total number of clients required is ", spawnCount)
+
+	var gapCount int
+	if spawnCount > int(r.numClients) {
+		gapCount = spawnCount - int(r.numClients)
+		log.Printf("The current number of clients is %v, %v clients will be added\n", r.numClients, gapCount)
+		r.addWorkers(gapCount)
+	} else {
+		gapCount = int(r.numClients) - spawnCount
+		log.Printf("The current number of clients is %v, %v clients will be removed\n", r.numClients, gapCount)
+		r.reduceWorkers(gapCount)
+	}
+
+	r.numClients = int32(spawnCount)
 
 	if spawnCompleteFunc != nil {
-		spawnCompleteFunc()
+		go spawnCompleteFunc() //For faster time
 	}
 }
 
 // setTasks will set the runner's task list AND the total task weight
-// which is used to get a random task later
+// which is used to get a task later
 func (r *runner) setTasks(t []*Task) {
 	r.tasks = t
+	if len(r.tasks) == 1 {
+		r.totalTaskWeight = 1
+		r.runTask = t
+		return
+	}
 
 	weightSum := 0
 	for _, task := range r.tasks {
+		if task.Weight <= 0 { //Ensure that user input values are legal
+			task.Weight = 1
+		}
 		weightSum += task.Weight
 	}
 	r.totalTaskWeight = weightSum
-}
 
-func (r *runner) getTask() *Task {
-	tasksCount := len(r.tasks)
-	if tasksCount == 1 {
-		// Fast path
-		return r.tasks[0]
-	}
-
-	rs := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	totalWeight := r.totalTaskWeight
-	if totalWeight <= 0 {
-		// If all the tasks have not weights defined, they have the same chance to run
-		randNum := rs.Intn(tasksCount)
-		return r.tasks[randNum]
-	}
-
-	randNum := rs.Intn(totalWeight)
-	runningSum := 0
-	for _, task := range r.tasks {
-		runningSum += task.Weight
-		if runningSum > randNum {
-			return task
+	r.runTask = make([]*Task, r.totalTaskWeight)
+	index := 0
+	for weightSum > 0 { //Assign task order according to weight
+		for _, task := range r.tasks {
+			if task.Weight > 0 {
+				r.runTask[index] = task
+				index++
+				task.Weight--
+				weightSum--
+			}
 		}
 	}
+}
 
-	return nil
+func (r *runner) getTask(index int) *Task {
+	return r.runTask[index]
 }
 
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
 
-	r.stopChan = make(chan bool)
-	r.numClients = 0
-
-	go r.spawnWorkers(spawnCount, r.stopChan, spawnCompleteFunc)
+	r.spawnWorkers(spawnCount, spawnCompleteFunc)
 }
 
 func (r *runner) stop() {
@@ -215,9 +246,8 @@ func (r *runner) stop() {
 	// user's code can subscribe to this event and do thins like cleaning up
 	Events.Publish(EVENT_STOP)
 
-	// stop previous goroutines without blocking
-	// those goroutines will exit when r.safeRun returns
-	close(r.stopChan)
+	r.reduceWorkers(int(r.numClients)) //Stop all goroutines
+	r.numClients = 0
 }
 
 type localRunner struct {
@@ -344,6 +374,8 @@ func (r *slaveRunner) shutdown() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Stop()
 	}
+	r.cancelFuncs = nil
+	r.numClients = 0
 	close(r.shutdownChan)
 }
 
@@ -460,7 +492,6 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		switch msgType {
 		case "spawn":
 			r.state = stateSpawning
-			r.stop()
 			r.onSpawnMessage(genericMsg)
 		case "stop":
 			r.stop()

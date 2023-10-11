@@ -72,6 +72,46 @@ var _ = Describe("Test runner", func() {
 		Expect(hitOutput2.onStop).To(BeTrue())
 	})
 
+	It("test add workers", func() {
+		taskA := &Task{
+			Weight: 10,
+			Fn: func() {
+				time.Sleep(time.Second)
+			},
+			Name: "TaskA",
+		}
+
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+		defer runner.shutdown()
+
+		runner.addWorkers(10)
+
+		currentClients := len(runner.cancelFuncs)
+		Expect(currentClients).To(BeEquivalentTo(10))
+	})
+
+	It("test reduce workers", func() {
+		taskA := &Task{
+			Weight: 10,
+			Fn: func() {
+				time.Sleep(time.Second)
+			},
+			Name: "TaskA",
+		}
+
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+		defer runner.shutdown()
+
+		runner.addWorkers(10)
+		runner.reduceWorkers(5)
+		runner.reduceWorkers(2)
+
+		currentClients := len(runner.cancelFuncs)
+		Expect(currentClients).To(BeEquivalentTo(3))
+	})
+
 	It("test localrunner", func() {
 		taskA := &Task{
 			Weight: 10,
@@ -120,8 +160,7 @@ var _ = Describe("Test runner", func() {
 		runner.client = newClient("localhost", 5557, runner.nodeID)
 		defer runner.shutdown()
 
-		go runner.spawnWorkers(10, runner.stopChan, runner.spawnComplete)
-		time.Sleep(10 * time.Millisecond)
+		runner.spawnWorkers(10, runner.spawnComplete)
 
 		currentClients := atomic.LoadInt32(&runner.numClients)
 		Expect(currentClients).To(BeEquivalentTo(10))
@@ -162,7 +201,7 @@ var _ = Describe("Test runner", func() {
 
 		const numToSpawn int = 30
 
-		runner.spawnWorkers(numToSpawn, runner.stopChan, runner.spawnComplete)
+		runner.spawnWorkers(numToSpawn, runner.spawnComplete)
 		time.Sleep(3 * time.Second)
 
 		currentClients := atomic.LoadInt32(&runner.numClients)
@@ -238,7 +277,6 @@ var _ = Describe("Test runner", func() {
 		}
 
 		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
-		runner.stopChan = make(chan bool)
 
 		stopped := false
 		handler := func() {
@@ -301,7 +339,6 @@ var _ = Describe("Test runner", func() {
 		Eventually(quitMessages).Should(Receive())
 
 		runner.state = stateRunning
-		runner.stopChan = make(chan bool)
 		runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
 		Eventually(quitMessages).Should(Receive())
 		Expect(runner.state).Should(BeIdenticalTo(stateInit))
