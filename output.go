@@ -38,12 +38,17 @@ type ConsoleOutput struct {
 }
 
 // NewConsoleOutput returns a ConsoleOutput.
-// If logger is nil, use log.Default().
-func NewConsoleOutput(logger *log.Logger) *ConsoleOutput {
-	if logger == nil {
-		logger = log.Default()
+func NewConsoleOutput() *ConsoleOutput {
+	return &ConsoleOutput{logger: log.Default()}
+}
+
+// WithLogger allows user to use their own logger.
+// If the logger is nil, it will not take effect.
+func (o *ConsoleOutput) WithLogger(logger *log.Logger) *ConsoleOutput {
+	if logger != nil {
+		o.logger = logger
 	}
-	return &ConsoleOutput{logger: logger}
+	return o
 }
 
 func getMedianResponseTime(numRequests int64, responseTimes map[int64]int64) int64 {
@@ -335,15 +340,20 @@ var (
 )
 
 // NewPrometheusPusherOutput returns a PrometheusPusherOutput.
-// If logger is nil, use log.Default().
-func NewPrometheusPusherOutput(logger *log.Logger, gatewayURL, jobName string) *PrometheusPusherOutput {
-	if logger == nil {
-		logger = log.Default()
-	}
+func NewPrometheusPusherOutput(gatewayURL, jobName string) *PrometheusPusherOutput {
 	return &PrometheusPusherOutput{
 		pusher: push.New(gatewayURL, jobName),
-		logger: logger,
+		logger: log.Default(),
 	}
+}
+
+// WithLogger allows user to use their own logger.
+// If the logger is nil, it will not take effect.
+func (o *PrometheusPusherOutput) WithLogger(logger *log.Logger) *PrometheusPusherOutput {
+	if logger != nil {
+		o.logger = logger
+	}
+	return o
 }
 
 // PrometheusPusherOutput pushes boomer stats to Prometheus Pushgateway.
