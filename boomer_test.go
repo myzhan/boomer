@@ -2,6 +2,7 @@ package boomer
 
 import (
 	"flag"
+	"log"
 	"math"
 	"os"
 	"runtime"
@@ -215,7 +216,7 @@ var _ = Describe("Test Boomer", func() {
 
 	It("test record success", func() {
 		defer func() {
-			defaultBoomer = &Boomer{}
+			defaultBoomer = &Boomer{logger: log.Default()}
 		}()
 
 		// called before runner instance created
@@ -245,7 +246,7 @@ var _ = Describe("Test Boomer", func() {
 
 	It("test record failure", func() {
 		defer func() {
-			defaultBoomer = &Boomer{}
+			defaultBoomer = &Boomer{logger: log.Default()}
 		}()
 
 		// called before runner instance created

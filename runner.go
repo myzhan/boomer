@@ -266,6 +266,7 @@ type localRunner struct {
 
 func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spawnRate float64) (r *localRunner) {
 	r = &localRunner{}
+	r.setLogger(log.Default())
 	r.setTasks(tasks)
 	r.spawnRate = spawnRate
 	r.spawnCount = spawnCount
@@ -342,6 +343,7 @@ type slaveRunner struct {
 
 func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter) (r *slaveRunner) {
 	r = &slaveRunner{}
+	r.setLogger(log.Default())
 	r.masterHost = masterHost
 	r.masterPort = masterPort
 	r.setTasks(tasks)

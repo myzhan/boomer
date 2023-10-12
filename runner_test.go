@@ -1,6 +1,7 @@
 package boomer
 
 import (
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,6 +34,7 @@ var _ = Describe("Test runner", func() {
 	It("test saferun", func() {
 		Expect(func() {
 			runner := &runner{}
+			runner.setLogger(log.Default())
 			runner.safeRun(func() {
 				panic("Runner will catch this panic")
 			})
@@ -43,6 +45,7 @@ var _ = Describe("Test runner", func() {
 		hitOutput := &HitOutput{}
 		hitOutput2 := &HitOutput{}
 		runner := &runner{}
+		runner.setLogger(log.Default())
 		runner.addOutput(hitOutput)
 		runner.addOutput(hitOutput2)
 		runner.outputOnStart()
@@ -54,6 +57,7 @@ var _ = Describe("Test runner", func() {
 		hitOutput := &HitOutput{}
 		hitOutput2 := &HitOutput{}
 		runner := &runner{}
+		runner.setLogger(log.Default())
 		runner.addOutput(hitOutput)
 		runner.addOutput(hitOutput2)
 		runner.outputOnEevent(nil)
@@ -65,6 +69,7 @@ var _ = Describe("Test runner", func() {
 		hitOutput := &HitOutput{}
 		hitOutput2 := &HitOutput{}
 		runner := &runner{}
+		runner.setLogger(log.Default())
 		runner.addOutput(hitOutput)
 		runner.addOutput(hitOutput2)
 		runner.outputOnStop()

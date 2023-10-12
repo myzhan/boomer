@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-var defaultBoomer = &Boomer{}
+var defaultBoomer = &Boomer{logger: log.Default()}
 
 // Mode is the running mode of boomer, both standalone and distributed are supported.
 type Mode int
