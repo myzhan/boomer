@@ -2,6 +2,7 @@ package boomer
 
 import (
 	"flag"
+	"log"
 	"math"
 	"os"
 	"runtime"
@@ -215,7 +216,7 @@ var _ = Describe("Test Boomer", func() {
 
 	It("test record success", func() {
 		defer func() {
-			defaultBoomer = &Boomer{}
+			defaultBoomer = &Boomer{logger: log.Default()}
 		}()
 
 		// called before runner instance created
@@ -245,7 +246,7 @@ var _ = Describe("Test Boomer", func() {
 
 	It("test record failure", func() {
 		defer func() {
-			defaultBoomer = &Boomer{}
+			defaultBoomer = &Boomer{logger: log.Default()}
 		}()
 
 		// called before runner instance created
@@ -273,5 +274,21 @@ var _ = Describe("Test Boomer", func() {
 		Expect(requestFailureMsg.requestType).To(Equal("udp"))
 		Expect(requestFailureMsg.responseTime).To(BeEquivalentTo(2))
 		Expect(requestFailureMsg.error).To(Equal("udp error"))
+	})
+
+	It("test loggers", func() {
+		defer func() {
+			defaultBoomer = &Boomer{logger: log.Default()}
+		}()
+
+		logger := log.New(os.Stdout, "[boomer]", log.LstdFlags)
+
+		defaultBoomer = &Boomer{}
+		defaultBoomer.WithLogger(nil)
+		defaultBoomer.WithLogger(logger)
+
+		defaultBoomer.slaveRunner = &slaveRunner{}
+		defaultBoomer.localRunner = &localRunner{}
+		defaultBoomer.WithLogger(logger)
 	})
 })

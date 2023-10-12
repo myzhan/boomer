@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"strconv"
 	"time"
@@ -35,11 +34,21 @@ type Output interface {
 
 // ConsoleOutput is the default output for standalone mode.
 type ConsoleOutput struct {
+	logger *log.Logger
 }
 
 // NewConsoleOutput returns a ConsoleOutput.
 func NewConsoleOutput() *ConsoleOutput {
-	return &ConsoleOutput{}
+	return &ConsoleOutput{logger: log.Default()}
+}
+
+// WithLogger allows user to use their own logger.
+// If the logger is nil, it will not take effect.
+func (o *ConsoleOutput) WithLogger(logger *log.Logger) *ConsoleOutput {
+	if logger != nil {
+		o.logger = logger
+	}
+	return o
 }
 
 func getMedianResponseTime(numRequests int64, responseTimes map[int64]int64) int64 {
@@ -119,14 +128,15 @@ func (o *ConsoleOutput) OnStop() {
 func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 	output, err := convertData(data)
 	if err != nil {
-		log.Printf("convert data error: %v\n", err)
+		o.logger.Printf("convert data error: %v\n", err)
 		return
 	}
 
 	currentTime := time.Now()
-	println(fmt.Sprintf("Current time: %s, Users: %d, Total RPS: %d, Total Fail Ratio: %.1f%%",
+	o.logger.Println(fmt.Sprintf("Current time: %s, Users: %d, Total RPS: %d, Total Fail Ratio: %.1f%%",
 		currentTime.Format("2006/01/02 15:04:05"), output.UserCount, output.TotalRPS, output.TotalFailRatio*100))
-	table := tablewriter.NewWriter(os.Stdout)
+	noPrefixLogger := log.New(o.logger.Writer(), "", 0)
+	table := tablewriter.NewWriter(noPrefixLogger.Writer())
 	table.SetHeader([]string{"Type", "Name", "# requests", "# fails", "Median", "Average", "Min", "Max", "Content Size", "# reqs/sec", "# fails/sec"})
 
 	for _, stat := range output.Stats {
@@ -145,7 +155,7 @@ func (o *ConsoleOutput) OnEvent(data map[string]interface{}) {
 		table.Append(row)
 	}
 	table.Render()
-	println()
+	o.logger.Println()
 }
 
 type statsEntryOutput struct {
@@ -334,17 +344,28 @@ var (
 func NewPrometheusPusherOutput(gatewayURL, jobName string) *PrometheusPusherOutput {
 	return &PrometheusPusherOutput{
 		pusher: push.New(gatewayURL, jobName),
+		logger: log.Default(),
 	}
+}
+
+// WithLogger allows user to use their own logger.
+// If the logger is nil, it will not take effect.
+func (o *PrometheusPusherOutput) WithLogger(logger *log.Logger) *PrometheusPusherOutput {
+	if logger != nil {
+		o.logger = logger
+	}
+	return o
 }
 
 // PrometheusPusherOutput pushes boomer stats to Prometheus Pushgateway.
 type PrometheusPusherOutput struct {
 	pusher *push.Pusher // Prometheus Pushgateway Pusher
+	logger *log.Logger
 }
 
 // OnStart will register all prometheus metric collectors
 func (o *PrometheusPusherOutput) OnStart() {
-	log.Println("register prometheus metric collectors")
+	o.logger.Println("register prometheus metric collectors")
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(
 		// gauge vectors for requests
@@ -374,7 +395,7 @@ func (o *PrometheusPusherOutput) OnStop() {
 func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 	output, err := convertData(data)
 	if err != nil {
-		log.Printf("convert data error: %v\n", err)
+		o.logger.Printf("convert data error: %v\n", err)
 		return
 	}
 
@@ -402,6 +423,6 @@ func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 	}
 
 	if err := o.pusher.Push(); err != nil {
-		log.Printf("Could not push to Pushgateway: error: %v\n", err)
+		o.logger.Printf("Could not push to Pushgateway: error: %v\n", err)
 	}
 }

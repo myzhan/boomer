@@ -1,6 +1,9 @@
 package boomer
 
 import (
+	"log"
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -93,5 +96,18 @@ var _ = Describe("test output", func() {
 		o.OnEvent(data)
 
 		o.OnStop()
+	})
+
+	It("test loggers", func() {
+		o := NewConsoleOutput()
+
+		logger := log.New(os.Stdout, "[boomer]", log.LstdFlags)
+
+		o.WithLogger(nil)
+		o.WithLogger(logger)
+
+		o2 := NewPrometheusPusherOutput("", "")
+		o2.WithLogger(nil)
+		o2.WithLogger(logger)
 	})
 })
