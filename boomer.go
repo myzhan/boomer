@@ -24,6 +24,7 @@ const (
 
 // A Boomer is used to run tasks.
 // This type is exposed, so users can create and control a Boomer instance programmatically.
+// A non-nil logger is supposed to be set.
 type Boomer struct {
 	masterHost  string
 	masterPort  int
