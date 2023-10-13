@@ -191,11 +191,11 @@ func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
 	var gapCount int
 	if spawnCount > int(r.numClients) {
 		gapCount = spawnCount - int(r.numClients)
-		log.Printf("The current number of clients is %v, %v clients will be added\n", r.numClients, gapCount)
+		r.logger.Printf("The current number of clients is %v, %v clients will be added\n", r.numClients, gapCount)
 		r.addWorkers(gapCount)
 	} else {
 		gapCount = int(r.numClients) - spawnCount
-		log.Printf("The current number of clients is %v, %v clients will be removed\n", r.numClients, gapCount)
+		r.logger.Printf("The current number of clients is %v, %v clients will be removed\n", r.numClients, gapCount)
 		r.reduceWorkers(gapCount)
 	}
 
