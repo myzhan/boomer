@@ -340,11 +340,16 @@ var (
 	)
 )
 
+type methodName struct {
+	method, name string
+}
+
 // NewPrometheusPusherOutput returns a PrometheusPusherOutput.
 func NewPrometheusPusherOutput(gatewayURL, jobName string) *PrometheusPusherOutput {
 	return &PrometheusPusherOutput{
-		pusher: push.New(gatewayURL, jobName),
-		logger: log.Default(),
+		pusher:        push.New(gatewayURL, jobName),
+		logger:        log.Default(),
+		methodNameSet: make(map[methodName]bool),
 	}
 }
 
@@ -359,8 +364,9 @@ func (o *PrometheusPusherOutput) WithLogger(logger *log.Logger) *PrometheusPushe
 
 // PrometheusPusherOutput pushes boomer stats to Prometheus Pushgateway.
 type PrometheusPusherOutput struct {
-	pusher *push.Pusher // Prometheus Pushgateway Pusher
-	logger *log.Logger
+	pusher        *push.Pusher // Prometheus Pushgateway Pusher
+	logger        *log.Logger
+	methodNameSet map[methodName]bool
 }
 
 // OnStart will register all prometheus metric collectors
@@ -386,9 +392,28 @@ func (o *PrometheusPusherOutput) OnStart() {
 	o.pusher = o.pusher.Gatherer(registry)
 }
 
-// OnStop of PrometheusPusherOutput has nothing to do.
+// OnStop of PrometheusPusherOutput pushes zero/reset gauges to Prometheus Pushgataway.
 func (o *PrometheusPusherOutput) OnStop() {
 
+	gaugeUsers.Set(0)
+	gaugeTotalRPS.Set(0)
+	gaugeTotalFailRatio.Set(0)
+
+	for k := range o.methodNameSet {
+		gaugeNumRequests.WithLabelValues(k.method, k.name).Set(0)
+		gaugeNumFailures.WithLabelValues(k.method, k.name).Set(0)
+		gaugeMedianResponseTime.WithLabelValues(k.method, k.name).Set(0)
+		gaugeAverageResponseTime.WithLabelValues(k.method, k.name).Set(0)
+		gaugeMinResponseTime.WithLabelValues(k.method, k.name).Set(0)
+		gaugeMaxResponseTime.WithLabelValues(k.method, k.name).Set(0)
+		gaugeAverageContentLength.WithLabelValues(k.method, k.name).Set(0)
+		gaugeCurrentRPS.WithLabelValues(k.method, k.name).Set(0)
+		gaugeCurrentFailPerSec.WithLabelValues(k.method, k.name).Set(0)
+	}
+
+	if err := o.pusher.Push(); err != nil {
+		o.logger.Printf("Could not push to Pushgateway: error: %v\n", err)
+	}
 }
 
 // OnEvent will push metric to Prometheus Pushgataway
@@ -411,6 +436,10 @@ func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 	for _, stat := range output.Stats {
 		method := stat.Method
 		name := stat.Name
+
+		// Keep track of all method/name combos that gauges will be created for
+		o.methodNameSet[methodName{method: method, name: name}] = true
+
 		gaugeNumRequests.WithLabelValues(method, name).Set(float64(stat.NumRequests))
 		gaugeNumFailures.WithLabelValues(method, name).Set(float64(stat.NumFailures))
 		gaugeMedianResponseTime.WithLabelValues(method, name).Set(float64(stat.medianResponseTime))
