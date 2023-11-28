@@ -21,8 +21,9 @@ const (
 )
 
 const (
-	slaveReportInterval = 3 * time.Second
-	heartbeatInterval   = 1 * time.Second
+	slaveReportInterval    = 3 * time.Second
+	heartbeatInterval      = 1 * time.Second
+	masterHeartbeatTimeout = 60 * time.Second
 )
 
 type runner struct {
@@ -332,13 +333,14 @@ func (r *localRunner) sendCustomMessage(messageType string, data interface{}) {
 type slaveRunner struct {
 	runner
 
-	nodeID                     string
-	masterHost                 string
-	masterPort                 int
-	waitForAck                 sync.WaitGroup
-	ackReceived                int32
-	lastReceivedSpawnTimestamp int64
-	client                     client
+	nodeID                       string
+	masterHost                   string
+	masterPort                   int
+	waitForAck                   sync.WaitGroup
+	ackReceived                  int32
+	lastReceivedSpawnTimestamp   int64
+	lastMasterHeartbeatTimestamp time.Time
+	client                       client
 }
 
 func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimiter RateLimiter) (r *slaveRunner) {
@@ -482,6 +484,12 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		}
 	}
 
+	switch msgType {
+	case "heartbeat":
+		r.lastMasterHeartbeatTimestamp = time.Now()
+		return
+	}
+
 	switch r.state {
 	case stateInit:
 		switch msgType {
@@ -603,6 +611,13 @@ func (r *slaveRunner) run() {
 		for {
 			select {
 			case <-ticker.C:
+				// check for master heartbeat timeout
+				if !r.lastMasterHeartbeatTimestamp.IsZero() && time.Now().Sub(r.lastMasterHeartbeatTimestamp) > masterHeartbeatTimeout {
+					r.logger.Printf("Didn't get heartbeat from master in over %vs, shutting down.\n", masterHeartbeatTimeout.Seconds())
+					r.shutdown()
+					return
+				}
+				// send client heartbeat message
 				CPUUsage := GetCurrentCPUUsage()
 				data := map[string]interface{}{
 					"state":             r.state,
