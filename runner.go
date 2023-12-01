@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -166,6 +167,7 @@ func (r *runner) addWorkers(gapCount int) {
 							}
 						}
 					}
+					runtime.Gosched()
 				}
 			}(ctx)
 		}
