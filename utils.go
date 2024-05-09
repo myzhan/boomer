@@ -135,7 +135,7 @@ func GetCurrentCPUUsage() float64 {
 		log.Printf("Fail to get CPU percent, %v\n", err)
 		return 0.0
 	}
-	return percent
+	return percent / float64(runtime.NumCPU())
 }
 
 func GetCurrentMemUsage() uint64 {
