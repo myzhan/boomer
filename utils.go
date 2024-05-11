@@ -137,3 +137,9 @@ func GetCurrentCPUUsage() float64 {
 	}
 	return percent / float64(runtime.NumCPU())
 }
+
+func GetCurrentMemUsage() uint64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.Alloc
+}
