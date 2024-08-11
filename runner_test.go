@@ -257,7 +257,7 @@ var _ = Describe("Test runner", func() {
 		runner.client = newClient("localhost", 5557, runner.nodeID)
 		defer runner.shutdown()
 
-		runner.startSpawning(10, float64(10), runner.spawnComplete)
+		runner.startSpawning(10, float64(10), "http://localhost:8080", runner.spawnComplete)
 		// wait for spawning goroutines
 		time.Sleep(2 * time.Second)
 		Expect(runner.numClients).To(BeEquivalentTo(10))
@@ -324,6 +324,41 @@ var _ = Describe("Test runner", func() {
 
 		Expect(workers).To(BeEquivalentTo(20))
 		Expect(spawnRate).To(BeEquivalentTo(20))
+		runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
+	})
+
+	It("test on spawn message with three arguments", func() {
+		taskA := &Task{
+			Fn: func() {
+				time.Sleep(time.Second)
+			},
+		}
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+		runner.state = stateInit
+		defer runner.shutdown()
+
+		workers, spawnRate, host := 0, float64(0), ""
+		callback := func(param1 int, param2 float64, param3 string) {
+			workers = param1
+			spawnRate = param2
+			host = param3
+		}
+		Events.Subscribe(EVENT_SPAWN3, callback)
+		defer Events.Unsubscribe(EVENT_SPAWN3, callback)
+
+		runner.onSpawnMessage(newGenericMessage("spawn", map[string]interface{}{
+			"user_classes_count": map[interface{}]interface{}{
+				"Dummy":  int64(10),
+				"Dummy2": int64(10),
+			},
+			"timestamp": 1,
+			"host":      []byte("http://localhost:3000"),
+		}, runner.nodeID))
+
+		Expect(workers).To(BeEquivalentTo(20))
+		Expect(spawnRate).To(BeEquivalentTo(20))
+		Expect(host).To(BeEquivalentTo("http://localhost:3000"))
 		runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	})
 
