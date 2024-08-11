@@ -246,8 +246,9 @@ func (r *runner) getTask(index int) *Task {
 	return r.runTask[index]
 }
 
-func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
+func (r *runner) startSpawning(spawnCount int, spawnRate float64, host string, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
+	Events.Publish(EVENT_SPAWN3, spawnCount, spawnRate, host)
 
 	r.spawnWorkers(spawnCount, spawnCompleteFunc)
 }
