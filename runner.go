@@ -43,7 +43,6 @@ type runner struct {
 
 	numClients int32
 	spawnRate  float64
-	targetHost string
 
 	// Cancellation method for all running workers(goroutines)
 	cancelFuncs []context.CancelFunc
@@ -312,7 +311,7 @@ func (r *localRunner) run() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
-	r.startSpawning(r.spawnCount, r.spawnRate, r.targetHost, nil)
+	r.startSpawning(r.spawnCount, r.spawnRate, "", nil)
 
 	wg.Wait()
 }
@@ -431,15 +430,16 @@ func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 		}
 	}
 
-	if host, ok := msg.Data["host"]; ok {
-		if host, ok := host.([]byte); ok {
-			r.targetHost = string(host)
+	var host string
+	if h, ok := msg.Data["host"]; ok {
+		if h, ok := h.([]byte); ok {
+			host = string(h)
 		}
 	}
 
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
-	r.startSpawning(workers, float64(workers), r.targetHost, r.spawnComplete)
+	r.startSpawning(workers, float64(workers), host, r.spawnComplete)
 }
 
 // TODO: consider to add register_message instead of publishing any unknown type as custom_message.
