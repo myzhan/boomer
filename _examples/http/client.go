@@ -126,6 +126,13 @@ verbose: %t`, method, url, timeout, postFile, contentType, disableCompression, d
 		Timeout:   time.Duration(timeout) * time.Second,
 	}
 
+	// Update the host URL passed from UI
+	boomer.Events.Subscribe(boomer.EVENT_CONFIG, func(params map[string]interface{}) {
+		if v, ok := params["host"]; ok {
+			url = v.(string)
+		}
+	})
+
 	task := &boomer.Task{
 		Name:   "worker",
 		Weight: 10,

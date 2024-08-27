@@ -257,7 +257,7 @@ var _ = Describe("Test runner", func() {
 		runner.client = newClient("localhost", 5557, runner.nodeID)
 		defer runner.shutdown()
 
-		runner.startSpawning(10, float64(10), runner.spawnComplete)
+		runner.startSpawning(10, float64(10), "http://localhost:8080", runner.spawnComplete)
 		// wait for spawning goroutines
 		time.Sleep(2 * time.Second)
 		Expect(runner.numClients).To(BeEquivalentTo(10))
@@ -314,16 +314,27 @@ var _ = Describe("Test runner", func() {
 		Events.Subscribe(EVENT_SPAWN, callback)
 		defer Events.Unsubscribe(EVENT_SPAWN, callback)
 
+		host := ""
+		configCallback := func(params map[string]interface{}) {
+			if v, ok := params["host"]; ok {
+				host = v.(string)
+			}
+		}
+		Events.Subscribe(EVENT_CONFIG, configCallback)
+		defer Events.Unsubscribe(EVENT_CONFIG, configCallback)
+
 		runner.onSpawnMessage(newGenericMessage("spawn", map[string]interface{}{
 			"user_classes_count": map[interface{}]interface{}{
 				"Dummy":  int64(10),
 				"Dummy2": int64(10),
 			},
 			"timestamp": 1,
+			"host":      []byte("http://localhost:3000"),
 		}, runner.nodeID))
 
 		Expect(workers).To(BeEquivalentTo(20))
 		Expect(spawnRate).To(BeEquivalentTo(20))
+		Expect(host).To(BeEquivalentTo("http://localhost:3000"))
 		runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
 	})
 

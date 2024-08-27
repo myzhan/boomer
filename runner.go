@@ -246,8 +246,11 @@ func (r *runner) getTask(index int) *Task {
 	return r.runTask[index]
 }
 
-func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
+func (r *runner) startSpawning(spawnCount int, spawnRate float64, host string, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
+	Events.Publish(EVENT_CONFIG, map[string]interface{}{
+		"host": host,
+	})
 
 	r.spawnWorkers(spawnCount, spawnCompleteFunc)
 }
@@ -310,7 +313,7 @@ func (r *localRunner) run() {
 	if r.rateLimitEnabled {
 		r.rateLimiter.Start()
 	}
-	r.startSpawning(r.spawnCount, r.spawnRate, nil)
+	r.startSpawning(r.spawnCount, r.spawnRate, "", nil)
 
 	wg.Wait()
 }
@@ -429,9 +432,16 @@ func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 		}
 	}
 
+	var host string
+	if h, ok := msg.Data["host"]; ok {
+		if h, ok := h.([]byte); ok {
+			host = string(h)
+		}
+	}
+
 	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
 	workers := r.sumUsersAmount(msg)
-	r.startSpawning(workers, float64(workers), r.spawnComplete)
+	r.startSpawning(workers, float64(workers), host, r.spawnComplete)
 }
 
 // TODO: consider to add register_message instead of publishing any unknown type as custom_message.
