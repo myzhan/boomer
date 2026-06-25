@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -30,6 +31,7 @@ type Boomer struct {
 	masterPort  int
 	mode        Mode
 	rateLimiter RateLimiter
+	mu          sync.RWMutex
 	slaveRunner *slaveRunner
 
 	localRunner *localRunner
@@ -135,21 +137,27 @@ func (b *Boomer) Run(tasks ...*Task) {
 
 	switch b.mode {
 	case DistributedMode:
-		b.slaveRunner = newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter)
-		b.slaveRunner.setLogger(b.logger)
+		sr := newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter)
+		sr.setLogger(b.logger)
 		b.logger.Println("new slave runner")
 		for _, o := range b.outputs {
-			b.slaveRunner.addOutput(o)
+			sr.addOutput(o)
 		}
-		b.slaveRunner.run()
+		b.mu.Lock()
+		b.slaveRunner = sr
+		b.mu.Unlock()
+		sr.run()
 	case StandaloneMode:
-		b.localRunner = newLocalRunner(tasks, b.rateLimiter, b.spawnCount, b.spawnRate)
-		b.localRunner.setLogger(b.logger)
+		lr := newLocalRunner(tasks, b.rateLimiter, b.spawnCount, b.spawnRate)
+		lr.setLogger(b.logger)
 		b.logger.Println("new local runner")
 		for _, o := range b.outputs {
-			b.localRunner.addOutput(o)
+			lr.addOutput(o)
 		}
-		b.localRunner.run()
+		b.mu.Lock()
+		b.localRunner = lr
+		b.mu.Unlock()
+		lr.run()
 	default:
 		b.logger.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")
 	}
@@ -218,19 +226,29 @@ func (b *Boomer) Quit() {
 	Events.Publish(EVENT_QUIT)
 	var ticker = time.NewTicker(3 * time.Second)
 
+	b.mu.RLock()
+	sr := b.slaveRunner
+	lr := b.localRunner
+	b.mu.RUnlock()
+
 	switch b.mode {
 	case DistributedMode:
+		if sr == nil {
+			return
+		}
 		// wait for quit message is sent to master
 		select {
-		case <-b.slaveRunner.client.disconnectedChannel():
+		case <-sr.client.disconnectedChannel():
 			break
 		case <-ticker.C:
 			b.logger.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
 			break
 		}
-		b.slaveRunner.shutdown()
+		sr.shutdown()
 	case StandaloneMode:
-		b.localRunner.shutdown()
+		if lr != nil {
+			lr.shutdown()
+		}
 	}
 }
 

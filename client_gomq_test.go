@@ -15,8 +15,8 @@ var _ = Describe("Test gomq client", func() {
 
 	It("test connect with error", func() {
 		client := newClient("mock:0.0.0.0", 1234, "testing")
-		MockGomqDealerInstance.SetConnectError(errors.New("connect error"))
-		defer MockGomqDealerInstance.SetConnectError(nil)
+		mockGomqDealerInstance.SetConnectError(errors.New("connect error"))
+		defer mockGomqDealerInstance.SetConnectError(nil)
 		err := client.connect()
 		Expect(err).To(HaveOccurred())
 	})
@@ -32,13 +32,13 @@ var _ = Describe("Test gomq client", func() {
 		pongMessageInBytes, _ := pongMessage.serialize()
 
 		client.sendChannel() <- pingMessage
-		Eventually(MockGomqDealerInstance.SendChannel()).Should(Receive(Equal(pingMessageInBytes)))
+		Eventually(mockGomqDealerInstance.SendChannel()).Should(Receive(Equal(pingMessageInBytes)))
 
 		serverMessage := &zmtp.Message{
 			MessageType: zmtp.UserMessage,
 			Body:        [][]byte{pongMessageInBytes},
 		}
-		MockGomqDealerInstance.RecvChannel() <- serverMessage
+		mockGomqDealerInstance.RecvChannel() <- serverMessage
 		Eventually(client.recvChannel()).Should(Receive(Equal(pongMessage)))
 	})
 
@@ -53,13 +53,13 @@ var _ = Describe("Test gomq client", func() {
 		pongMessageInBytes, _ := pongMessage.serialize()
 
 		client.sendChannel() <- pingMessage
-		Eventually(MockGomqDealerInstance.SendChannel()).Should(Receive(Equal(pingMessageInBytes)))
+		Eventually(mockGomqDealerInstance.SendChannel()).Should(Receive(Equal(pingMessageInBytes)))
 
 		serverZmtpMessage := &zmtp.Message{
 			MessageType: zmtp.UserMessage,
 			Body:        [][]byte{pongMessageInBytes},
 		}
-		MockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
+		mockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
 		Eventually(client.recvChannel()).Should(Receive(Equal(pongMessage)))
 	})
 })

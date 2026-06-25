@@ -18,13 +18,13 @@ import (
 )
 
 func castToInt64(num interface{}) (ret int64, ok bool) {
-	t_int64, ok := num.(int64)
+	tInt64, ok := num.(int64)
 	if ok {
-		return t_int64, true
+		return tInt64, true
 	}
-	t_uint64, ok := num.(uint64)
+	tUint64, ok := num.(uint64)
 	if ok {
-		return int64(t_uint64), true
+		return int64(tUint64), true
 	}
 	return int64(0), false
 }
@@ -82,7 +82,7 @@ func Now() int64 {
 }
 
 // StartMemoryProfile starts memory profiling and save the results in file.
-func StartMemoryProfile(file string, duration time.Duration) (err error) {
+func StartMemoryProfile(file string, duration time.Duration) error {
 	f, err := os.Create(file)
 	if err != nil {
 		return err
@@ -90,8 +90,7 @@ func StartMemoryProfile(file string, duration time.Duration) (err error) {
 
 	log.Println("Start memory profiling for", duration)
 	time.AfterFunc(duration, func() {
-		err = pprof.WriteHeapProfile(f)
-		if err != nil {
+		if err := pprof.WriteHeapProfile(f); err != nil {
 			log.Println(err)
 		}
 		f.Close()

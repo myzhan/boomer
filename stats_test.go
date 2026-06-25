@@ -92,9 +92,21 @@ var _ = Describe("Test states", func() {
 		newStats := newRequestStats()
 		newStats.start()
 		defer newStats.close()
-		newStats.logRequest("http", "success", 1, 20)
+		newStats.requestSuccessChan <- &requestSuccess{
+			requestType:    "http",
+			name:           "success",
+			responseTime:   1,
+			responseLength: 20,
+		}
+		// Wait for the first report to ensure the success is processed
+		report := <-newStats.messageToRunnerChan
+		stats := report["stats"].([]interface{})
+		Expect(len(stats)).To(BeEquivalentTo(1))
+		// Now clear and verify it takes effect in the next report
 		newStats.clearStatsChan <- true
-		Expect(newStats.total.NumRequests).To(BeEquivalentTo(0))
+		report = <-newStats.messageToRunnerChan
+		stats = report["stats"].([]interface{})
+		Expect(len(stats)).To(BeEquivalentTo(0))
 	})
 
 	It("test serialize stats", func() {

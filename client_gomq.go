@@ -13,77 +13,75 @@ import (
 	"github.com/myzhan/gomq/zmtp"
 )
 
-type MockGomqDealer struct {
+type mockGomqDealer struct {
 	connectErr     error
 	sendChannel    chan []byte
 	receiveChannel chan *zmtp.Message
 }
 
-var MockGomqDealerInstance *MockGomqDealer = &MockGomqDealer{
+var mockGomqDealerInstance = &mockGomqDealer{
 	sendChannel:    make(chan []byte, 10),
 	receiveChannel: make(chan *zmtp.Message, 10),
 }
 
-func (m *MockGomqDealer) SetConnectError(err error) {
+func (m *mockGomqDealer) SetConnectError(err error) {
 	m.connectErr = err
 }
 
-func (m *MockGomqDealer) Connect(add string) (err error) {
+func (m *mockGomqDealer) Connect(add string) (err error) {
 	if m.connectErr != nil {
 		return m.connectErr
 	}
 	return nil
 }
 
-func (m *MockGomqDealer) AddConnection(*gomq.Connection) {
-
+func (m *mockGomqDealer) AddConnection(*gomq.Connection) {
 }
 
-func (m *MockGomqDealer) RemoveConnection(string) {
+func (m *mockGomqDealer) RemoveConnection(string) {
 }
 
-func (m *MockGomqDealer) SendChannel() chan []byte {
+func (m *mockGomqDealer) SendChannel() chan []byte {
 	return m.sendChannel
 }
 
-func (m *MockGomqDealer) Send(payload []byte) (err error) {
+func (m *mockGomqDealer) Send(payload []byte) (err error) {
 	m.sendChannel <- payload
 	return nil
 }
 
-func (m *MockGomqDealer) SendMultipart(payload [][]byte) (err error) {
+func (m *mockGomqDealer) SendMultipart(payload [][]byte) (err error) {
 	return nil
 }
 
-func (m *MockGomqDealer) RecvChannel() chan *zmtp.Message {
+func (m *mockGomqDealer) RecvChannel() chan *zmtp.Message {
 	return m.receiveChannel
 }
 
-func (m *MockGomqDealer) Recv() ([]byte, error) {
+func (m *mockGomqDealer) Recv() ([]byte, error) {
 	return nil, nil
 }
 
-func (m *MockGomqDealer) RecvMultipart() ([][]byte, error) {
+func (m *mockGomqDealer) RecvMultipart() ([][]byte, error) {
 	return nil, nil
 }
 
-func (m *MockGomqDealer) Close() {
-
+func (m *mockGomqDealer) Close() {
 }
 
-func (m *MockGomqDealer) RetryInterval() time.Duration {
+func (m *mockGomqDealer) RetryInterval() time.Duration {
 	return time.Second
 }
 
-func (m *MockGomqDealer) SocketType() zmtp.SocketType {
+func (m *mockGomqDealer) SocketType() zmtp.SocketType {
 	return zmtp.DealerSocketType
 }
 
-func (m *MockGomqDealer) SocketIdentity() zmtp.SocketIdentity {
+func (m *mockGomqDealer) SocketIdentity() zmtp.SocketIdentity {
 	return nil
 }
 
-func (m *MockGomqDealer) SecurityMechanism() zmtp.SecurityMechanism {
+func (m *mockGomqDealer) SecurityMechanism() zmtp.SecurityMechanism {
 	return nil
 }
 
@@ -118,8 +116,7 @@ func (c *gomqSocketClient) connect() (err error) {
 	addr := fmt.Sprintf("tcp://%s:%d", c.masterHost, c.masterPort)
 
 	if strings.HasPrefix(c.masterHost, "mock:") {
-		// for unittest
-		c.dealerSocket = MockGomqDealerInstance
+		c.dealerSocket = mockGomqDealerInstance
 	} else {
 		c.dealerSocket = gomq.NewDealer(zmtp.NewSecurityNull(), c.identity)
 	}

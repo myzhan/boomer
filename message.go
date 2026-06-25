@@ -8,6 +8,10 @@ var (
 	mh codec.MsgpackHandle
 )
 
+func init() {
+	mh.StructToArray = true
+}
+
 type message interface {
 	serialize() (out []byte, err error)
 }
@@ -27,14 +31,12 @@ func newGenericMessage(t string, data map[string]interface{}, nodeID string) (ms
 }
 
 func (m *genericMessage) serialize() (out []byte, err error) {
-	mh.StructToArray = true
 	enc := codec.NewEncoderBytes(&out, &mh)
 	err = enc.Encode(m)
 	return out, err
 }
 
 func newGenericMessageFromBytes(raw []byte) (newMsg *genericMessage, err error) {
-	mh.StructToArray = true
 	dec := codec.NewDecoderBytes(raw, &mh)
 	newMsg = &genericMessage{}
 	err = dec.Decode(newMsg)
@@ -56,14 +58,12 @@ func newClientReadyMessage(t string, data int, nodeID string) (msg *clientReadyM
 }
 
 func (m *clientReadyMessage) serialize() (out []byte, err error) {
-	mh.StructToArray = true
 	enc := codec.NewEncoderBytes(&out, &mh)
 	err = enc.Encode(m)
 	return out, err
 }
 
 func newClientReadyMessageFromBytes(raw []byte) (newMsg *clientReadyMessage, err error) {
-	mh.StructToArray = true
 	dec := codec.NewDecoderBytes(raw, &mh)
 	newMsg = &clientReadyMessage{}
 	err = dec.Decode(newMsg)
@@ -85,14 +85,12 @@ func newCustomMessage(t string, data interface{}, nodeID string) (msg *CustomMes
 }
 
 func (m *CustomMessage) serialize() (out []byte, err error) {
-	mh.StructToArray = true
 	enc := codec.NewEncoderBytes(&out, &mh)
 	err = enc.Encode(m)
 	return out, err
 }
 
 func newCustomMessageFromBytes(raw []byte) (newMsg *CustomMessage, err error) {
-	mh.StructToArray = true
 	dec := codec.NewDecoderBytes(raw, &mh)
 	newMsg = &CustomMessage{}
 	err = dec.Decode(newMsg)

@@ -60,7 +60,7 @@ var _ = Describe("Test runner", func() {
 		runner.setLogger(log.Default())
 		runner.addOutput(hitOutput)
 		runner.addOutput(hitOutput2)
-		runner.outputOnEevent(nil)
+		runner.outputOnEvent(nil)
 		Expect(hitOutput.onEvent).To(BeTrue())
 		Expect(hitOutput2.onEvent).To(BeTrue())
 	})
@@ -92,7 +92,9 @@ var _ = Describe("Test runner", func() {
 
 		runner.addWorkers(10)
 
+		runner.mu.RLock()
 		currentClients := len(runner.cancelFuncs)
+		runner.mu.RUnlock()
 		Expect(currentClients).To(BeEquivalentTo(10))
 	})
 
@@ -113,7 +115,9 @@ var _ = Describe("Test runner", func() {
 		runner.reduceWorkers(5)
 		runner.reduceWorkers(2)
 
+		runner.mu.RLock()
 		currentClients := len(runner.cancelFuncs)
+		runner.mu.RUnlock()
 		Expect(currentClients).To(BeEquivalentTo(3))
 	})
 
@@ -253,14 +257,14 @@ var _ = Describe("Test runner", func() {
 		}
 
 		runner := newSlaveRunner("localhost", 5557, []*Task{taskA, taskB}, nil)
-		runner.state = stateSpawning
+		runner.setState(stateSpawning)
 		runner.client = newClient("localhost", 5557, runner.nodeID)
 		defer runner.shutdown()
 
 		runner.startSpawning(10, float64(10), runner.spawnComplete)
 		// wait for spawning goroutines
 		time.Sleep(2 * time.Second)
-		Expect(runner.numClients).To(BeEquivalentTo(10))
+		Expect(atomic.LoadInt32(&runner.numClients)).To(BeEquivalentTo(10))
 
 		msg := <-runner.client.sendChannel()
 		m := msg.(*genericMessage)
@@ -303,7 +307,7 @@ var _ = Describe("Test runner", func() {
 		}
 		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
 		runner.client = newClient("localhost", 5557, runner.nodeID)
-		runner.state = stateInit
+		runner.setState(stateInit)
 		defer runner.shutdown()
 
 		workers, spawnRate := 0, float64(0)
@@ -330,7 +334,7 @@ var _ = Describe("Test runner", func() {
 	It("test onQuitMessage", func() {
 		runner := newSlaveRunner("localhost", 5557, nil, nil)
 		runner.client = newClient("localhost", 5557, "test")
-		runner.state = stateInit
+		runner.setState(stateInit)
 		defer runner.shutdown()
 
 		quitMessages := make(chan bool, 10)
@@ -343,15 +347,15 @@ var _ = Describe("Test runner", func() {
 		runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
 		Eventually(quitMessages).Should(Receive())
 
-		runner.state = stateRunning
+		runner.setState(stateRunning)
 		runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
 		Eventually(quitMessages).Should(Receive())
-		Expect(runner.state).Should(BeIdenticalTo(stateInit))
+		Expect(runner.getState()).Should(BeIdenticalTo(stateInit))
 
-		runner.state = stateStopped
+		runner.setState(stateStopped)
 		runner.onMessage(newGenericMessage("quit", nil, runner.nodeID))
 		Eventually(quitMessages).Should(Receive())
-		Expect(runner.state).Should(BeIdenticalTo(stateInit))
+		Expect(runner.getState()).Should(BeIdenticalTo(stateInit))
 	})
 
 	It("test on ack message", func() {
@@ -360,8 +364,9 @@ var _ = Describe("Test runner", func() {
 			eventCount++
 		})
 		runner := newSlaveRunner("localhost", 5557, []*Task{}, nil)
-		runner.waitForAck = sync.WaitGroup{}
-		runner.waitForAck.Add(1)
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		runner.waitForAck = wg
 
 		runner.onAckMessage(nil)
 		runner.onAckMessage(nil)
@@ -382,7 +387,7 @@ var _ = Describe("Test runner", func() {
 
 		runner := newSlaveRunner("localhost", 5557, []*Task{taskA, taskB}, nil)
 		runner.client = newClient("localhost", 5557, runner.nodeID)
-		runner.state = stateInit
+		runner.setState(stateInit)
 		defer runner.shutdown()
 
 		go func() {
@@ -410,8 +415,8 @@ var _ = Describe("Test runner", func() {
 		Expect(m.Type).To(Equal("spawning"))
 
 		time.Sleep(2 * time.Second)
-		Expect(runner.state).Should(BeIdenticalTo(stateRunning))
-		Expect(runner.numClients).Should(BeEquivalentTo(10))
+		Expect(runner.getState()).Should(BeIdenticalTo(stateRunning))
+		Expect(atomic.LoadInt32(&runner.numClients)).Should(BeEquivalentTo(10))
 
 		msg = <-runner.client.sendChannel()
 		m = msg.(*genericMessage)
@@ -430,8 +435,8 @@ var _ = Describe("Test runner", func() {
 		Expect(m.Type).To(Equal("spawning"))
 
 		time.Sleep(2 * time.Second)
-		Expect(runner.state).Should(BeIdenticalTo(stateRunning))
-		Expect(runner.numClients).Should(BeEquivalentTo(20))
+		Expect(runner.getState()).Should(BeIdenticalTo(stateRunning))
+		Expect(atomic.LoadInt32(&runner.numClients)).Should(BeEquivalentTo(20))
 
 		msg = <-runner.client.sendChannel()
 		m = msg.(*genericMessage)
@@ -439,7 +444,7 @@ var _ = Describe("Test runner", func() {
 
 		// stop all the workers
 		runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
-		Expect(runner.state).To(BeIdenticalTo(stateInit))
+		Expect(runner.getState()).To(BeIdenticalTo(stateInit))
 
 		msg = <-runner.client.sendChannel()
 		m = msg.(*genericMessage)
@@ -463,15 +468,15 @@ var _ = Describe("Test runner", func() {
 
 		// spawn complete and running
 		time.Sleep(2 * time.Second)
-		Expect(runner.state).Should(BeIdenticalTo(stateRunning))
-		Expect(runner.numClients).Should(BeEquivalentTo(10))
+		Expect(runner.getState()).Should(BeIdenticalTo(stateRunning))
+		Expect(atomic.LoadInt32(&runner.numClients)).Should(BeEquivalentTo(10))
 
 		msg = <-runner.client.sendChannel()
 		m = msg.(*genericMessage)
 		Expect(m.Type).To(Equal("spawning_complete"))
 		// stop all the workers
 		runner.onMessage(newGenericMessage("stop", nil, runner.nodeID))
-		Expect(runner.state).To(BeIdenticalTo(stateInit))
+		Expect(runner.getState()).To(BeIdenticalTo(stateInit))
 
 		msg = <-runner.client.sendChannel()
 		m = msg.(*genericMessage)
@@ -495,7 +500,7 @@ var _ = Describe("Test runner", func() {
 
 		clientReadyMessage := newClientReadyMessage("client_ready", -1, r.nodeID)
 		clientReadyMessageInBytes, _ := clientReadyMessage.serialize()
-		Eventually(MockGomqDealerInstance.SendChannel()).Should(Receive(Equal(clientReadyMessageInBytes)))
+		Eventually(mockGomqDealerInstance.SendChannel()).Should(Receive(Equal(clientReadyMessageInBytes)))
 
 		ackMessage := newGenericMessage("ack", nil, r.nodeID)
 		ackMessageInBytes, _ := ackMessage.serialize()
@@ -503,6 +508,6 @@ var _ = Describe("Test runner", func() {
 			MessageType: zmtp.UserMessage,
 			Body:        [][]byte{ackMessageInBytes},
 		}
-		MockGomqDealerInstance.RecvChannel() <- ackZmtpMessage
+		mockGomqDealerInstance.RecvChannel() <- ackZmtpMessage
 	})
 })

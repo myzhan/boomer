@@ -20,7 +20,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Run unittests and generate coverage report
-        run: go test -timeout 2m -coverprofile="cover.out" -covermode=atomic
+        run: go test -race -timeout 2m -coverprofile="cover.out" -covermode=atomic
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

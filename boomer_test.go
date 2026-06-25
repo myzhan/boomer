@@ -122,10 +122,10 @@ var _ = Describe("Test Boomer", func() {
 			MessageType: zmtp.UserMessage,
 			Body:        [][]byte{serverMessageInBytes},
 		}
-		MockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
+		mockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
 
 		time.Sleep(4 * time.Second)
-		Expect(count).Should(BeEquivalentTo(10))
+		Expect(atomic.LoadInt64(&count)).Should(BeEquivalentTo(10))
 	})
 
 	It("test run tasks for test", func() {
@@ -177,7 +177,7 @@ var _ = Describe("Test Boomer", func() {
 		Expect(rampUpRateLimiter.maxThreshold).To(BeEquivalentTo(10))
 		Expect(rampUpRateLimiter.rampUpRate).To(Equal("2/2s"))
 		Expect(rampUpRateLimiter.rampUpStep).To(BeEquivalentTo(2))
-		Expect(rampUpRateLimiter.rampUpPeroid).To(BeEquivalentTo(2 * time.Second))
+		Expect(rampUpRateLimiter.rampUpPeriod).To(BeEquivalentTo(2 * time.Second))
 	})
 
 	It("test run", func() {
@@ -194,24 +194,34 @@ var _ = Describe("Test Boomer", func() {
 		}
 
 		go Run(taskA)
-		time.Sleep(50 * time.Millisecond)
 		defer defaultBoomer.Quit()
+
+		// Wait for Run() to finish setting up slaveRunner
+		time.Sleep(200 * time.Millisecond)
+
+		defaultBoomer.mu.RLock()
+		sr := defaultBoomer.slaveRunner
+		defaultBoomer.mu.RUnlock()
+		Expect(sr).NotTo(BeNil())
+
+		// Drain the client_ready message from the send channel
+		Eventually(mockGomqDealerInstance.SendChannel()).Should(Receive())
 
 		serverMessage := newGenericMessage("spawn", map[string]interface{}{
 			"user_classes_count": map[interface{}]interface{}{
 				"Dummy":  int64(5),
 				"Dummy2": int64(5),
 			},
-		}, defaultBoomer.slaveRunner.nodeID)
+		}, sr.nodeID)
 		serverMessageInBytes, _ := serverMessage.serialize()
 		serverZmtpMessage := &zmtp.Message{
 			MessageType: zmtp.UserMessage,
 			Body:        [][]byte{serverMessageInBytes},
 		}
-		MockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
+		mockGomqDealerInstance.RecvChannel() <- serverZmtpMessage
 
 		time.Sleep(4 * time.Second)
-		Expect(count).To(BeEquivalentTo(10))
+		Expect(atomic.LoadInt64(&count)).To(BeEquivalentTo(10))
 	})
 
 	It("test record success", func() {

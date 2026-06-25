@@ -74,7 +74,7 @@ func (s *requestStats) logError(method, name, err string) {
 		}
 		s.errors[key] = entry
 	}
-	entry.occured()
+	entry.occurred()
 }
 
 func (s *requestStats) get(name string, method string) (entry *statsEntry) {
@@ -315,7 +315,7 @@ type statsError struct {
 	occurrences int64
 }
 
-func (err *statsError) occured() {
+func (err *statsError) occurred() {
 	err.occurrences++
 }
 

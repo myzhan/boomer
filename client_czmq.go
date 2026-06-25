@@ -1,3 +1,4 @@
+//go:build goczmq
 // +build goczmq
 
 package boomer

@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -41,6 +42,7 @@ type StableRateLimiter struct {
 	timerId          uint64
 	refillPeriod     time.Duration
 	broadcastChannel chan bool
+	mu               sync.Mutex
 	quitChannel      chan bool
 }
 
@@ -70,12 +72,13 @@ func (limiter *StableRateLimiter) Start() {
 				time.Sleep(limiter.refillPeriod)
 				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
 				if hasBeenStarted {
-					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
 					return
 				}
 				atomic.StoreInt64(&limiter.currentThreshold, limiter.threshold)
+				limiter.mu.Lock()
 				close(limiter.broadcastChannel)
 				limiter.broadcastChannel = make(chan bool)
+				limiter.mu.Unlock()
 			}
 		}
 	}(timerId)
@@ -86,8 +89,10 @@ func (limiter *StableRateLimiter) Acquire() (blocked bool) {
 	permit := atomic.AddInt64(&limiter.currentThreshold, -1)
 	if permit < 0 {
 		blocked = true
-		// block until the bucket is refilled
-		<-limiter.broadcastChannel
+		limiter.mu.Lock()
+		ch := limiter.broadcastChannel
+		limiter.mu.Unlock()
+		<-ch
 	} else {
 		blocked = false
 	}
@@ -113,8 +118,9 @@ type RampUpRateLimiter struct {
 	refillPeriod     time.Duration
 	rampUpRate       string
 	rampUpStep       int64
-	rampUpPeroid     time.Duration
+	rampUpPeriod     time.Duration
 	broadcastChannel chan bool
+	mu               sync.Mutex
 	quitChannel      chan bool
 }
 
@@ -130,40 +136,40 @@ func NewRampUpRateLimiter(maxThreshold int64, rampUpRate string, refillPeriod ti
 		refillPeriod:     refillPeriod,
 		broadcastChannel: make(chan bool),
 	}
-	rateLimiter.rampUpStep, rateLimiter.rampUpPeroid, err = rateLimiter.parseRampUpRate(rateLimiter.rampUpRate)
+	rateLimiter.rampUpStep, rateLimiter.rampUpPeriod, err = rateLimiter.parseRampUpRate(rateLimiter.rampUpRate)
 	if err != nil {
 		return nil, err
 	}
 	return rateLimiter, nil
 }
 
-func (limiter *RampUpRateLimiter) parseRampUpRate(rampUpRate string) (rampUpStep int64, rampUpPeroid time.Duration, err error) {
+func (limiter *RampUpRateLimiter) parseRampUpRate(rampUpRate string) (rampUpStep int64, rampUpPeriod time.Duration, err error) {
 	if strings.Contains(rampUpRate, "/") {
 		tmp := strings.Split(rampUpRate, "/")
 		if len(tmp) != 2 {
-			return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
+			return rampUpStep, rampUpPeriod, ErrParsingRampUpRate
 		}
 		rampUpStep, err := strconv.ParseInt(tmp[0], 10, 64)
 		if err != nil {
-			return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
+			return rampUpStep, rampUpPeriod, ErrParsingRampUpRate
 		}
-		rampUpPeroid, err := time.ParseDuration(tmp[1])
+		rampUpPeriod, err := time.ParseDuration(tmp[1])
 		if err != nil {
-			return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
+			return rampUpStep, rampUpPeriod, ErrParsingRampUpRate
 		}
-		return rampUpStep, rampUpPeroid, nil
+		return rampUpStep, rampUpPeriod, nil
 	}
 
 	rampUpStep, err = strconv.ParseInt(rampUpRate, 10, 64)
 	if err != nil {
-		return rampUpStep, rampUpPeroid, ErrParsingRampUpRate
+		return rampUpStep, rampUpPeriod, ErrParsingRampUpRate
 	}
-	rampUpPeroid = time.Second
-	return rampUpStep, rampUpPeroid, nil
+	rampUpPeriod = time.Second
+	return rampUpStep, rampUpPeriod, nil
 }
 
 func (limiter *RampUpRateLimiter) getNextThreshold() int64 {
-	nextValue := limiter.nextThreshold + limiter.rampUpStep
+	nextValue := atomic.LoadInt64(&limiter.nextThreshold) + limiter.rampUpStep
 	if nextValue < 0 {
 		// int64 overflow
 		nextValue = int64(math.MaxInt64)
@@ -181,7 +187,7 @@ func (limiter *RampUpRateLimiter) Start() {
 	quitChannel := limiter.quitChannel
 
 	atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
-	atomic.StoreInt64(&limiter.currentThreshold, limiter.nextThreshold)
+	atomic.StoreInt64(&limiter.currentThreshold, atomic.LoadInt64(&limiter.nextThreshold))
 	// bucket updater
 	go func(myId uint64) {
 		for {
@@ -192,13 +198,14 @@ func (limiter *RampUpRateLimiter) Start() {
 				time.Sleep(limiter.refillPeriod)
 				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
 				if hasBeenStarted {
-					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
 					return
 				}
 
-				atomic.StoreInt64(&limiter.currentThreshold, limiter.nextThreshold)
+				atomic.StoreInt64(&limiter.currentThreshold, atomic.LoadInt64(&limiter.nextThreshold))
+				limiter.mu.Lock()
 				close(limiter.broadcastChannel)
 				limiter.broadcastChannel = make(chan bool)
+				limiter.mu.Unlock()
 			}
 		}
 	}(timerId)
@@ -210,10 +217,9 @@ func (limiter *RampUpRateLimiter) Start() {
 			case <-quitChannel:
 				return
 			default:
-				time.Sleep(limiter.rampUpPeroid)
+				time.Sleep(limiter.rampUpPeriod)
 				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
 				if hasBeenStarted {
-					// limiter may be restarted while sleeping, a new timer will be created, just quit this one.
 					return
 				}
 
@@ -228,8 +234,10 @@ func (limiter *RampUpRateLimiter) Acquire() (blocked bool) {
 	permit := atomic.AddInt64(&limiter.currentThreshold, -1)
 	if permit < 0 {
 		blocked = true
-		// block until the bucket is refilled
-		<-limiter.broadcastChannel
+		limiter.mu.Lock()
+		ch := limiter.broadcastChannel
+		limiter.mu.Unlock()
+		<-ch
 	} else {
 		blocked = false
 	}
@@ -238,6 +246,6 @@ func (limiter *RampUpRateLimiter) Acquire() (blocked bool) {
 
 // Stop the rate limiter.
 func (limiter *RampUpRateLimiter) Stop() {
-	limiter.nextThreshold = 0
+	atomic.StoreInt64(&limiter.nextThreshold, 0)
 	close(limiter.quitChannel)
 }
