@@ -34,6 +34,7 @@ type runner struct {
 	tasks           []*Task
 	totalTaskWeight int
 	runTask         []*Task // goroutine execute tasks according to the list
+	taskIndex       uint64  // shared cursor into runTask, advanced atomically by all workers
 
 	rateLimiter      RateLimiter
 	rateLimitEnabled bool
@@ -155,7 +156,6 @@ func (r *runner) addWorkers(gapCount int) {
 			r.cancelFuncs = append(r.cancelFuncs, cancel)
 			r.mu.Unlock()
 			go func(ctx context.Context) {
-				index := 0
 				for {
 					select {
 					case <-ctx.Done():
@@ -166,20 +166,12 @@ func (r *runner) addWorkers(gapCount int) {
 						if r.rateLimitEnabled {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
-								task := r.getTask(index)
+								task := r.getTask(r.nextTaskIndex())
 								r.safeRun(task.Fn)
-								index++
-								if index == r.totalTaskWeight {
-									index = 0
-								}
 							}
 						} else {
-							task := r.getTask(index)
+							task := r.getTask(r.nextTaskIndex())
 							r.safeRun(task.Fn)
-							index++
-							if index == r.totalTaskWeight {
-								index = 0
-							}
 						}
 					}
 					runtime.Gosched()
@@ -270,6 +262,15 @@ func (r *runner) setTasks(t []*Task) {
 
 func (r *runner) getTask(index int) *Task {
 	return r.runTask[index]
+}
+
+// nextTaskIndex returns the next index into runTask, advancing a single shared cursor across
+// all worker goroutines. Sharing the cursor (rather than a per-goroutine index that every
+// worker starts at 0 and advances in unison) prevents concurrent workers from selecting the
+// same task in lockstep, while preserving the weighted round-robin distribution of runTask.
+func (r *runner) nextTaskIndex() int {
+	next := atomic.AddUint64(&r.taskIndex, 1) - 1
+	return int(next % uint64(r.totalTaskWeight))
 }
 
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
