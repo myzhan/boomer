@@ -8,6 +8,10 @@ type Task struct {
 	// The weight is used to distribute goroutines over multiple tasks.
 	Weight int
 	// Fn is called by the goroutines allocated to this task, in a loop.
-	Fn   func()
-	Name string
+	Fn func()
+	// Teardown, if non-nil, is invoked once per virtual user that is
+	// deleted. Each user runs on its own goroutine, meaning goroutine ID
+	// can be used to identify a unique user for stateful tests.
+	Teardown func()
+	Name     string
 }
