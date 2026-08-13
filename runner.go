@@ -156,6 +156,13 @@ func (r *runner) addWorkers(gapCount int) {
 			r.cancelFuncs = append(r.cancelFuncs, cancel)
 			r.mu.Unlock()
 			go func(ctx context.Context) {
+				defer func() {
+					for _, task := range r.tasks {
+						if task.Teardown != nil {
+							r.safeRun(task.Teardown)
+						}
+					}
+				}()
 				for {
 					select {
 					case <-ctx.Done():

@@ -121,6 +121,148 @@ var _ = Describe("Test runner", func() {
 		Expect(currentClients).To(BeEquivalentTo(3))
 	})
 
+	It("test teardown called on context cancel", func() {
+		teardownCalls := int64(0)
+		taskA := &Task{
+			Weight: 10,
+			Fn: func() {
+				time.Sleep(10 * time.Millisecond)
+			},
+			Teardown: func() {
+				atomic.AddInt64(&teardownCalls, 1)
+			},
+			Name: "TaskA",
+		}
+
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+		defer runner.shutdown()
+
+		runner.addWorkers(5)
+		// give workers a chance to execute the task at least once
+		time.Sleep(100 * time.Millisecond)
+		runner.reduceWorkers(5)
+
+		Eventually(func() int64 {
+			return atomic.LoadInt64(&teardownCalls)
+		}).Should(BeEquivalentTo(5))
+	})
+
+	It("test nil teardown does not crash", func() {
+		taskA := &Task{
+			Weight: 10,
+			Fn: func() {
+				time.Sleep(10 * time.Millisecond)
+			},
+			Name: "TaskA",
+		}
+
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+		defer runner.shutdown()
+
+		Expect(func() {
+			runner.addWorkers(3)
+			time.Sleep(100 * time.Millisecond)
+			runner.reduceWorkers(3)
+			time.Sleep(100 * time.Millisecond)
+		}).ShouldNot(Panic())
+	})
+
+	It("test teardown panic is recovered", func() {
+		teardownCalls := int64(0)
+		taskA := &Task{
+			Weight: 10,
+			Fn: func() {
+				time.Sleep(10 * time.Millisecond)
+			},
+			Teardown: func() {
+				atomic.AddInt64(&teardownCalls, 1)
+				panic("Runner will catch this panic")
+			},
+			Name: "TaskA",
+		}
+
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+		defer runner.shutdown()
+
+		Expect(func() {
+			runner.addWorkers(3)
+			time.Sleep(100 * time.Millisecond)
+			runner.reduceWorkers(3)
+			Eventually(func() int64 {
+				return atomic.LoadInt64(&teardownCalls)
+			}).Should(BeEquivalentTo(3))
+		}).ShouldNot(Panic())
+	})
+
+	It("test teardown called once per distinct task run", func() {
+		var teardownA, teardownB int64
+		taskA := &Task{
+			Weight: 1,
+			Fn: func() {
+				time.Sleep(10 * time.Millisecond)
+			},
+			Teardown: func() {
+				atomic.AddInt64(&teardownA, 1)
+			},
+			Name: "TaskA",
+		}
+		taskB := &Task{
+			Weight: 1,
+			Fn: func() {
+				time.Sleep(10 * time.Millisecond)
+			},
+			Teardown: func() {
+				atomic.AddInt64(&teardownB, 1)
+			},
+			Name: "TaskB",
+		}
+
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA, taskB}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+		defer runner.shutdown()
+
+		runner.addWorkers(4)
+		// enough time for every worker to cycle through both tasks
+		time.Sleep(200 * time.Millisecond)
+		runner.reduceWorkers(4)
+
+		Eventually(func() int64 {
+			return atomic.LoadInt64(&teardownA)
+		}).Should(BeEquivalentTo(4))
+		Eventually(func() int64 {
+			return atomic.LoadInt64(&teardownB)
+		}).Should(BeEquivalentTo(4))
+	})
+
+	It("test teardown called on shutdown", func() {
+		teardownCalls := int64(0)
+		taskA := &Task{
+			Weight: 10,
+			Fn: func() {
+				time.Sleep(10 * time.Millisecond)
+			},
+			Teardown: func() {
+				atomic.AddInt64(&teardownCalls, 1)
+			},
+			Name: "TaskA",
+		}
+
+		runner := newSlaveRunner("localhost", 5557, []*Task{taskA}, nil)
+		runner.client = newClient("localhost", 5557, runner.nodeID)
+
+		runner.addWorkers(4)
+		// give workers a chance to execute the task at least once
+		time.Sleep(100 * time.Millisecond)
+		runner.shutdown()
+
+		Eventually(func() int64 {
+			return atomic.LoadInt64(&teardownCalls)
+		}).Should(BeEquivalentTo(4))
+	})
+
 	It("test localrunner", func() {
 		taskA := &Task{
 			Weight: 10,
