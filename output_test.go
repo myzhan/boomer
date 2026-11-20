@@ -3,9 +3,11 @@ package boomer
 import (
 	"log"
 	"os"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var _ = Describe("test output", func() {
@@ -111,3 +113,58 @@ var _ = Describe("test output", func() {
 		o2.WithLogger(logger)
 	})
 })
+
+func gatherGaugeValue(t *testing.T, registry *prometheus.Registry, metricName, labelName, labelValue string) float64 {
+	t.Helper()
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("failed to gather metrics: %v", err)
+	}
+	for _, family := range families {
+		if family.GetName() != metricName {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			matched := false
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == labelName && label.GetValue() == labelValue {
+					matched = true
+				}
+			}
+			if matched {
+				return metric.GetGauge().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
+// Each output must own its metrics, otherwise two outputs in the same process
+// overwrite each other's gauges.
+func TestPrometheusPusherOutputMetricsAreIsolated(t *testing.T) {
+	first := NewPrometheusPusherOutput("http://127.0.0.1:1", "boomer").WithLogger(newDiscardLogger())
+	second := NewPrometheusPusherOutput("http://127.0.0.1:1", "boomer").WithLogger(newDiscardLogger())
+	first.OnStart()
+	second.OnStart()
+
+	if first.metrics == nil || second.metrics == nil {
+		t.Fatal("metrics should be created by OnStart")
+	}
+	if first.metrics == second.metrics {
+		t.Fatal("outputs must not share the same metrics")
+	}
+
+	first.metrics.numRequests.WithLabelValues("GET", "/").Set(42)
+
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(second.metrics.collectors()...)
+	if got := gatherGaugeValue(t, registry, "boomer_num_requests", "name", "/"); got != 0 {
+		t.Fatalf("metrics of the second output were polluted, got %v", got)
+	}
+}
+
+// OnEvent without OnStart used to use the package level gauges, it must not panic.
+func TestPrometheusPusherOutputOnEventBeforeOnStart(t *testing.T) {
+	output := NewPrometheusPusherOutput("http://127.0.0.1:1", "boomer").WithLogger(newDiscardLogger())
+	output.OnEvent(map[string]interface{}{})
+}

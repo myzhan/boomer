@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/myzhan/gomq"
@@ -96,6 +97,7 @@ type gomqSocketClient struct {
 	toMaster               chan message
 	disconnectedFromMaster chan bool
 	shutdownChan           chan bool
+	closeOnce              sync.Once
 }
 
 func newClient(masterHost string, masterPort int, identity string) (client *gomqSocketClient) {
@@ -106,7 +108,7 @@ func newClient(masterHost string, masterPort int, identity string) (client *gomq
 		identity:               identity,
 		fromMaster:             make(chan message, 100),
 		toMaster:               make(chan message, 100),
-		disconnectedFromMaster: make(chan bool),
+		disconnectedFromMaster: make(chan bool, 1),
 		shutdownChan:           make(chan bool),
 	}
 	return client
@@ -133,10 +135,12 @@ func (c *gomqSocketClient) connect() (err error) {
 }
 
 func (c *gomqSocketClient) close() {
-	close(c.shutdownChan)
-	if c.dealerSocket != nil {
-		c.dealerSocket.Close()
-	}
+	c.closeOnce.Do(func() {
+		close(c.shutdownChan)
+		if c.dealerSocket != nil {
+			c.dealerSocket.Close()
+		}
+	})
 }
 
 func (c *gomqSocketClient) recvChannel() chan message {
@@ -166,7 +170,11 @@ func (c *gomqSocketClient) recv() {
 				if decodedGenericMsg.NodeID != c.identity {
 					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedGenericMsg.Type, decodedGenericMsg.NodeID, c.identity)
 				} else {
-					c.fromMaster <- decodedGenericMsg
+					select {
+					case c.fromMaster <- decodedGenericMsg:
+					case <-c.shutdownChan:
+						return
+					}
 				}
 				continue
 			}
@@ -176,7 +184,11 @@ func (c *gomqSocketClient) recv() {
 				if decodedCustomMsg.NodeID != c.identity {
 					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedCustomMsg.Type, decodedCustomMsg.NodeID, c.identity)
 				} else {
-					c.fromMaster <- decodedCustomMsg
+					select {
+					case c.fromMaster <- decodedCustomMsg:
+					case <-c.shutdownChan:
+						return
+					}
 				}
 				continue
 			}
@@ -202,7 +214,11 @@ func (c *gomqSocketClient) send() {
 			m, ok := msg.(*genericMessage)
 			if ok {
 				if m.Type == "quit" {
-					c.disconnectedFromMaster <- true
+					// Notify without blocking, in case nobody is waiting (e.g. Quit already timed out).
+					select {
+					case c.disconnectedFromMaster <- true:
+					default:
+					}
 				}
 			}
 		}

@@ -44,6 +44,10 @@ type StableRateLimiter struct {
 	broadcastChannel chan bool
 	mu               sync.Mutex
 	quitChannel      chan bool
+	// doneChannel is closed by Stop so that goroutines blocked in Acquire can return
+	// instead of waiting for a refill which will never happen. It is nil before Start
+	// and after Stop.
+	doneChannel chan struct{}
 }
 
 // NewStableRateLimiter returns a StableRateLimiter.
@@ -60,26 +64,40 @@ func NewStableRateLimiter(threshold int64, refillPeriod time.Duration) (rateLimi
 
 // Start to refill the bucket periodically.
 func (limiter *StableRateLimiter) Start() {
-	timerId := atomic.AddUint64(&limiter.timerId, 1)
+	limiter.mu.Lock()
 	limiter.quitChannel = make(chan bool)
+	limiter.doneChannel = make(chan struct{})
 	quitChannel := limiter.quitChannel
+	limiter.mu.Unlock()
+
+	timerId := atomic.AddUint64(&limiter.timerId, 1)
 	go func(myId uint64) {
 		for {
 			select {
 			case <-quitChannel:
 				return
 			default:
-				time.Sleep(limiter.refillPeriod)
-				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
-				if hasBeenStarted {
-					return
-				}
-				atomic.StoreInt64(&limiter.currentThreshold, limiter.threshold)
-				limiter.mu.Lock()
-				close(limiter.broadcastChannel)
-				limiter.broadcastChannel = make(chan bool)
-				limiter.mu.Unlock()
 			}
+
+			time.Sleep(limiter.refillPeriod)
+
+			// Stop may have been called while sleeping, don't refill anymore.
+			select {
+			case <-quitChannel:
+				return
+			default:
+			}
+
+			hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
+			if hasBeenStarted {
+				return
+			}
+
+			atomic.StoreInt64(&limiter.currentThreshold, limiter.threshold)
+			limiter.mu.Lock()
+			close(limiter.broadcastChannel)
+			limiter.broadcastChannel = make(chan bool)
+			limiter.mu.Unlock()
 		}
 	}(timerId)
 }
@@ -87,21 +105,47 @@ func (limiter *StableRateLimiter) Start() {
 // Acquire a token from the bucket, returns true if the bucket is exhausted.
 func (limiter *StableRateLimiter) Acquire() (blocked bool) {
 	permit := atomic.AddInt64(&limiter.currentThreshold, -1)
-	if permit < 0 {
-		blocked = true
-		limiter.mu.Lock()
-		ch := limiter.broadcastChannel
-		limiter.mu.Unlock()
-		<-ch
-	} else {
-		blocked = false
+	if permit >= 0 {
+		return false
 	}
-	return blocked
+
+	limiter.mu.Lock()
+	broadcastChannel := limiter.broadcastChannel
+	doneChannel := limiter.doneChannel
+	limiter.mu.Unlock()
+
+	if doneChannel == nil {
+		// The limiter is not running, never block forever.
+		return true
+	}
+
+	select {
+	case <-broadcastChannel:
+	case <-doneChannel:
+	}
+	return true
 }
 
-// Stop the rate limiter.
+// Stop the rate limiter. It is safe to call Stop without Start, and to call it many times.
 func (limiter *StableRateLimiter) Stop() {
-	close(limiter.quitChannel)
+	limiter.mu.Lock()
+	quitChannel := limiter.quitChannel
+	doneChannel := limiter.doneChannel
+	limiter.quitChannel = nil
+	limiter.doneChannel = nil
+	if quitChannel != nil || doneChannel != nil {
+		// Release goroutines blocked in Acquire.
+		close(limiter.broadcastChannel)
+		limiter.broadcastChannel = make(chan bool)
+	}
+	limiter.mu.Unlock()
+
+	if quitChannel != nil {
+		close(quitChannel)
+	}
+	if doneChannel != nil {
+		close(doneChannel)
+	}
 }
 
 // ErrParsingRampUpRate is the error returned if the format of rampUpRate is invalid.
@@ -122,6 +166,9 @@ type RampUpRateLimiter struct {
 	broadcastChannel chan bool
 	mu               sync.Mutex
 	quitChannel      chan bool
+	// doneChannel is closed by Stop so that goroutines blocked in Acquire can return.
+	// It is nil before Start and after Stop.
+	doneChannel chan struct{}
 }
 
 // NewRampUpRateLimiter returns a RampUpRateLimiter.
@@ -182,9 +229,13 @@ func (limiter *RampUpRateLimiter) getNextThreshold() int64 {
 
 // Start to refill the bucket periodically.
 func (limiter *RampUpRateLimiter) Start() {
-	timerId := atomic.AddUint64(&limiter.timerId, 1)
+	limiter.mu.Lock()
 	limiter.quitChannel = make(chan bool)
+	limiter.doneChannel = make(chan struct{})
 	quitChannel := limiter.quitChannel
+	limiter.mu.Unlock()
+
+	timerId := atomic.AddUint64(&limiter.timerId, 1)
 
 	atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
 	atomic.StoreInt64(&limiter.currentThreshold, atomic.LoadInt64(&limiter.nextThreshold))
@@ -195,18 +246,27 @@ func (limiter *RampUpRateLimiter) Start() {
 			case <-quitChannel:
 				return
 			default:
-				time.Sleep(limiter.refillPeriod)
-				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
-				if hasBeenStarted {
-					return
-				}
-
-				atomic.StoreInt64(&limiter.currentThreshold, atomic.LoadInt64(&limiter.nextThreshold))
-				limiter.mu.Lock()
-				close(limiter.broadcastChannel)
-				limiter.broadcastChannel = make(chan bool)
-				limiter.mu.Unlock()
 			}
+
+			time.Sleep(limiter.refillPeriod)
+
+			// Stop may have been called while sleeping, don't refill anymore.
+			select {
+			case <-quitChannel:
+				return
+			default:
+			}
+
+			hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
+			if hasBeenStarted {
+				return
+			}
+
+			atomic.StoreInt64(&limiter.currentThreshold, atomic.LoadInt64(&limiter.nextThreshold))
+			limiter.mu.Lock()
+			close(limiter.broadcastChannel)
+			limiter.broadcastChannel = make(chan bool)
+			limiter.mu.Unlock()
 		}
 	}(timerId)
 
@@ -217,14 +277,23 @@ func (limiter *RampUpRateLimiter) Start() {
 			case <-quitChannel:
 				return
 			default:
-				time.Sleep(limiter.rampUpPeriod)
-				hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
-				if hasBeenStarted {
-					return
-				}
-
-				atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
 			}
+
+			time.Sleep(limiter.rampUpPeriod)
+
+			// Stop may have been called while sleeping, don't ramp up anymore.
+			select {
+			case <-quitChannel:
+				return
+			default:
+			}
+
+			hasBeenStarted := atomic.LoadUint64(&limiter.timerId) != myId
+			if hasBeenStarted {
+				return
+			}
+
+			atomic.StoreInt64(&limiter.nextThreshold, limiter.getNextThreshold())
 		}
 	}(timerId)
 }
@@ -232,20 +301,47 @@ func (limiter *RampUpRateLimiter) Start() {
 // Acquire a token from the bucket, returns true if the bucket is exhausted.
 func (limiter *RampUpRateLimiter) Acquire() (blocked bool) {
 	permit := atomic.AddInt64(&limiter.currentThreshold, -1)
-	if permit < 0 {
-		blocked = true
-		limiter.mu.Lock()
-		ch := limiter.broadcastChannel
-		limiter.mu.Unlock()
-		<-ch
-	} else {
-		blocked = false
+	if permit >= 0 {
+		return false
 	}
-	return blocked
+
+	limiter.mu.Lock()
+	broadcastChannel := limiter.broadcastChannel
+	doneChannel := limiter.doneChannel
+	limiter.mu.Unlock()
+
+	if doneChannel == nil {
+		// The limiter is not running, never block forever.
+		return true
+	}
+
+	select {
+	case <-broadcastChannel:
+	case <-doneChannel:
+	}
+	return true
 }
 
-// Stop the rate limiter.
+// Stop the rate limiter. It is safe to call Stop without Start, and to call it many times.
 func (limiter *RampUpRateLimiter) Stop() {
 	atomic.StoreInt64(&limiter.nextThreshold, 0)
-	close(limiter.quitChannel)
+
+	limiter.mu.Lock()
+	quitChannel := limiter.quitChannel
+	doneChannel := limiter.doneChannel
+	limiter.quitChannel = nil
+	limiter.doneChannel = nil
+	if quitChannel != nil || doneChannel != nil {
+		// Release goroutines blocked in Acquire.
+		close(limiter.broadcastChannel)
+		limiter.broadcastChannel = make(chan bool)
+	}
+	limiter.mu.Unlock()
+
+	if quitChannel != nil {
+		close(quitChannel)
+	}
+	if doneChannel != nil {
+		close(doneChannel)
+	}
 }

@@ -1,7 +1,14 @@
 package boomer
 
 import (
+	"sync"
 	"time"
+)
+
+const (
+	// idleEntryTTL is the number of report periods an entry must stay idle before it's dropped,
+	// so that an unbounded set of request names doesn't leak memory forever.
+	idleEntryTTL = 20
 )
 
 type requestSuccess struct {
@@ -18,8 +25,15 @@ type requestFailure struct {
 	error        string
 }
 
+// entryKey identifies a stats entry. A struct key needs no temporary string on
+// every recorded request, and can't collide like name+method concatenation does.
+type entryKey struct {
+	name   string
+	method string
+}
+
 type requestStats struct {
-	entries   map[string]*statsEntry
+	entries   map[entryKey]*statsEntry
 	errors    map[string]*statsError
 	total     *statsEntry
 	startTime int64
@@ -29,10 +43,11 @@ type requestStats struct {
 	clearStatsChan      chan bool
 	messageToRunnerChan chan map[string]interface{}
 	shutdownChan        chan bool
+	closeOnce           sync.Once
 }
 
 func newRequestStats() (stats *requestStats) {
-	entries := make(map[string]*statsEntry)
+	entries := make(map[entryKey]*statsEntry)
 	errors := make(map[string]*statsError)
 
 	stats = &requestStats{
@@ -77,20 +92,21 @@ func (s *requestStats) logError(method, name, err string) {
 	entry.occurred()
 }
 
+// get returns the stats entry of (name, method), creating it if needed.
 func (s *requestStats) get(name string, method string) (entry *statsEntry) {
-	entry, ok := s.entries[name+method]
-	if !ok {
-		newEntry := &statsEntry{
-			Name:          name,
-			Method:        method,
-			NumReqsPerSec: make(map[int64]int64),
-			ResponseTimes: make(map[int64]int64),
-		}
-		newEntry.reset()
-		s.entries[name+method] = newEntry
-		return newEntry
+	key := entryKey{name: name, method: method}
+	if entry, ok := s.entries[key]; ok {
+		return entry
 	}
-	return entry
+	newEntry := &statsEntry{
+		Name:          name,
+		Method:        method,
+		NumReqsPerSec: make(map[int64]int64),
+		ResponseTimes: make(map[int64]int64),
+	}
+	newEntry.reset()
+	s.entries[key] = newEntry
+	return newEntry
 }
 
 func (s *requestStats) clearAll() {
@@ -100,7 +116,7 @@ func (s *requestStats) clearAll() {
 	}
 	s.total.reset()
 
-	s.entries = make(map[string]*statsEntry)
+	s.entries = make(map[entryKey]*statsEntry)
 	s.errors = make(map[string]*statsError)
 	s.startTime = time.Now().Unix()
 }
@@ -129,12 +145,29 @@ func (s *requestStats) collectReportData() map[string]interface{} {
 	data["stats_total"] = s.total.getStrippedReport()
 	data["errors"] = s.serializeErrors()
 	s.errors = make(map[string]*statsError)
+	s.dropIdleEntries()
 	return data
+}
+
+// dropIdleEntries drops entries that stayed idle for idleEntryTTL report periods.
+// They are not reported anyway, so dropping them doesn't change what master receives.
+func (s *requestStats) dropIdleEntries() {
+	for key, entry := range s.entries {
+		if entry.NumRequests == 0 && entry.NumFailures == 0 {
+			entry.idleCycles++
+			if entry.idleCycles >= idleEntryTTL {
+				delete(s.entries, key)
+			}
+		} else {
+			entry.idleCycles = 0
+		}
+	}
 }
 
 func (s *requestStats) start() {
 	go func() {
-		var ticker = time.NewTicker(slaveReportInterval)
+		ticker := time.NewTicker(slaveReportInterval)
+		defer ticker.Stop()
 		for {
 			select {
 			case m := <-s.requestSuccessChan:
@@ -147,7 +180,11 @@ func (s *requestStats) start() {
 			case <-ticker.C:
 				data := s.collectReportData()
 				// send data to channel, no network IO in this goroutine
-				s.messageToRunnerChan <- data
+				select {
+				case s.messageToRunnerChan <- data:
+				case <-s.shutdownChan:
+					return
+				}
 			case <-s.shutdownChan:
 				return
 			}
@@ -155,9 +192,21 @@ func (s *requestStats) start() {
 	}()
 }
 
-// close is used by unit tests to avoid leakage of goroutines
+// close stops the stats goroutine. Queued records are discarded, and freeing the
+// queue means that a sender which just found the buffer full can't stay blocked
+// on a channel nobody consumes anymore.
 func (s *requestStats) close() {
-	close(s.shutdownChan)
+	s.closeOnce.Do(func() {
+		close(s.shutdownChan)
+		for i := 0; i < cap(s.requestSuccessChan)+cap(s.requestFailureChan); i++ {
+			select {
+			case <-s.requestSuccessChan:
+			case <-s.requestFailureChan:
+			default:
+				return
+			}
+		}
+	})
 }
 
 // statsEntry represents a single stats entry (name and method)
@@ -194,6 +243,9 @@ type statsEntry struct {
 	// Boomer doesn't allow None response time for requests like locust.
 	// num_none_requests is added to keep compatible with locust.
 	NumNoneRequests int64 `json:"num_none_requests"`
+
+	// idleCycles counts how many report periods in a row this entry received nothing.
+	idleCycles int
 }
 
 func (s *statsEntry) reset() {

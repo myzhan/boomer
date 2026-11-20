@@ -1,6 +1,10 @@
 package boomer
 
 import (
+	"fmt"
+	"sync"
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -9,6 +13,7 @@ var _ = Describe("Test taskset", func() {
 
 	It("test weighing taskset with single task", func() {
 		ts := NewWeighingTaskSet()
+		Expect(ts.GetTask(0)).To(BeNil())
 
 		taskAIsRun := false
 		taskA := &Task{
@@ -108,3 +113,75 @@ var _ = Describe("Test taskset", func() {
 	})
 
 })
+
+func TestSmoothRoundRobinTaskSetConcurrentAccess(t *testing.T) {
+	ts := NewSmoothRoundRobinTaskSet()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				ts.AddTask(&Task{
+					Name:   fmt.Sprintf("task-%d-%d", worker, j),
+					Weight: 1,
+					Fn:     func() {},
+				})
+				if task := ts.GetTask(); task != nil {
+					task.Fn()
+				}
+				ts.SetWeight(j)
+				_ = ts.GetWeight()
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if ts.GetTask() == nil {
+		t.Fatal("expected a task after adding tasks")
+	}
+}
+
+func TestWeighingTaskSetConcurrentAccess(t *testing.T) {
+	ts := NewWeighingTaskSet()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				ts.AddTask(&Task{
+					Name:   fmt.Sprintf("task-%d-%d", worker, j),
+					Weight: 1,
+					Fn:     func() {},
+				})
+				if task := ts.GetTask(0); task != nil {
+					task.Fn()
+				}
+				ts.SetWeight(j)
+				_ = ts.GetWeight()
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if ts.GetTask(0) == nil {
+		t.Fatal("expected a task after adding tasks")
+	}
+}
+
+// Run used to panic with "invalid argument to Intn" when the task set was empty.
+func TestWeighingTaskSetRunWithoutTasks(t *testing.T) {
+	ts := NewWeighingTaskSet()
+	ts.Run()
+}
+
+func TestTaskSetAddNilTask(t *testing.T) {
+	smooth := NewSmoothRoundRobinTaskSet()
+	smooth.AddTask(nil)
+
+	weighing := NewWeighingTaskSet()
+	weighing.AddTask(nil)
+}

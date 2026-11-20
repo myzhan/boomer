@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/myzhan/gomq/zmtp"
@@ -302,3 +303,115 @@ var _ = Describe("Test Boomer", func() {
 		defaultBoomer.WithLogger(logger)
 	})
 })
+
+// RecordSuccess used to dereference the runner of the current mode even when only
+// the other runner existed, which panicked with a nil pointer dereference.
+func TestRecordWithMismatchedRunner(t *testing.T) {
+	b := NewBoomer("127.0.0.1", 5557) // DistributedMode
+	b.localRunner = newLocalRunner([]*Task{noopTask("noop")}, nil, 1, 1)
+
+	b.RecordSuccess("http", "foo", 1, 1)
+	b.RecordFailure("http", "foo", 1, "boom")
+	b.SendCustomMessage("custom", nil)
+
+	standalone := NewStandaloneBoomer(1, 1) // StandaloneMode
+	standalone.slaveRunner = newSlaveRunner("127.0.0.1", 5557, nil, nil)
+
+	standalone.RecordSuccess("http", "foo", 1, 1)
+	standalone.RecordFailure("http", "foo", 1, "boom")
+}
+
+// Records must be dropped instead of blocking forever once stats is closed.
+func TestRecordAfterStatsClosedDoesNotBlock(t *testing.T) {
+	b := NewStandaloneBoomer(1, 1)
+	lr := newLocalRunner([]*Task{noopTask("noop")}, nil, 1, 1)
+	lr.setLogger(newDiscardLogger())
+	b.localRunner = lr
+	lr.stats.close()
+
+	done := make(chan struct{})
+	go func() {
+		// Fill the buffered channels so that sending can only give up on the
+		// closed stats.
+		for i := 0; i < cap(lr.stats.requestSuccessChan)+1; i++ {
+			b.RecordSuccess("http", "foo", 1, 1)
+			b.RecordFailure("http", "foo", 1, "boom")
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RecordSuccess/RecordFailure blocked after stats was closed")
+	}
+}
+
+// The hot record path must not take the lock on every call, Run caches the stats
+// pointer of the runner it starts.
+func TestRunCachesRecordStats(t *testing.T) {
+	b := NewStandaloneBoomer(1, 1).WithLogger(newDiscardLogger())
+	go b.Run(noopTask("noop"))
+	defer b.Quit()
+
+	var stats *requestStats
+	for i := 0; i < 200; i++ {
+		if stats = b.recordStats.Load(); stats != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if stats == nil {
+		t.Fatal("run did not cache the stats of the local runner")
+	}
+
+	b.mu.RLock()
+	lr := b.localRunner
+	b.mu.RUnlock()
+	if lr == nil || stats != lr.stats {
+		t.Fatal("cached stats does not belong to the running local runner")
+	}
+}
+
+func TestQuitIsIdempotent(t *testing.T) {
+	b := NewStandaloneBoomer(1, 1)
+	lr := newLocalRunner([]*Task{noopTask("noop")}, nil, 1, 1)
+	lr.setLogger(newDiscardLogger())
+	b.localRunner = lr
+
+	b.Quit()
+	b.Quit()
+
+	select {
+	case <-lr.shutdownChan:
+	default:
+		t.Fatal("local runner was not shut down by Quit")
+	}
+}
+
+func TestQuitWithoutRunner(t *testing.T) {
+	b := NewBoomer("127.0.0.1", 5557)
+	b.Quit()
+
+	standalone := NewStandaloneBoomer(1, 1)
+	standalone.Quit()
+}
+
+// Run without tasks used to panic with "integer divide by zero" once workers
+// were spawned.
+func TestRunWithoutTasks(t *testing.T) {
+	b := NewStandaloneBoomer(1, 1).WithLogger(newDiscardLogger())
+
+	done := make(chan struct{})
+	go func() {
+		b.Run()
+		b.Run(nil)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run without tasks blocked")
+	}
+}

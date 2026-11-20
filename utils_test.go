@@ -1,8 +1,12 @@
 package boomer
 
 import (
+	"io"
+	"log"
 	"os"
 	"regexp"
+	"sync"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -67,3 +71,26 @@ var _ = Describe("Test utils", func() {
 		Eventually("cpu.pprof").WithTimeout(3 * time.Second).Should(BeAnExistingFile())
 	})
 })
+
+func newDiscardLogger() *log.Logger {
+	return log.New(io.Discard, "", 0)
+}
+
+// GetCurrentCPUUsage used to create a new process handle on every call, which is
+// expensive and keeps state behind the caller's back. Concurrent callers must
+// not race on the cached handle.
+func TestGetCurrentCPUUsageConcurrent(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 3; j++ {
+				if usage := GetCurrentCPUUsage(); usage < 0 {
+					t.Errorf("cpu usage should not be negative, got %v", usage)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}

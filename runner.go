@@ -52,6 +52,10 @@ type runner struct {
 	// close this channel will stop all goroutines used in runner, including running workers.
 	shutdownChan chan bool
 
+	// shutdownOnce makes shutdown idempotent, calling it twice must not panic on
+	// closing an already closed channel.
+	shutdownOnce sync.Once
+
 	outputs []Output
 
 	logger *log.Logger
@@ -84,9 +88,13 @@ func (r *runner) safeRun(fn func()) {
 		if err != nil {
 			stackTrace := debug.Stack()
 			errMsg := fmt.Sprintf("%v", err)
-			os.Stderr.Write([]byte(errMsg))
-			os.Stderr.Write([]byte("\n"))
-			os.Stderr.Write(stackTrace)
+			if r.logger != nil {
+				r.logger.Printf("%s\n%s", errMsg, stackTrace)
+			} else {
+				os.Stderr.Write([]byte(errMsg))
+				os.Stderr.Write([]byte("\n"))
+				os.Stderr.Write(stackTrace)
+			}
 		}
 	}()
 	fn()
@@ -105,8 +113,8 @@ func (r *runner) outputOnStart() {
 	wg.Add(size)
 	for _, output := range r.outputs {
 		go func(o Output) {
-			o.OnStart()
-			wg.Done()
+			defer wg.Done()
+			r.safeRun(o.OnStart)
 		}(output)
 	}
 	wg.Wait()
@@ -121,8 +129,8 @@ func (r *runner) outputOnEvent(data map[string]interface{}) {
 	wg.Add(size)
 	for _, output := range r.outputs {
 		go func(o Output) {
-			o.OnEvent(data)
-			wg.Done()
+			defer wg.Done()
+			r.safeRun(func() { o.OnEvent(data) })
 		}(output)
 	}
 	wg.Wait()
@@ -137,8 +145,8 @@ func (r *runner) outputOnStop() {
 	wg.Add(size)
 	for _, output := range r.outputs {
 		go func(o Output) {
-			o.OnStop()
-			wg.Done()
+			defer wg.Done()
+			r.safeRun(o.OnStop)
 		}(output)
 	}
 	wg.Wait()
@@ -167,11 +175,15 @@ func (r *runner) addWorkers(gapCount int) {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
 								task := r.getTask(r.nextTaskIndex())
-								r.safeRun(task.Fn)
+								if task != nil {
+									r.safeRun(task.Fn)
+								}
 							}
 						} else {
 							task := r.getTask(r.nextTaskIndex())
-							r.safeRun(task.Fn)
+							if task != nil {
+								r.safeRun(task.Fn)
+							}
 						}
 					}
 					runtime.Gosched()
@@ -202,6 +214,16 @@ func (r *runner) reduceWorkers(gapCount int) {
 
 func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
 	r.logger.Println("The total number of clients required is ", spawnCount)
+
+	if len(r.runTask) == 0 {
+		// Starting workers with an empty task list would panic on modulo zero,
+		// so just tell master that there is nothing to spawn.
+		r.logger.Println("No tasks to run, skip spawning workers.")
+		if spawnCompleteFunc != nil {
+			go spawnCompleteFunc() //For faster time
+		}
+		return
+	}
 
 	currentClients := int(atomic.LoadInt32(&r.numClients))
 	var gapCount int
@@ -261,6 +283,9 @@ func (r *runner) setTasks(t []*Task) {
 }
 
 func (r *runner) getTask(index int) *Task {
+	if index < 0 || index >= len(r.runTask) {
+		return nil
+	}
 	return r.runTask[index]
 }
 
@@ -269,6 +294,10 @@ func (r *runner) getTask(index int) *Task {
 // worker starts at 0 and advances in unison) prevents concurrent workers from selecting the
 // same task in lockstep, while preserving the weighted round-robin distribution of runTask.
 func (r *runner) nextTaskIndex() int {
+	if r.totalTaskWeight <= 0 {
+		// No task was configured, workers must not divide by zero.
+		return 0
+	}
 	next := atomic.AddUint64(&r.taskIndex, 1) - 1
 	return int(next % uint64(r.totalTaskWeight))
 }
@@ -343,13 +372,15 @@ func (r *localRunner) run() {
 }
 
 func (r *localRunner) shutdown() {
-	if r.stats != nil {
-		r.stats.close()
-	}
-	if r.rateLimitEnabled {
-		r.rateLimiter.Stop()
-	}
-	close(r.shutdownChan)
+	r.shutdownOnce.Do(func() {
+		close(r.shutdownChan)
+		if r.stats != nil {
+			r.stats.close()
+		}
+		if r.rateLimitEnabled && r.rateLimiter != nil {
+			r.rateLimiter.Stop()
+		}
+	})
 }
 
 func (r *localRunner) sendCustomMessage(messageType string, data interface{}) {
@@ -396,36 +427,97 @@ func (r *slaveRunner) spawnComplete() {
 	r.mu.RLock()
 	data["user_classes_count"] = r.userClassesCountFromMaster
 	r.mu.RUnlock()
-	r.client.sendChannel() <- newGenericMessage("spawning_complete", data, r.nodeID)
-	r.setState(stateRunning)
+	r.sendMessage(newGenericMessage("spawning_complete", data, r.nodeID))
+	// Only report running while we are still spawning. A late stop/quit message must not
+	// be overridden by this goroutine, otherwise the state machine keeps reporting stats.
+	if r.getState() == stateSpawning {
+		r.setState(stateRunning)
+	}
 }
 
 func (r *slaveRunner) onQuiting() {
 	if r.getState() != stateQuitting {
-		r.client.sendChannel() <- newGenericMessage("quit", nil, r.nodeID)
+		r.setState(stateQuitting)
+		r.sendMessage(newGenericMessage("quit", nil, r.nodeID))
+	}
+}
+
+// sendMessage sends a message to master, giving up when the runner is shutting down.
+// Without it, a stuck connection would block the listener forever, which means
+// stop/quit messages from master could never be handled again.
+func (r *slaveRunner) sendMessage(msg message) {
+	if r.client == nil {
+		return
+	}
+	select {
+	case r.client.sendChannel() <- msg:
+	case <-r.shutdownChan:
+	}
+}
+
+// clearStats asks the stats goroutine to reset all statistics, giving up on shutdown.
+func (r *slaveRunner) clearStats() {
+	select {
+	case r.stats.clearStatsChan <- true:
+	case <-r.shutdownChan:
 	}
 }
 
 func (r *slaveRunner) shutdown() {
-	if r.stats != nil {
-		r.stats.close()
-	}
-	if r.client != nil {
-		r.client.close()
-	}
-	if r.rateLimitEnabled {
-		r.rateLimiter.Stop()
-	}
-	r.mu.Lock()
-	r.cancelFuncs = nil
-	r.mu.Unlock()
-	atomic.StoreInt32(&r.numClients, 0)
-	close(r.shutdownChan)
+	r.shutdownOnce.Do(func() {
+		// Broadcast the shutdown first, so that goroutines waiting to send can give up.
+		close(r.shutdownChan)
+
+		r.mu.Lock()
+		cancelFuncs := r.cancelFuncs
+		r.cancelFuncs = nil
+		r.mu.Unlock()
+		for _, cancelFunc := range cancelFuncs {
+			cancelFunc()
+		}
+
+		Events.Unsubscribe(EVENT_QUIT, r.onQuiting)
+		if r.client != nil {
+			r.client.close()
+		}
+		if r.stats != nil {
+			r.stats.close()
+		}
+		if r.rateLimitEnabled && r.rateLimiter != nil {
+			r.rateLimiter.Stop()
+		}
+		atomic.StoreInt32(&r.numClients, 0)
+	})
 }
 
+// sumUsersAmount sums up the amount of users in the spawn message.
+// It never panics, a malformed message from master should not crash boomer.
 func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
-	userClassesCount := msg.Data["user_classes_count"]
-	userClassesCountMap := userClassesCount.(map[interface{}]interface{})
+	if msg == nil {
+		return 0
+	}
+
+	userClassesCount, ok := msg.Data["user_classes_count"]
+	if !ok || userClassesCount == nil {
+		// Locust before 2.0 doesn't send this field at all.
+		r.logger.Println("spawn message without user_classes_count, ignored.")
+		return 0
+	}
+
+	var userClassesCountMap map[interface{}]interface{}
+	switch value := userClassesCount.(type) {
+	case map[interface{}]interface{}:
+		userClassesCountMap = value
+	case map[string]interface{}:
+		// Be tolerant to decoders which produce string keys.
+		userClassesCountMap = make(map[interface{}]interface{}, len(value))
+		for class, num := range value {
+			userClassesCountMap[class] = num
+		}
+	default:
+		r.logger.Printf("user_classes_count in spawn message can't be casted to a map, current type is %T, ignored!\n", userClassesCount)
+		return 0
+	}
 
 	// Save the original field and send it back to master in spawnComplete message.
 	r.mu.Lock()
@@ -436,7 +528,7 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 		c, ok := class.(string)
 		n, ok2 := castToInt64(num)
 		if !ok || !ok2 {
-			log.Printf("user_classes_count in spawn message can't be casted to map[string]int64, current type is map[%T]%T, ignored!\n", class, num)
+			r.logger.Printf("user_classes_count in spawn message can't be casted to map[string]int64, current type is map[%T]%T, ignored!\n", class, num)
 			continue
 		}
 		r.mu.Lock()
@@ -452,6 +544,11 @@ func (r *slaveRunner) sumUsersAmount(msg *genericMessage) int {
 // master and workers use the same locustfile. Before we find a better way to deal with this,
 // boomer sums up the total amout of users in spawn message and uses task weight to spawn goroutines like before.
 func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
+	if msg == nil {
+		r.logger.Println("Receive a nil spawn message, ignored.")
+		return
+	}
+
 	if timeStamp, ok := msg.Data["timestamp"]; ok {
 		if timeStampInt64, ok := castToInt64(timeStamp); ok {
 			if timeStampInt64 <= r.lastReceivedSpawnTimestamp {
@@ -463,7 +560,7 @@ func (r *slaveRunner) onSpawnMessage(msg *genericMessage) {
 		}
 	}
 
-	r.client.sendChannel() <- newGenericMessage("spawning", nil, r.nodeID)
+	r.sendMessage(newGenericMessage("spawning", nil, r.nodeID))
 	workers := r.sumUsersAmount(msg)
 	r.startSpawning(workers, float64(workers), r.spawnComplete)
 }
@@ -501,7 +598,7 @@ func (r *slaveRunner) sendClientReadyAndWaitForAck() {
 
 	atomic.StoreInt32(&r.ackReceived, 0)
 	// locust allows workers to bypass version check by sending -1 as version
-	r.client.sendChannel() <- newClientReadyMessage("client_ready", -1, r.nodeID)
+	r.sendMessage(newClientReadyMessage("client_ready", -1, r.nodeID))
 
 	go func() {
 		if waitTimeout(wg, 5*time.Second) {
@@ -533,6 +630,13 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 	case "heartbeat":
 		r.lastMasterHeartbeatTimestamp.Store(time.Now())
 		return
+	case "ack", "spawn":
+		// These message types must be decoded as genericMessage. A custom message with
+		// the same type would leave genericMsg nil, which must not be dereferenced later.
+		if genericMsg == nil {
+			r.logger.Printf("Receive %s message which is not a generic message, ignored.\n", msgType)
+			return
+		}
 	}
 
 	currentState := r.getState()
@@ -544,7 +648,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.onAckMessage(genericMsg)
 		case "spawn":
 			r.setState(stateSpawning)
-			r.stats.clearStatsChan <- true
+			r.clearStats()
 			r.onSpawnMessage(genericMsg)
 		case "quit":
 			Events.Publish(EVENT_QUIT)
@@ -562,7 +666,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 			r.stop()
 			r.setState(stateStopped)
 			r.logger.Println("Recv stop message from master, all the goroutines are stopped")
-			r.client.sendChannel() <- newGenericMessage("client_stopped", nil, r.nodeID)
+			r.sendMessage(newGenericMessage("client_stopped", nil, r.nodeID))
 			r.sendClientReadyAndWaitForAck()
 			r.setState(stateInit)
 		case "quit":
@@ -577,7 +681,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 		switch msgType {
 		case "spawn":
 			r.setState(stateSpawning)
-			r.stats.clearStatsChan <- true
+			r.clearStats()
 			r.onSpawnMessage(genericMsg)
 		case "quit":
 			Events.Publish(EVENT_QUIT)
@@ -590,7 +694,7 @@ func (r *slaveRunner) onMessage(msgInterface message) {
 
 func (r *slaveRunner) sendCustomMessage(messageType string, data interface{}) {
 	msg := newCustomMessage(messageType, data, r.nodeID)
-	r.client.sendChannel() <- msg
+	r.sendMessage(msg)
 }
 
 func (r *slaveRunner) startListener() {
@@ -598,7 +702,7 @@ func (r *slaveRunner) startListener() {
 		for {
 			select {
 			case msg := <-r.client.recvChannel():
-				r.onMessage(msg)
+				r.safeRun(func() { r.onMessage(msg) })
 			case <-r.shutdownChan:
 				return
 			}
@@ -645,7 +749,7 @@ func (r *slaveRunner) run() {
 				r.mu.RLock()
 				data["user_classes_count"] = r.userClassesCountFromMaster
 				r.mu.RUnlock()
-				r.client.sendChannel() <- newGenericMessage("stats", data, r.nodeID)
+				r.sendMessage(newGenericMessage("stats", data, r.nodeID))
 				r.outputOnEvent(data)
 			case <-r.shutdownChan:
 				r.outputOnStop()
@@ -656,14 +760,26 @@ func (r *slaveRunner) run() {
 
 	// heartbeat
 	// See: https://github.com/locustio/locust/commit/a8c0d7d8c588f3980303358298870f2ea394ab93
+	r.startHeartbeat()
+
+	Events.Subscribe(EVENT_QUIT, r.onQuiting)
+}
+
+// startHeartbeat reports the runner state to master periodically, and shuts the
+// runner down when master has been quiet for too long.
+func (r *slaveRunner) startHeartbeat() {
 	go func() {
-		var ticker = time.NewTicker(heartbeatInterval)
+		ticker := time.NewTicker(heartbeatInterval)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				// check for master heartbeat timeout
 				if ts, ok := r.lastMasterHeartbeatTimestamp.Load().(time.Time); ok && !ts.IsZero() && time.Since(ts) > masterHeartbeatTimeout {
 					r.logger.Printf("Didn't get heartbeat from master in over %vs, shutting down.\n", masterHeartbeatTimeout.Seconds())
+					// boomer.Run() returns either on a signal or on EVENT_QUIT, without
+					// publishing it the process would hang forever after shutting down.
+					Events.Publish(EVENT_QUIT)
 					r.shutdown()
 					return
 				}
@@ -675,12 +791,10 @@ func (r *slaveRunner) run() {
 					"current_cpu_usage":    CPUUsage,
 					"current_memory_usage": MemUsage,
 				}
-				r.client.sendChannel() <- newGenericMessage("heartbeat", data, r.nodeID)
+				r.sendMessage(newGenericMessage("heartbeat", data, r.nodeID))
 			case <-r.shutdownChan:
 				return
 			}
 		}
 	}()
-
-	Events.Subscribe(EVENT_QUIT, r.onQuiting)
 }
