@@ -6,6 +6,7 @@ package boomer
 import (
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/zeromq/goczmq"
 )
@@ -21,6 +22,7 @@ type czmqSocketClient struct {
 	toMaster               chan message
 	disconnectedFromMaster chan bool
 	shutdownChan           chan bool
+	closeOnce              sync.Once
 }
 
 func newClient(masterHost string, masterPort int, identity string) (client *czmqSocketClient) {
@@ -31,7 +33,7 @@ func newClient(masterHost string, masterPort int, identity string) (client *czmq
 		identity:               identity,
 		fromMaster:             make(chan message, 100),
 		toMaster:               make(chan message, 100),
-		disconnectedFromMaster: make(chan bool),
+		disconnectedFromMaster: make(chan bool, 1),
 		shutdownChan:           make(chan bool),
 	}
 
@@ -58,10 +60,12 @@ func (c *czmqSocketClient) connect() (err error) {
 }
 
 func (c *czmqSocketClient) close() {
-	close(c.shutdownChan)
-	if c.dealerSocket != nil {
-		c.dealerSocket.Destroy()
-	}
+	c.closeOnce.Do(func() {
+		close(c.shutdownChan)
+		if c.dealerSocket != nil {
+			c.dealerSocket.Destroy()
+		}
+	})
 }
 
 func (c *czmqSocketClient) recvChannel() chan message {
@@ -85,7 +89,11 @@ func (c *czmqSocketClient) recv() {
 				if decodedGenericMsg.NodeID != c.identity {
 					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedGenericMsg.Type, decodedGenericMsg.NodeID, c.identity)
 				} else {
-					c.fromMaster <- decodedGenericMsg
+					select {
+					case c.fromMaster <- decodedGenericMsg:
+					case <-c.shutdownChan:
+						return
+					}
 				}
 				continue
 			}
@@ -95,7 +103,11 @@ func (c *czmqSocketClient) recv() {
 				if decodedCustomMsg.NodeID != c.identity {
 					log.Printf("Recv a %s message for node(%s), not for me(%s), dropped.\n", decodedCustomMsg.Type, decodedCustomMsg.NodeID, c.identity)
 				} else {
-					c.fromMaster <- decodedCustomMsg
+					select {
+					case c.fromMaster <- decodedCustomMsg:
+					case <-c.shutdownChan:
+						return
+					}
 				}
 				continue
 			}
@@ -121,7 +133,11 @@ func (c *czmqSocketClient) send() {
 			m, ok := msg.(*genericMessage)
 			if ok {
 				if m.Type == "quit" {
-					c.disconnectedFromMaster <- true
+					// Notify without blocking, in case nobody is waiting (e.g. Quit already timed out).
+					select {
+					case c.disconnectedFromMaster <- true:
+					default:
+					}
 				}
 			}
 		}

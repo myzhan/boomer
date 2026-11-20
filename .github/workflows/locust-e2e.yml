@@ -1,0 +1,35 @@
+name: Locust E2E
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locust-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Locust
+        run: python -m pip install -r integration/locust/requirements.txt
+      - name: Build Boomer worker with race detection
+        run: go build -race -o "$RUNNER_TEMP/boomer-e2e-worker" ./integration/locust/worker
+      - name: Verify distributed load test and stats reports
+        run: python integration/locust/e2e.py "$RUNNER_TEMP/boomer-e2e-worker" "$RUNNER_TEMP/locust-e2e"
+      - name: Upload logs and stats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: locust-e2e
+          path: ${{ runner.temp }}/locust-e2e
+

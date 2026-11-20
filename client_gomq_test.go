@@ -4,7 +4,10 @@
 package boomer
 
 import (
+	"bytes"
 	"errors"
+	"testing"
+	"time"
 
 	"github.com/myzhan/gomq/zmtp"
 	. "github.com/onsi/ginkgo/v2"
@@ -63,3 +66,103 @@ var _ = Describe("Test gomq client", func() {
 		Eventually(client.recvChannel()).Should(Receive(Equal(pongMessage)))
 	})
 })
+
+func drainMockGomqSendChannel() {
+	for {
+		select {
+		case <-mockGomqDealerInstance.SendChannel():
+		default:
+			return
+		}
+	}
+}
+
+func drainMockGomqRecvChannel() {
+	for {
+		select {
+		case <-mockGomqDealerInstance.RecvChannel():
+		default:
+			return
+		}
+	}
+}
+
+func waitForMockGomqSend(t *testing.T, want []byte, timeout time.Duration) {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		select {
+		case got := <-mockGomqDealerInstance.SendChannel():
+			if bytes.Equal(got, want) {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("timeout waiting for %s", string(want))
+		}
+	}
+}
+
+func newMockClient(t *testing.T, identity string) *gomqSocketClient {
+	t.Helper()
+	drainMockGomqSendChannel()
+	drainMockGomqRecvChannel()
+
+	c := newClient("mock:0.0.0.0", 1234, identity)
+	if err := c.connect(); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	return c
+}
+
+func TestGomqClientCloseIsIdempotent(t *testing.T) {
+	c := newMockClient(t, "regression-close")
+	c.close()
+	// Closing twice used to panic with "close of closed channel".
+	c.close()
+}
+
+// Sending the quit notification used to block the send goroutine when nobody was
+// waiting on disconnectedChannel, which stopped every following message.
+func TestGomqClientQuitNotificationDoesNotBlock(t *testing.T) {
+	c := newMockClient(t, "regression-quit")
+	defer c.close()
+
+	// Nobody consumes disconnectedChannel, fill up its only slot.
+	c.disconnectedFromMaster <- true
+
+	c.sendChannel() <- newGenericMessage("quit", nil, "regression-quit")
+	ping := newGenericMessage("ping", nil, "regression-quit")
+	pingBytes, err := ping.serialize()
+	if err != nil {
+		t.Fatalf("failed to serialize message: %v", err)
+	}
+	c.sendChannel() <- ping
+
+	// If the send goroutine got stuck on the quit notification, ping is never sent.
+	waitForMockGomqSend(t, pingBytes, 5*time.Second)
+}
+
+func TestGomqClientRecvStopsAfterClose(t *testing.T) {
+	c := newMockClient(t, "regression-recv")
+	c.close()
+
+	// Give the recv goroutine a chance to observe the closed shutdown channel.
+	time.Sleep(100 * time.Millisecond)
+
+	ping := newGenericMessage("ping", nil, "regression-recv")
+	pingBytes, err := ping.serialize()
+	if err != nil {
+		t.Fatalf("failed to serialize message: %v", err)
+	}
+	mockGomqDealerInstance.RecvChannel() <- &zmtp.Message{
+		MessageType: zmtp.UserMessage,
+		Body:        [][]byte{pingBytes},
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case msg := <-c.fromMaster:
+		t.Fatalf("recv goroutine is still running after close, got %T", msg)
+	default:
+	}
+}

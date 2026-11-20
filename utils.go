@@ -121,16 +121,31 @@ func StartCPUProfile(file string, duration time.Duration) (err error) {
 	return nil
 }
 
+var (
+	// currentProcess is the cached handle of the current process, creating it on
+	// every call is expensive. It is guarded by currentProcessMu because
+	// process.CPUPercent keeps state and is not safe for concurrent use.
+	currentProcess   *process.Process
+	currentProcessMu sync.Mutex
+)
+
 // GetCurrentCPUUsage get current CPU usage
 func GetCurrentCPUUsage() float64 {
-	currentPid := os.Getpid()
-	p, err := process.NewProcess(int32(currentPid))
-	if err != nil {
-		log.Printf("Fail to get CPU percent, %v\n", err)
-		return 0.0
+	currentProcessMu.Lock()
+	defer currentProcessMu.Unlock()
+
+	if currentProcess == nil {
+		p, err := process.NewProcess(int32(os.Getpid()))
+		if err != nil {
+			log.Printf("Fail to get CPU percent, %v\n", err)
+			return 0.0
+		}
+		currentProcess = p
 	}
-	percent, err := p.CPUPercent()
+	percent, err := currentProcess.CPUPercent()
 	if err != nil {
+		// The cached process may be stale, drop it and try again on the next call.
+		currentProcess = nil
 		log.Printf("Fail to get CPU percent, %v\n", err)
 		return 0.0
 	}

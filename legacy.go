@@ -104,7 +104,7 @@ func NewWeighingTaskSet() *WeighingTaskSet {
 // AddTask add a Task to the Weighing TaskSet.
 // If the task's weight is <= 0, it will be ignored.
 func (ts *WeighingTaskSet) AddTask(task *Task) {
-	if task.Weight <= 0 {
+	if task == nil || task.Weight <= 0 {
 		return
 	}
 	ts.lock.Lock()
@@ -139,31 +139,48 @@ func (ts *WeighingTaskSet) binarySearch(roll int) (task *Task) {
 
 // GetTask returns a task in the task set.
 func (ts *WeighingTaskSet) GetTask(roll int) (task *Task) {
+	ts.lock.RLock()
+	defer ts.lock.RUnlock()
+
 	if roll < 0 || roll >= ts.offset {
 		return nil
 	}
-	ts.lock.RLock()
-	task = ts.binarySearch(roll)
-	ts.lock.RUnlock()
-	return task
+	return ts.binarySearch(roll)
 }
 
 // SetWeight sets the weight of the task set.
 func (ts *WeighingTaskSet) SetWeight(weight int) {
+	ts.lock.Lock()
 	ts.weight = weight
+	ts.lock.Unlock()
 }
 
 // GetWeight returns the weight of the task set.
 func (ts *WeighingTaskSet) GetWeight() (weight int) {
-	return ts.weight
+	ts.lock.RLock()
+	weight = ts.weight
+	ts.lock.RUnlock()
+	return weight
 }
 
 // Run will pick up a task in the task set randomly and run.
 // It can is used as a Task.Fn.
 func (ts *WeighingTaskSet) Run() {
+	ts.lock.RLock()
+	offset := ts.offset
+	ts.lock.RUnlock()
+
+	if offset <= 0 {
+		// No task has been added, nothing to run.
+		return
+	}
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	roll := r.Intn(ts.offset)
+	roll := r.Intn(offset)
 	task := ts.GetTask(roll)
+	if task == nil || task.Fn == nil {
+		return
+	}
 	task.Fn()
 }
 

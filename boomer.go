@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -47,6 +48,13 @@ type Boomer struct {
 	outputs []Output
 
 	logger *log.Logger
+
+	// quitting is guarded by mu, it makes Quit idempotent.
+	quitting bool
+
+	// recordStats caches the stats of the runner which is running, so that
+	// recording a request doesn't take the lock on every call.
+	recordStats atomic.Pointer[requestStats]
 }
 
 // NewBoomer returns a new Boomer.
@@ -75,6 +83,8 @@ func (b *Boomer) WithLogger(logger *log.Logger) *Boomer {
 	if logger == nil {
 		return b
 	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.logger = logger
 	if b.slaveRunner != nil {
 		b.slaveRunner.setLogger(logger)
@@ -88,11 +98,15 @@ func (b *Boomer) WithLogger(logger *log.Logger) *Boomer {
 // SetRateLimiter allows user to use their own rate limiter.
 // It must be called before the test is started.
 func (b *Boomer) SetRateLimiter(rateLimiter RateLimiter) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.rateLimiter = rateLimiter
 }
 
 // SetMode only accepts boomer.DistributedMode and boomer.StandaloneMode.
 func (b *Boomer) SetMode(mode Mode) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	switch mode {
 	case DistributedMode:
 		b.mode = DistributedMode
@@ -105,144 +119,216 @@ func (b *Boomer) SetMode(mode Mode) {
 
 // AddOutput accepts outputs which implements the boomer.Output interface.
 func (b *Boomer) AddOutput(o Output) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.outputs = append(b.outputs, o)
 }
 
 // EnableCPUProfile will start cpu profiling after run.
 func (b *Boomer) EnableCPUProfile(cpuProfileFile string, duration time.Duration) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.cpuProfileFile = cpuProfileFile
 	b.cpuProfileDuration = duration
 }
 
 // EnableMemoryProfile will start memory profiling after run.
 func (b *Boomer) EnableMemoryProfile(memoryProfileFile string, duration time.Duration) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.memoryProfileFile = memoryProfileFile
 	b.memoryProfileDuration = duration
 }
 
 // Run accepts a slice of Task and connects to the locust master.
 func (b *Boomer) Run(tasks ...*Task) {
-	if b.cpuProfileFile != "" {
-		err := StartCPUProfile(b.cpuProfileFile, b.cpuProfileDuration)
+	b.mu.Lock()
+	b.quitting = false
+	mode := b.mode
+	rateLimiter := b.rateLimiter
+	logger := b.logger
+	cpuProfileFile, cpuProfileDuration := b.cpuProfileFile, b.cpuProfileDuration
+	memoryProfileFile, memoryProfileDuration := b.memoryProfileFile, b.memoryProfileDuration
+	spawnCount, spawnRate := b.spawnCount, b.spawnRate
+	masterHost, masterPort := b.masterHost, b.masterPort
+	outputs := make([]Output, len(b.outputs))
+	copy(outputs, b.outputs)
+	b.mu.Unlock()
+
+	if logger == nil {
+		logger = log.Default()
+	}
+
+	// A nil task would be executed by the workers, guard against it.
+	runnableTasks := make([]*Task, 0, len(tasks))
+	for _, task := range tasks {
+		if task == nil {
+			continue
+		}
+		runnableTasks = append(runnableTasks, task)
+	}
+	if len(runnableTasks) == 0 {
+		logger.Println("No tasks to run, boomer will not start.")
+		return
+	}
+
+	if cpuProfileFile != "" {
+		err := StartCPUProfile(cpuProfileFile, cpuProfileDuration)
 		if err != nil {
-			b.logger.Printf("Error starting cpu profiling, %v", err)
+			logger.Printf("Error starting cpu profiling, %v", err)
 		}
 	}
-	if b.memoryProfileFile != "" {
-		err := StartMemoryProfile(b.memoryProfileFile, b.memoryProfileDuration)
+	if memoryProfileFile != "" {
+		err := StartMemoryProfile(memoryProfileFile, memoryProfileDuration)
 		if err != nil {
-			b.logger.Printf("Error starting memory profiling, %v", err)
+			logger.Printf("Error starting memory profiling, %v", err)
 		}
 	}
 
-	switch b.mode {
+	switch mode {
 	case DistributedMode:
-		sr := newSlaveRunner(b.masterHost, b.masterPort, tasks, b.rateLimiter)
-		sr.setLogger(b.logger)
-		b.logger.Println("new slave runner")
-		for _, o := range b.outputs {
+		sr := newSlaveRunner(masterHost, masterPort, runnableTasks, rateLimiter)
+		sr.setLogger(logger)
+		logger.Println("new slave runner")
+		for _, o := range outputs {
 			sr.addOutput(o)
 		}
 		b.mu.Lock()
 		b.slaveRunner = sr
+		b.recordStats.Store(sr.stats)
 		b.mu.Unlock()
 		sr.run()
 	case StandaloneMode:
-		lr := newLocalRunner(tasks, b.rateLimiter, b.spawnCount, b.spawnRate)
-		lr.setLogger(b.logger)
-		b.logger.Println("new local runner")
-		for _, o := range b.outputs {
+		lr := newLocalRunner(runnableTasks, rateLimiter, spawnCount, spawnRate)
+		lr.setLogger(logger)
+		logger.Println("new local runner")
+		for _, o := range outputs {
 			lr.addOutput(o)
 		}
 		b.mu.Lock()
 		b.localRunner = lr
+		b.recordStats.Store(lr.stats)
 		b.mu.Unlock()
 		lr.run()
 	default:
-		b.logger.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")
+		logger.Println("Invalid mode, expected boomer.DistributedMode or boomer.StandaloneMode")
 	}
+}
+
+// runnerStats returns the stats instance of the runner matching the current mode,
+// or nil if boomer has not been started.
+func (b *Boomer) runnerStats() (stats *requestStats) {
+	if stats = b.recordStats.Load(); stats != nil {
+		return stats
+	}
+	// No runner has been started yet, or a runner was injected directly.
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	switch b.mode {
+	case DistributedMode:
+		if sr := b.slaveRunner; sr != nil {
+			stats = sr.stats
+		}
+	case StandaloneMode:
+		if lr := b.localRunner; lr != nil {
+			stats = lr.stats
+		}
+	}
+	return stats
 }
 
 // RecordSuccess reports a success.
 func (b *Boomer) RecordSuccess(requestType, name string, responseTime int64, responseLength int64) {
-	if b.localRunner == nil && b.slaveRunner == nil {
+	stats := b.runnerStats()
+	if stats == nil {
 		return
 	}
-	switch b.mode {
-	case DistributedMode:
-		b.slaveRunner.stats.requestSuccessChan <- &requestSuccess{
-			requestType:    requestType,
-			name:           name,
-			responseTime:   responseTime,
-			responseLength: responseLength,
-		}
-	case StandaloneMode:
-		b.localRunner.stats.requestSuccessChan <- &requestSuccess{
-			requestType:    requestType,
-			name:           name,
-			responseTime:   responseTime,
-			responseLength: responseLength,
-		}
+	msg := &requestSuccess{
+		requestType:    requestType,
+		name:           name,
+		responseTime:   responseTime,
+		responseLength: responseLength,
+	}
+	select {
+	case stats.requestSuccessChan <- msg:
+	case <-stats.shutdownChan:
+		// stats has been closed, drop the record instead of blocking forever.
 	}
 }
 
 // RecordFailure reports a failure.
 func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exception string) {
-	if b.localRunner == nil && b.slaveRunner == nil {
+	stats := b.runnerStats()
+	if stats == nil {
 		return
 	}
-	switch b.mode {
-	case DistributedMode:
-		b.slaveRunner.stats.requestFailureChan <- &requestFailure{
-			requestType:  requestType,
-			name:         name,
-			responseTime: responseTime,
-			error:        exception,
-		}
-	case StandaloneMode:
-		b.localRunner.stats.requestFailureChan <- &requestFailure{
-			requestType:  requestType,
-			name:         name,
-			responseTime: responseTime,
-			error:        exception,
-		}
+	msg := &requestFailure{
+		requestType:  requestType,
+		name:         name,
+		responseTime: responseTime,
+		error:        exception,
+	}
+	select {
+	case stats.requestFailureChan <- msg:
+	case <-stats.shutdownChan:
+		// stats has been closed, drop the record instead of blocking forever.
 	}
 }
 
+// SendCustomMessage sends a custom message to the master.
 func (b *Boomer) SendCustomMessage(messageType string, data interface{}) {
-	if b.localRunner == nil && b.slaveRunner == nil {
-		return
-	}
-	switch b.mode {
+	b.mu.RLock()
+	mode := b.mode
+	sr := b.slaveRunner
+	lr := b.localRunner
+	b.mu.RUnlock()
+
+	switch mode {
 	case DistributedMode:
-		b.slaveRunner.sendCustomMessage(messageType, data)
+		if sr != nil {
+			sr.sendCustomMessage(messageType, data)
+		}
 	case StandaloneMode:
-		b.localRunner.sendCustomMessage(messageType, data)
+		if lr != nil {
+			lr.sendCustomMessage(messageType, data)
+		}
 	}
 }
 
 // Quit will send a quit message to the master.
 func (b *Boomer) Quit() {
-	Events.Publish(EVENT_QUIT)
-	var ticker = time.NewTicker(3 * time.Second)
-
-	b.mu.RLock()
+	b.mu.Lock()
+	if b.quitting {
+		b.mu.Unlock()
+		return
+	}
+	b.quitting = true
+	mode := b.mode
 	sr := b.slaveRunner
 	lr := b.localRunner
-	b.mu.RUnlock()
+	b.mu.Unlock()
 
-	switch b.mode {
+	Events.Publish(EVENT_QUIT)
+
+	switch mode {
 	case DistributedMode:
 		if sr == nil {
 			return
 		}
+		if sr.client == nil {
+			sr.shutdown()
+			return
+		}
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
 		// wait for quit message is sent to master
 		select {
 		case <-sr.client.disconnectedChannel():
-			break
 		case <-ticker.C:
-			b.logger.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
-			break
+			if b.logger != nil {
+				b.logger.Println("Timeout waiting for sending quit message to master, boomer will quit any way.")
+			}
 		}
 		sr.shutdown()
 	case StandaloneMode:
@@ -256,7 +342,7 @@ func (b *Boomer) Quit() {
 func runTasksForTest(tasks ...*Task) {
 	taskNames := strings.Split(runTasks, ",")
 	for _, task := range tasks {
-		if task.Name == "" {
+		if task == nil || task.Name == "" {
 			continue
 		} else {
 			for _, name := range taskNames {
@@ -281,6 +367,10 @@ func Run(tasks ...*Task) {
 		return
 	}
 
+	if len(tasks) == 0 {
+		log.Fatal("No tasks to run, boomer will exit.")
+	}
+
 	initLegacyEventHandlers()
 
 	rateLimiter, err := createRateLimiter(maxRPS, requestIncreaseRate)
@@ -293,23 +383,27 @@ func Run(tasks ...*Task) {
 	defaultBoomer.EnableMemoryProfile(memoryProfileFile, memoryProfileDuration)
 	defaultBoomer.EnableCPUProfile(cpuProfileFile, cpuProfileDuration)
 
-	defaultBoomer.Run(tasks...)
-
-	quitByMe := false
-	quitChan := make(chan bool)
-
+	// Subscribe before running, otherwise a quit message arriving right after connecting
+	// would be missed and Run would block forever waiting for it.
+	var quitByMe atomic.Bool
+	quitChan := make(chan bool, 1)
 	Events.SubscribeOnce(EVENT_QUIT, func() {
-		if !quitByMe {
-			close(quitChan)
+		if !quitByMe.Load() {
+			select {
+			case quitChan <- true:
+			default:
+			}
 		}
 	})
+
+	defaultBoomer.Run(tasks...)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case <-c:
-		quitByMe = true
+		quitByMe.Store(true)
 		defaultBoomer.Quit()
 	case <-quitChan:
 	}

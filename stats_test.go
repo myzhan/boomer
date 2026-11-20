@@ -142,17 +142,6 @@ var _ = Describe("Test states", func() {
 		}))
 	})
 
-	It("test collect report data", func() {
-		newStats := newRequestStats()
-		newStats.logRequest("http", "success", 2, 30)
-		newStats.logError("http", "failure", "500 error")
-		result := newStats.collectReportData()
-
-		Expect(result).To(HaveKey("stats"))
-		Expect(result).To(HaveKey("stats_total"))
-		Expect(result).To(HaveKey("errors"))
-	})
-
 	It("test stats start", func() {
 		newStats := newRequestStats()
 		newStats.start()
@@ -175,3 +164,204 @@ var _ = Describe("Test states", func() {
 		Eventually(newStats.messageToRunnerChan).WithTimeout(slaveReportInterval + 500*time.Millisecond).Should(Receive())
 	})
 })
+
+func TestRequestStatsReportKeepsActiveEntries(t *testing.T) {
+	stats := newRequestStats()
+	key := entryKey{name: "active", method: "GET"}
+	first := stats.get(key.name, key.method)
+	for i := 0; i < idleEntryTTL*2; i++ {
+		stats.logRequest("GET", "active", 1, 1)
+		stats.collectReportData()
+		if stats.entries[key] != first {
+			t.Fatal("report evicted a continuously active entry")
+		}
+	}
+	for i := 0; i < idleEntryTTL-1; i++ {
+		stats.collectReportData()
+	}
+	if stats.entries[key] != first {
+		t.Fatal("entry evicted before the idle TTL elapsed")
+	}
+	stats.collectReportData()
+	if _, ok := stats.entries[key]; ok {
+		t.Fatal("idle entry retained after the TTL elapsed")
+	}
+}
+
+func TestRequestStatsCloseIsIdempotent(t *testing.T) {
+	stats := newRequestStats()
+	stats.start()
+	stats.close()
+	// Closing twice used to panic with "close of closed channel".
+	stats.close()
+}
+
+// The goroutine of requestStats must stop consuming records once close is called.
+func TestRequestStatsStopsAfterClose(t *testing.T) {
+	stats := newRequestStats()
+	stats.start()
+	stats.close()
+
+	// Give the goroutine a chance to observe the closed shutdown channel.
+	time.Sleep(100 * time.Millisecond)
+
+	stats.requestSuccessChan <- &requestSuccess{
+		requestType:    "http",
+		name:           "after-close",
+		responseTime:   1,
+		responseLength: 1,
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if left := len(stats.requestSuccessChan); left != 1 {
+		t.Fatalf("stats goroutine is still consuming records after close, %d left", left)
+	}
+}
+
+// Records which were still queued when close is called can't be reported
+// anymore, and they must not occupy the buffer either.
+func TestRequestStatsCloseDrainsQueue(t *testing.T) {
+	stats := newRequestStats()
+	for i := 0; i < cap(stats.requestSuccessChan); i++ {
+		stats.requestSuccessChan <- &requestSuccess{name: "queued"}
+	}
+	stats.requestFailureChan <- &requestFailure{name: "queued"}
+
+	stats.close()
+
+	if n := len(stats.requestSuccessChan); n != 0 {
+		t.Fatalf("close left %d success records in the queue", n)
+	}
+	if n := len(stats.requestFailureChan); n != 0 {
+		t.Fatalf("close left %d failure records in the queue", n)
+	}
+}
+
+// Concatenating name and method used to make ("ab", "c") and ("a", "bc") collide.
+func TestRequestStatsEntriesDoNotCollide(t *testing.T) {
+	stats := newRequestStats()
+	first := stats.get("ab", "c")
+	second := stats.get("a", "bc")
+	if first == second {
+		t.Fatal("entries with different name and method must not collide")
+	}
+	if first.Name != "ab" || first.Method != "c" {
+		t.Fatalf("unexpected entry, got name=%q method=%q", first.Name, first.Method)
+	}
+	if second.Name != "a" || second.Method != "bc" {
+		t.Fatalf("unexpected entry, got name=%q method=%q", second.Name, second.Method)
+	}
+
+	// Both pairs must keep their own records, and lookups must be stable.
+	stats.logRequest("c", "ab", 1, 1)
+	stats.logRequest("bc", "a", 1, 1)
+	stats.logRequest("c", "ab", 1, 1)
+	if stats.get("ab", "c") != first || stats.get("a", "bc") != second {
+		t.Fatal("get must keep returning the entry of each pair")
+	}
+	if first.NumRequests != 2 || second.NumRequests != 1 {
+		t.Fatalf("records leaked between colliding entries, got %d and %d", first.NumRequests, second.NumRequests)
+	}
+}
+
+// Idle entries are dropped once they reach the TTL, and a dropped pair gets a
+// fresh entry on its next request. Entries which received requests must never be
+// dropped.
+func TestRequestStatsDropsIdleEntries(t *testing.T) {
+	stats := newRequestStats()
+	idleKey := entryKey{name: "idle", method: "GET"}
+	activeKey := entryKey{name: "active", method: "GET"}
+	idle := stats.get("idle", "GET")
+	active := stats.get("active", "GET")
+	stats.logRequest("GET", "active", 1, 1) // keep the second pair alive
+
+	for i := 0; i < idleEntryTTL-1; i++ {
+		stats.dropIdleEntries()
+	}
+	if _, ok := stats.entries[idleKey]; !ok {
+		t.Fatal("idle entry should not be dropped before reaching the TTL")
+	}
+
+	stats.dropIdleEntries()
+	if _, ok := stats.entries[idleKey]; ok {
+		t.Fatal("idle entry should be dropped after reaching the TTL")
+	}
+	if _, ok := stats.entries[activeKey]; !ok {
+		t.Fatal("the active entry must be kept")
+	}
+
+	// The dropped pair comes back with a fresh entry, next to the active one.
+	if revived := stats.get("idle", "GET"); revived == idle || revived == active {
+		t.Fatal("the revived pair must get a fresh entry")
+	}
+
+	// The active entry stays, no matter how many periods pass.
+	for i := 0; i < idleEntryTTL*2; i++ {
+		stats.dropIdleEntries()
+	}
+	if stats.get("active", "GET") != active {
+		t.Fatal("the active entry must be kept and reused")
+	}
+	if active.NumRequests != 1 {
+		t.Fatalf("the active entry was modified, got %d requests", active.NumRequests)
+	}
+}
+
+// The field names below are taken from locust's StatsEntryDict and StatsErrorDict,
+// renaming or dropping one of them would break the master silently.
+var locustStatsEntryFields = []string{
+	"name",
+	"method",
+	"last_request_timestamp",
+	"start_time",
+	"num_requests",
+	"num_none_requests",
+	"num_failures",
+	"total_response_time",
+	"max_response_time",
+	"min_response_time",
+	"total_content_length",
+	"response_times",
+	"num_reqs_per_sec",
+	"num_fail_per_sec",
+}
+
+func TestStatsReportFieldsMatchLocust(t *testing.T) {
+	stats := newRequestStats()
+	stats.logRequest("http", "success", 10, 20)
+	stats.logError("http", "failure", "500 error")
+
+	data := stats.collectReportData()
+
+	entries, ok := data["stats"].([]interface{})
+	if !ok || len(entries) == 0 {
+		t.Fatalf("expected a non empty stats list, got %v", data["stats"])
+	}
+	for _, field := range locustStatsEntryFields {
+		if _, ok := entries[0].(map[string]interface{})[field]; !ok {
+			t.Fatalf("stats entry is missing the field %q required by locust", field)
+		}
+	}
+
+	total, ok := data["stats_total"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected stats_total to be a map, got %T", data["stats_total"])
+	}
+	for _, field := range locustStatsEntryFields {
+		if _, ok := total[field]; !ok {
+			t.Fatalf("stats_total is missing the field %q required by locust", field)
+		}
+	}
+
+	errors, ok := data["errors"].(map[string]map[string]interface{})
+	if !ok || len(errors) != 1 {
+		t.Fatalf("expected exactly one error entry, got %v", data["errors"])
+	}
+	for _, entry := range errors {
+		for _, field := range []string{"method", "name", "error", "occurrences"} {
+			if _, ok := entry[field]; !ok {
+				t.Fatalf("error entry is missing the field %q required by locust", field)
+			}
+		}
+	}
+}

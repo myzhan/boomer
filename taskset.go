@@ -56,15 +56,20 @@ func NewSmoothRoundRobinTaskSet() *SmoothRoundRobinTaskSet {
 // AddTask add a Task to the Smooth RoundRobin TaskSet.
 // If the task's weight is <= 0, it will be ignored.
 func (ts *SmoothRoundRobinTaskSet) AddTask(task *Task) {
-	if task.Weight <= 0 {
+	if task == nil || task.Weight <= 0 {
 		return
 	}
 
 	rrTask := newRoundRobinTask(task)
+	ts.lock.Lock()
 	ts.rrTasks = append(ts.rrTasks, rrTask)
+	ts.lock.Unlock()
 }
 
 func (ts *SmoothRoundRobinTaskSet) GetTask() (task *Task) {
+	ts.lock.Lock()
+	defer ts.lock.Unlock()
+
 	rrTasksLength := len(ts.rrTasks)
 
 	if rrTasksLength == 0 {
@@ -78,8 +83,6 @@ func (ts *SmoothRoundRobinTaskSet) GetTask() (task *Task) {
 	totalWeight := 0
 	var picked *roundRobinTask
 
-	ts.lock.Lock()
-
 	for _, rrTask := range ts.rrTasks {
 		rrTask.currentWeight += rrTask.effectiveWeight
 		totalWeight += rrTask.effectiveWeight
@@ -92,19 +95,22 @@ func (ts *SmoothRoundRobinTaskSet) GetTask() (task *Task) {
 	}
 	picked.currentWeight -= totalWeight
 
-	ts.lock.Unlock()
-
 	return &picked.Task
 }
 
 // SetWeight sets the weight of the task set.
 func (ts *SmoothRoundRobinTaskSet) SetWeight(weight int) {
+	ts.lock.Lock()
 	ts.weight = weight
+	ts.lock.Unlock()
 }
 
 // GetWeight returns the weight of the task set.
 func (ts *SmoothRoundRobinTaskSet) GetWeight() (weight int) {
-	return ts.weight
+	ts.lock.RLock()
+	weight = ts.weight
+	ts.lock.RUnlock()
+	return weight
 }
 
 // Run will pick up a task in the task set smoothly and run.

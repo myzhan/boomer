@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
@@ -239,106 +240,82 @@ const (
 	namespace = "boomer"
 )
 
-// gauge vectors for requests
-var (
-	gaugeNumRequests = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "num_requests",
-			Help:      "The number of requests",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeNumFailures = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "num_failures",
-			Help:      "The number of failures",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeMedianResponseTime = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "median_response_time",
-			Help:      "The median response time",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeAverageResponseTime = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "average_response_time",
-			Help:      "The average response time",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeMinResponseTime = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "min_response_time",
-			Help:      "The min response time",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeMaxResponseTime = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "max_response_time",
-			Help:      "The max response time",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeAverageContentLength = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "average_content_length",
-			Help:      "The average content length",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeCurrentRPS = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "current_rps",
-			Help:      "The current requests per second",
-		},
-		[]string{"method", "name"},
-	)
-	gaugeCurrentFailPerSec = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "current_fail_per_sec",
-			Help:      "The current failure number per second",
-		},
-		[]string{"method", "name"},
-	)
-)
+// prometheusMetrics holds the gauges of a single PrometheusPusherOutput.
+// They are scoped to the output instance, so that multiple outputs in the same
+// process don't overwrite each other's metrics.
+type prometheusMetrics struct {
+	// gauge vectors for requests
+	numRequests          *prometheus.GaugeVec
+	numFailures          *prometheus.GaugeVec
+	medianResponseTime   *prometheus.GaugeVec
+	averageResponseTime  *prometheus.GaugeVec
+	minResponseTime      *prometheus.GaugeVec
+	maxResponseTime      *prometheus.GaugeVec
+	averageContentLength *prometheus.GaugeVec
+	currentRPS           *prometheus.GaugeVec
+	currentFailPerSec    *prometheus.GaugeVec
 
-// gauges for total
-var (
-	gaugeUsers = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "users",
-			Help:      "The current number of users",
-		},
-	)
-	gaugeTotalRPS = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "total_rps",
-			Help:      "The requests per second in total",
-		},
-	)
-	gaugeTotalFailRatio = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "fail_ratio",
-			Help:      "The ratio of request failures in total",
-		},
-	)
-)
+	// gauges for total
+	users          prometheus.Gauge
+	totalRPS       prometheus.Gauge
+	totalFailRatio prometheus.Gauge
+}
+
+func newPrometheusMetrics() *prometheusMetrics {
+	newGaugeVec := func(name, help string) *prometheus.GaugeVec {
+		return prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Name:      name,
+				Help:      help,
+			},
+			[]string{"method", "name"},
+		)
+	}
+	newGauge := func(name, help string) prometheus.Gauge {
+		return prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: namespace,
+				Name:      name,
+				Help:      help,
+			},
+		)
+	}
+
+	return &prometheusMetrics{
+		numRequests:          newGaugeVec("num_requests", "The number of requests"),
+		numFailures:          newGaugeVec("num_failures", "The number of failures"),
+		medianResponseTime:   newGaugeVec("median_response_time", "The median response time"),
+		averageResponseTime:  newGaugeVec("average_response_time", "The average response time"),
+		minResponseTime:      newGaugeVec("min_response_time", "The min response time"),
+		maxResponseTime:      newGaugeVec("max_response_time", "The max response time"),
+		averageContentLength: newGaugeVec("average_content_length", "The average content length"),
+		currentRPS:           newGaugeVec("current_rps", "The current requests per second"),
+		currentFailPerSec:    newGaugeVec("current_fail_per_sec", "The current failure number per second"),
+		users:                newGauge("users", "The current number of users"),
+		totalRPS:             newGauge("total_rps", "The requests per second in total"),
+		totalFailRatio:       newGauge("fail_ratio", "The ratio of request failures in total"),
+	}
+}
+
+func (m *prometheusMetrics) collectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		// gauge vectors for requests
+		m.numRequests,
+		m.numFailures,
+		m.medianResponseTime,
+		m.averageResponseTime,
+		m.minResponseTime,
+		m.maxResponseTime,
+		m.averageContentLength,
+		m.currentRPS,
+		m.currentFailPerSec,
+		// gauges for total
+		m.users,
+		m.totalRPS,
+		m.totalFailRatio,
+	}
+}
 
 // NewPrometheusPusherOutput returns a PrometheusPusherOutput.
 func NewPrometheusPusherOutput(gatewayURL, jobName string) *PrometheusPusherOutput {
@@ -352,7 +329,9 @@ func NewPrometheusPusherOutput(gatewayURL, jobName string) *PrometheusPusherOutp
 // If the logger is nil, it will not take effect.
 func (o *PrometheusPusherOutput) WithLogger(logger *log.Logger) *PrometheusPusherOutput {
 	if logger != nil {
+		o.mu.Lock()
 		o.logger = logger
+		o.mu.Unlock()
 	}
 	return o
 }
@@ -361,29 +340,24 @@ func (o *PrometheusPusherOutput) WithLogger(logger *log.Logger) *PrometheusPushe
 type PrometheusPusherOutput struct {
 	pusher *push.Pusher // Prometheus Pushgateway Pusher
 	logger *log.Logger
+
+	mu      sync.Mutex
+	metrics *prometheusMetrics
 }
 
 // OnStart will register all prometheus metric collectors
 func (o *PrometheusPusherOutput) OnStart() {
 	o.logger.Println("register prometheus metric collectors")
+	// Metrics are created per output, so that multiple outputs in the same process
+	// don't share (and overwrite) the same gauges.
+	metrics := newPrometheusMetrics()
 	registry := prometheus.NewRegistry()
-	registry.MustRegister(
-		// gauge vectors for requests
-		gaugeNumRequests,
-		gaugeNumFailures,
-		gaugeMedianResponseTime,
-		gaugeAverageResponseTime,
-		gaugeMinResponseTime,
-		gaugeMaxResponseTime,
-		gaugeAverageContentLength,
-		gaugeCurrentRPS,
-		gaugeCurrentFailPerSec,
-		// gauges for total
-		gaugeUsers,
-		gaugeTotalRPS,
-		gaugeTotalFailRatio,
-	)
+	registry.MustRegister(metrics.collectors()...)
+
+	o.mu.Lock()
+	o.metrics = metrics
 	o.pusher = o.pusher.Gatherer(registry)
+	o.mu.Unlock()
 }
 
 // OnStop of PrometheusPusherOutput has nothing to do.
@@ -399,30 +373,41 @@ func (o *PrometheusPusherOutput) OnEvent(data map[string]interface{}) {
 		return
 	}
 
+	o.mu.Lock()
+	metrics := o.metrics
+	pusher := o.pusher
+	o.mu.Unlock()
+
+	if metrics == nil {
+		// OnStart has not been called, nowhere to report to.
+		o.logger.Println("metrics are not registered, call OnStart before OnEvent")
+		return
+	}
+
 	// user count
-	gaugeUsers.Set(float64(output.UserCount))
+	metrics.users.Set(float64(output.UserCount))
 
 	// rps in total
-	gaugeTotalRPS.Set(float64(output.TotalRPS))
+	metrics.totalRPS.Set(float64(output.TotalRPS))
 
 	// failure ratio in total
-	gaugeTotalFailRatio.Set(output.TotalFailRatio)
+	metrics.totalFailRatio.Set(output.TotalFailRatio)
 
 	for _, stat := range output.Stats {
 		method := stat.Method
 		name := stat.Name
-		gaugeNumRequests.WithLabelValues(method, name).Set(float64(stat.NumRequests))
-		gaugeNumFailures.WithLabelValues(method, name).Set(float64(stat.NumFailures))
-		gaugeMedianResponseTime.WithLabelValues(method, name).Set(float64(stat.medianResponseTime))
-		gaugeAverageResponseTime.WithLabelValues(method, name).Set(float64(stat.avgResponseTime))
-		gaugeMinResponseTime.WithLabelValues(method, name).Set(float64(stat.MinResponseTime))
-		gaugeMaxResponseTime.WithLabelValues(method, name).Set(float64(stat.MaxResponseTime))
-		gaugeAverageContentLength.WithLabelValues(method, name).Set(float64(stat.avgContentLength))
-		gaugeCurrentRPS.WithLabelValues(method, name).Set(float64(stat.currentRps))
-		gaugeCurrentFailPerSec.WithLabelValues(method, name).Set(float64(stat.currentFailPerSec))
+		metrics.numRequests.WithLabelValues(method, name).Set(float64(stat.NumRequests))
+		metrics.numFailures.WithLabelValues(method, name).Set(float64(stat.NumFailures))
+		metrics.medianResponseTime.WithLabelValues(method, name).Set(float64(stat.medianResponseTime))
+		metrics.averageResponseTime.WithLabelValues(method, name).Set(float64(stat.avgResponseTime))
+		metrics.minResponseTime.WithLabelValues(method, name).Set(float64(stat.MinResponseTime))
+		metrics.maxResponseTime.WithLabelValues(method, name).Set(float64(stat.MaxResponseTime))
+		metrics.averageContentLength.WithLabelValues(method, name).Set(float64(stat.avgContentLength))
+		metrics.currentRPS.WithLabelValues(method, name).Set(float64(stat.currentRps))
+		metrics.currentFailPerSec.WithLabelValues(method, name).Set(float64(stat.currentFailPerSec))
 	}
 
-	if err := o.pusher.Push(); err != nil {
+	if err := pusher.Push(); err != nil {
 		o.logger.Printf("Could not push to Pushgateway: error: %v\n", err)
 	}
 }
