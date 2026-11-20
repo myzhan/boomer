@@ -815,13 +815,57 @@ func TestHeartbeatTimeoutWithFullSendQueue(t *testing.T) {
 	r.startHeartbeat()
 	select {
 	case <-quit:
-	case <-time.After(5 * time.Second):
+	case <-time.After(12 * time.Second):
 		t.Fatal("heartbeat timeout blocked on the full send queue")
 	}
 	select {
 	case <-r.shutdownChan:
 	default:
 		t.Fatal("quit event published before local shutdown")
+	}
+}
+
+func TestHeartbeatTimeoutSendsQuitBeforeClosing(t *testing.T) {
+	r := newTestSlaveRunner(noopTask("noop"))
+	c := newRecordingClient()
+	r.client = c
+	r.setState(stateRunning)
+	Events.Subscribe(EVENT_QUIT, r.onQuiting)
+	defer r.shutdown()
+	r.lastMasterHeartbeatTimestamp.Store(time.Now().Add(-2 * masterHeartbeatTimeout))
+	r.startHeartbeat()
+	msg := nextMessage(t, c.toMaster, 3*time.Second)
+	quit, ok := msg.(*genericMessage)
+	if !ok || quit.Type != "quit" || quit.Data != nil || quit.NodeID != r.nodeID {
+		t.Fatalf("unexpected quit message: %#v", msg)
+	}
+	select {
+	case <-c.shutdownChan:
+		t.Fatal("client closed before quit send completed")
+	default:
+	}
+	c.disconnectedFromMaster <- true
+	select {
+	case <-c.shutdownChan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("client did not close after quit send completed")
+	}
+}
+
+func TestHeartbeatTimeoutWithStuckSender(t *testing.T) {
+	r := newTestSlaveRunner(noopTask("noop"))
+	c := newRecordingClient()
+	r.client = c
+	r.setState(stateRunning)
+	defer r.shutdown()
+	r.lastMasterHeartbeatTimestamp.Store(time.Now().Add(-2 * masterHeartbeatTimeout))
+	r.startHeartbeat()
+	// The quit message can be queued, but the sender never reports completion.
+	nextMessage(t, c.toMaster, 3*time.Second)
+	select {
+	case <-c.shutdownChan:
+	case <-time.After(12 * time.Second):
+		t.Fatal("stuck sender prevented shutdown")
 	}
 }
 

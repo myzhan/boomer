@@ -436,9 +436,40 @@ func (r *slaveRunner) spawnComplete() {
 }
 
 func (r *slaveRunner) onQuiting() {
-	if r.getState() != stateQuitting {
-		r.setState(stateQuitting)
-		r.sendMessage(newGenericMessage("quit", nil, r.nodeID))
+	r.quitToMaster(false)
+}
+
+// quitToMaster makes a bounded attempt to notify master. Locust uses nonblocking
+// sends with retries delayed by 1, 3 and 5 seconds; use the same total wait budget.
+// The client sender reports completion through disconnectedChannel.
+func (r *slaveRunner) quitToMaster(waitForSend bool) {
+	r.mu.Lock()
+	if r.state == stateQuitting {
+		r.mu.Unlock()
+		return
+	}
+	r.state = stateQuitting
+	r.mu.Unlock()
+	if r.client == nil {
+		return
+	}
+	timer := time.NewTimer(9 * time.Second)
+	defer timer.Stop()
+	select {
+	case r.client.sendChannel() <- newGenericMessage("quit", nil, r.nodeID):
+	case <-r.shutdownChan:
+		return
+	case <-timer.C:
+		r.logger.Println("Timeout queuing quit message to master, shutting down anyway.")
+		return
+	}
+	if waitForSend {
+		select {
+		case <-r.client.disconnectedChannel():
+		case <-r.shutdownChan:
+		case <-timer.C:
+			r.logger.Println("Timeout sending quit message to master, shutting down anyway.")
+		}
 	}
 }
 
@@ -779,9 +810,10 @@ func (r *slaveRunner) startHeartbeat() {
 					r.logger.Printf("Didn't get heartbeat from master in over %vs, shutting down.\n", masterHeartbeatTimeout.Seconds())
 					// boomer.Run() returns either on a signal or on EVENT_QUIT, without
 					// publishing it the process would hang forever after shutting down.
+					r.stop()
+					r.quitToMaster(true)
 					r.shutdown()
-					// Unsubscribe onQuiting and release blocked sends before publishing:
-					// a full send queue must not prevent local shutdown.
+					// Notify the application after the bounded send attempt and cleanup.
 					Events.Publish(EVENT_QUIT)
 					return
 				}
