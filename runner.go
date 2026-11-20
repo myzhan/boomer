@@ -779,8 +779,10 @@ func (r *slaveRunner) startHeartbeat() {
 					r.logger.Printf("Didn't get heartbeat from master in over %vs, shutting down.\n", masterHeartbeatTimeout.Seconds())
 					// boomer.Run() returns either on a signal or on EVENT_QUIT, without
 					// publishing it the process would hang forever after shutting down.
-					Events.Publish(EVENT_QUIT)
 					r.shutdown()
+					// Unsubscribe onQuiting and release blocked sends before publishing:
+					// a full send queue must not prevent local shutdown.
+					Events.Publish(EVENT_QUIT)
 					return
 				}
 				// send client heartbeat message

@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -386,6 +387,49 @@ func TestQuitIsIdempotent(t *testing.T) {
 	case <-lr.shutdownChan:
 	default:
 		t.Fatal("local runner was not shut down by Quit")
+	}
+}
+
+func TestConcurrentRecordAfterStatsClosed(t *testing.T) {
+	for _, failure := range []bool{false, true} {
+		for attempt := 0; attempt < 100; attempt++ {
+			b := NewStandaloneBoomer(1, 1)
+			s := newRequestStats()
+			s.close()
+			b.recordStats.Store(s)
+			// Leave one slot so concurrent senders compete for the remaining space.
+			if failure {
+				for i := 0; i < cap(s.requestFailureChan)-1; i++ {
+					s.requestFailureChan <- &requestFailure{}
+				}
+			} else {
+				for i := 0; i < cap(s.requestSuccessChan)-1; i++ {
+					s.requestSuccessChan <- &requestSuccess{}
+				}
+			}
+			start := make(chan struct{})
+			var wg sync.WaitGroup
+			for i := 0; i < 100; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					<-start
+					if failure {
+						b.RecordFailure("GET", "closed", 1, "error")
+					} else {
+						b.RecordSuccess("GET", "closed", 1, 1)
+					}
+				}()
+			}
+			close(start)
+			done := make(chan struct{})
+			go func() { wg.Wait(); close(done) }()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatalf("concurrent records blocked after close (failure=%v)", failure)
+			}
+		}
 	}
 }
 

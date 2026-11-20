@@ -793,6 +793,38 @@ func nextMessage(t *testing.T, ch chan message, timeout time.Duration) message {
 	}
 }
 
+func TestHeartbeatTimeoutWithFullSendQueue(t *testing.T) {
+	r := newTestSlaveRunner(noopTask("noop"))
+	c := newRecordingClient()
+	r.client = c
+	r.setState(stateRunning)
+	for i := 0; i < cap(c.toMaster); i++ {
+		c.toMaster <- newGenericMessage("stats", nil, r.nodeID)
+	}
+	Events.Subscribe(EVENT_QUIT, r.onQuiting)
+	quit := make(chan struct{}, 1)
+	onQuit := func() { quit <- struct{}{} }
+	Events.Subscribe(EVENT_QUIT, onQuit)
+	defer func() {
+		// Release a blocked quit send as well if the regression returns.
+		<-c.toMaster
+		r.shutdown()
+		Events.Unsubscribe(EVENT_QUIT, onQuit)
+	}()
+	r.lastMasterHeartbeatTimestamp.Store(time.Now().Add(-2 * masterHeartbeatTimeout))
+	r.startHeartbeat()
+	select {
+	case <-quit:
+	case <-time.After(5 * time.Second):
+		t.Fatal("heartbeat timeout blocked on the full send queue")
+	}
+	select {
+	case <-r.shutdownChan:
+	default:
+		t.Fatal("quit event published before local shutdown")
+	}
+}
+
 // locust master reads state, current_cpu_usage and current_memory_usage from the
 // heartbeat message.
 func TestHeartbeatMessageMatchesLocust(t *testing.T) {

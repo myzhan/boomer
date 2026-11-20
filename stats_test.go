@@ -165,6 +165,29 @@ var _ = Describe("Test states", func() {
 	})
 })
 
+func TestRequestStatsReportKeepsActiveEntries(t *testing.T) {
+	stats := newRequestStats()
+	key := entryKey{name: "active", method: "GET"}
+	first := stats.get(key.name, key.method)
+	for i := 0; i < idleEntryTTL*2; i++ {
+		stats.logRequest("GET", "active", 1, 1)
+		stats.collectReportData()
+		if stats.entries[key] != first {
+			t.Fatal("report evicted a continuously active entry")
+		}
+	}
+	for i := 0; i < idleEntryTTL-1; i++ {
+		stats.collectReportData()
+	}
+	if stats.entries[key] != first {
+		t.Fatal("entry evicted before the idle TTL elapsed")
+	}
+	stats.collectReportData()
+	if _, ok := stats.entries[key]; ok {
+		t.Fatal("idle entry retained after the TTL elapsed")
+	}
+}
+
 func TestRequestStatsCloseIsIdempotent(t *testing.T) {
 	stats := newRequestStats()
 	stats.start()

@@ -250,16 +250,8 @@ func (b *Boomer) RecordSuccess(requestType, name string, responseTime int64, res
 		responseTime:   responseTime,
 		responseLength: responseLength,
 	}
-	// The channel is buffered and its consumer is a single goroutine, so this
-	// pre-check keeps the common case as cheap as a plain send. A select is only
-	// used when the buffer is full, where it can also give up on a closed stats.
-	ch := stats.requestSuccessChan
-	if len(ch) < cap(ch) {
-		ch <- msg
-		return
-	}
 	select {
-	case ch <- msg:
+	case stats.requestSuccessChan <- msg:
 	case <-stats.shutdownChan:
 		// stats has been closed, drop the record instead of blocking forever.
 	}
@@ -277,14 +269,8 @@ func (b *Boomer) RecordFailure(requestType, name string, responseTime int64, exc
 		responseTime: responseTime,
 		error:        exception,
 	}
-	// See RecordSuccess for why the send is guarded like this.
-	ch := stats.requestFailureChan
-	if len(ch) < cap(ch) {
-		ch <- msg
-		return
-	}
 	select {
-	case ch <- msg:
+	case stats.requestFailureChan <- msg:
 	case <-stats.shutdownChan:
 		// stats has been closed, drop the record instead of blocking forever.
 	}

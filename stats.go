@@ -140,12 +140,13 @@ func (s *requestStats) serializeErrors() map[string]map[string]interface{} {
 }
 
 func (s *requestStats) collectReportData() map[string]interface{} {
+	// Inspect activity before serializeStats resets the interval counters.
+	s.dropIdleEntries()
 	data := make(map[string]interface{})
 	data["stats"] = s.serializeStats()
 	data["stats_total"] = s.total.getStrippedReport()
 	data["errors"] = s.serializeErrors()
 	s.errors = make(map[string]*statsError)
-	s.dropIdleEntries()
 	return data
 }
 
